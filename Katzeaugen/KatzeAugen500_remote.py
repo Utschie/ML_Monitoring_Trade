@@ -1,6 +1,6 @@
 #实时监控澳客网赔率，经过测试，500彩票网的赔率更新与betbrains是保持一致的，而澳客网的赔率更新时间数据和500彩票网一样，所以基本上可以认为没有问题
 #由于澳客网是动态加载，所以本代码从每场比赛的欧赔加载中找到原始地址,通过请求ajax的原始地址获取数据
-#原始地址每个请求返回30个公司赔率数据，这样每场比赛大约6到13个请求，每周大约500到600场比赛，则最多不到8000个请求。
+#原始地址每个请求返回30个公司赔率数据，这样每场比赛大约6到13个请求，每周大约500到600场比赛，则最多不到8000个请求，一个月的话就是3万个请求差不多。
 #如果ajax请求的服务器承受能力跟单个公司历史赔率页面相同，那么每秒50个请求来算，同步一周的比赛大约需要3分钟左右的时间
 #经试验，请求主页的ajax不需要登陆，但是请求下一周的比赛还是要登录的，所以顺序应该如常，进入主页，登陆，进入日期，获取链接，然后接下来做————20190112
 #ajax下来的网页解码方式是unicode-escape，与其他网页不同————20190112
@@ -16,6 +16,10 @@
 #permission这个变量未必有必要存在————20190317
 #再dropip中如果用if的方式语句会报错那么则改用try————20190317
 #login函数可以改得更简洁一些————20190317
+#24小时监控更新ip池需要考虑成本问题，或者尝试其他供应商，或者限制ip池内ip总数————20190317
+#开了穿梭之后需要先在cmd设置代理 set http_proxy=http://127.0.0.1:56594 set https_proxy=http://127.0.0.1:56594————20190519
+#端口号56594在穿梭文件夹下的privoxy的conf里，可以自己更改————20190519
+#每次循环最好重新登录一次————20190519
 from gevent import monkey;monkey.patch_all()
 import os
 import re
@@ -192,19 +196,24 @@ def dangtianbisai(bisailist,date):#对列表里比赛的网址同时进行爬取
     print('日期'+date+'同步成功')
     
 
-today = time.strftime("%Y-%m-%d")#今天
-nextmonth = datetime.strftime(datetime.now()+timedelta(35),"%Y-%m-%d")#下个月，威廉一些重要比赛甚至提前一个多月就出了
-datelist = dateRange(today,nextmonth)#生成日期列表
-for i in datelist:
-    bisailist = jinruriqi(i)
-    dangtianbisai(bisailist,i)
+def monitoring(ippool):#总的监控程序
+    while True:#无限循环
+        today = time.strftime("%Y-%m-%d")#今天
+        nextmonth = datetime.strftime(datetime.now()+timedelta(35),"%Y-%m-%d")#下个月，威廉一些重要比赛甚至提前一个多月就出了
+        datelist = dateRange(today,nextmonth)#生成日期列表
+        for i in datelist:
+            bisailist = jinruriqi(i)
+            dangtianbisai(bisailist,i)
+        print('同步已完成')
 
 
 
 ippool = list()
 permission = False#设定一个允许提取ip的信号，初始为False
-pw = Process(target=writeip, args=(ippool,))#创建写入ippool的进程
+pw = Process(target=writeip,args=(ippool,))#创建写入ippool的进程
+pm = Process(target=monitoring,args=(ippool,))
 pw.start()
+pm.start()
 
 
 
