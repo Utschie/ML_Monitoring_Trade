@@ -20,6 +20,7 @@
 #开了穿梭之后需要先在cmd设置代理 set http_proxy=http://127.0.0.1:56594 set https_proxy=http://127.0.0.1:56594————20190519
 #端口号56594在穿梭文件夹下的privoxy的conf里，可以自己更改————20190519
 #每次循环最好重新登录一次————20190519
+#先把monitoring函数的登陆写进去，然后把各个函数的随机UA加进去。然后开始写ajax入库，然后测试随机换ip策略————20190520
 from gevent import monkey;monkey.patch_all()
 import os
 import re
@@ -147,7 +148,7 @@ def dropip(ip,ippool):#当发现某个ip有问题时，从ippool中去除这个i
 
 
 
-        
+
 #经试验，请求主页的ajax不需要登陆，但是请求下一周的比赛还是要登录的，所以顺序应该如常，进入主页，登陆，进入日期，获取链接，然后接下来做
 def dateRange(start, end, step=1, format="%Y-%m-%d"):#生成日期列表函数，用于给datelist赋值
     strptime, strftime = datetime.strptime, datetime.strftime
@@ -194,7 +195,7 @@ def dangtianbisai(bisailist,date):#对列表里比赛的网址同时进行爬取
         ge.append(gevent.spawn(danchangbisai,i))
     gevent.joinall(ge)
     print('日期'+date+'同步成功')
-    
+
 
 def monitoring(ippool):#总的监控程序
     while True:#无限循环
@@ -214,6 +215,3 @@ pw = Process(target=writeip,args=(ippool,))#创建写入ippool的进程
 pm = Process(target=monitoring,args=(ippool,))
 pw.start()
 pm.start()
-
-
-
