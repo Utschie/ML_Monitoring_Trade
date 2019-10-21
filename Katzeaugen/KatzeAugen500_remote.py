@@ -201,14 +201,14 @@ def jinruriqi(date,header = None):
 #    return bisailist
 @randomUA
 def ajax(url,i,header = None):#从单个ajax请求的响应中获取赔率并入库
-    a = r.get(url+'http://www.okooo.com/soccer/match/1052796/odds/ajax/?page=1&companytype=BaijiaBooks&type=0',headers = header)
+    a = r.get(url+'http://www.okooo.com/soccer/match/1052796/odds/ajax/?page='+i+'&companytype=BaijiaBooks&type=0',headers = header)
     a.encoding = 'unicode-escape'#用这个格式解码
     a.text#其中一部分即为所需要的json文件
 
 
 def danchangbisai(url):#对单场比赛进行ajax请求以获得当前赔率
     ge = list()
-    for i in (0,14):
+    for i in (0,14):#这里的14好像涉及到翻页
         ge.append(gevent.spawn(ajax,url,i))
     gevent.joinall(ge)
     print(url)
@@ -217,8 +217,8 @@ def danchangbisai(url):#对单场比赛进行ajax请求以获得当前赔率
 
 def dangtianbisai(bisailist,date):#对列表里比赛的网址同时进行爬取
     ge = list()
-    for i in bisailist:
-        ge.append(gevent.spawn(danchangbisai,i))
+    for url in bisailist:
+        ge.append(gevent.spawn(danchangbisai,url))
     gevent.joinall(ge)
     print('日期'+date+'同步成功')
 
@@ -309,8 +309,9 @@ def monitoring(ippool):#总的监控程序
 
 ippool = list()
 permission = False#设定一个允许提取ip的信号，初始为False
-pw = Process(target=writeip,args=(ippool,))#创建写入ippool的进程
-pd = Process(target=dropip,args=(ippool,))
-pm = Process(target=monitoring,args=(ippool,))
-pw.start()
-pm.start()
+processwrite = Process(target=writeip,args=(ippool,))#创建写入ippool的进程
+processdrop = Process(target=dropip,args=(ippool,))
+processmonitor = Process(target=monitoring,args=(ippool,))
+processwrite.start()
+processmonitor.start()
+processdrop.start()
