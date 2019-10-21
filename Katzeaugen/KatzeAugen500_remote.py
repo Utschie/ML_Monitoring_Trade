@@ -21,6 +21,8 @@
 #端口号56594在穿梭文件夹下的privoxy的conf里，可以自己更改————20190519
 #每次循环最好重新登录一次————20190519
 #先把monitoring函数的登陆写进去，然后把各个函数的随机UA加进去。然后开始写ajax入库，然后测试随机换ip策略————20190520
+#再写IP的同时，再开一个去IP的进程，把每个ip的“犯规次数”做个记录，超过一定次数则去除————20191021（已完成）
+#现在是通过一个全局变量permission来传递可以不可以请求的信息，或许用进程间通信会更好些————20191021
 from gevent import monkey;monkey.patch_all()
 import os
 import re
@@ -46,6 +48,26 @@ r = requests.Session()
 header = {'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/61.0.3163.100 Safari/537.36'}
 header['Referer'] = 'http://www.okooo.com/soccer/'#必须加上这个才能进入足球日历
 header['Upgrade-Insecure-Requests'] = '1'#这个也得加上
+UAcontent = urllib.request.urlopen('file:///D:/data/useragentswitcher.xml').read()
+UAcontent = str(UAcontent)
+UAname = re.findall('(useragent=")(.*?)(")',UAcontent)
+UAlist = list()
+for z in range(0,int(len(UAname))):
+    UAlist.append(UAname[z][1])
+
+UAlist = UAlist[0:586]#这样就得到了一个拥有586个UA的UA池
+UAlist.append('Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/61.0.3163.100 Safari/537.36')#再加一个
+
+def randomUA(func):#用与随机UA的装饰器
+    global UAlist
+    global header
+    headers = header
+    def decorate(*args):
+        headers['User-Agent'] = random.choice(UAlist)
+        return func(*args,header = headers)
+    return decorate
+
+
 def ydm(filename):#把filepath传给它，他就能得到验证码的验证结果
     username = '921202jsy'
     password  = '921202jay'
@@ -74,76 +96,81 @@ def randomdatas(filename):#把filepath传给它，它就能得到一个随机的
     datas['PassWord'] = User[suiji][1]
     datas['AuthCode'] = ydm(filename)#验证码用云打码模块识别
     return datas
-
-def login(datas):#把datas给它，它就能进行登录。应该同样也加入挂起功能
-    global header
+@randomUA
+def login(datas,header = None):#把datas给它，它就能进行登录。应该同样也加入挂起功能
     global r
     global ippool
-    header2 = header
     error = True
     while error == True:
         try:
-            r.post('http://www.okooo.com/I/?method=ok.user.login.login',headers = header2,verify=False,data = datas,allow_redirects=False,timeout = 16)#向对面服务器传送数据
+            ip = getip(ippool)
+            r.proxies = ip[0]
+            r.post('http://www.okooo.com/I/?method=ok.user.login.login',headers = header,verify=False,data = datas,allow_redirects=False,timeout = 16)#向对面服务器传送数据
             error = False
         except Exception:
+            ip[1] += 1#加一次犯规次数
             print('login超时，正在重拨')
-            r.proxies = random.choice(ippool)#换一个ip
             error = True
     error = True
     while error == True:
         try:
-            r.get('http://www.okooo.com/soccer/',headers = header2,verify=False,allow_redirects=False,timeout = 16)#进入足球中心
+            ip = getip(ippool)
+            r.proxies = ip[0]
+            r.get('http://www.okooo.com/soccer/',headers = header,verify=False,allow_redirects=False,timeout = 16)#进入足球中心
             error = False
         except Exception:
+            ip[1] += 1#加一次犯规次数
             print('login超时，正在重拨')
-            r.proxies = random.choice(ippool)#换一个ip
             error = True
-    header2['Referer'] = 'http://www.okooo.com/soccer/'#必须加上这个才能进入足球日历
-    header2['Upgrade-Insecure-Requests'] = '1'#这个也得加上
+    header['Referer'] = 'http://www.okooo.com/soccer/'#必须加上这个才能进入足球日历
+    header['Upgrade-Insecure-Requests'] = '1'#这个也得加上
     error = True
     while error == True:
         try:
-            r.get('http://www.okooo.com/soccer/match/',headers = header2,verify=False,allow_redirects=False,timeout = 16)#进入足球日历,成功
+            ip = getip(ippool)
+            r.proxies = ip[0]
+            r.get('http://www.okooo.com/soccer/match/',headers = header,verify=False,allow_redirects=False,timeout = 16)#进入足球日历,成功
             error = False
         except Exception:
+            ip[1] += 1#加一次犯规次数
             print('login超时，正在重拨')
-            r.proxies = random.choice(ippool)#换一个ip
             error = True
 
 
 
 
 
-def writeip(ippool):#每隔20秒写入ip
+def writeip(ippool):#每隔20秒写入ip,并为每个ip初始化犯规次数=0
     global permission
     while True:
         if len(ippool) < 5:
             permission = False
         proxycontent = requests.get('http://api.xdaili.cn/xdaili-api//privateProxy/applyStaticProxy?spiderId=0a4b8956ad274e579822b533d27f79e1&returnType=1&count=1')
-        proxylist = re.findall('(.*?)\\r\\n',proxycontent.text)
-        for j in range(0,len(proxylist)):
-            proxylist[j] = {"http":"http://" + proxylist[j],}#为ip完善格式
-            ippool = ippool+proxylist[j]#和ippool中原本的ip列表合并
+        newip = re.findall('(.*?)\\r\\n',proxycontent.text)
+        for j in range(0,len(newip)):
+            newip[j] = [{"http":"http://" + ippool[j],},0]#为ip完善格式并初始化犯规次数
+            ippool.append(newip[j])#和ippool中原本的ip列表合并
         permission = True
         time.sleep(20)#休息20秒继续
 
 
-def getip(ippool,q):#先看看permission允不允许,直到允许，再从ippool中获取ip
+def getip(ippool):#先看看permission允不允许,直到允许，再从ippool中获取ip
     global permission
     while permission != True:
+        time.sleep(5)
         continue
-    proxy = random.choice(ippool)
-    return proxy
+    ip = random.choice(ippool)
+    return ip
 
 
-def dropip(ip,ippool):#当发现某个ip有问题时，从ippool中去除这个ip，并且给大家传递一个信号，等一会儿再取ip
+def dropip(ippool):#当发现某个ip有问题时，从ippool中去除这个ip，并且给大家传递一个信号，等一会儿再取ip
     global permission
-    if ip in ippool:#如果无效ip在池中，则挂起其他程序并去除它
-        permission = False#此函数运行时所有请求挂起
-        ippool.remove(ip)
-        if len(ippool) < 5:
-            permission = False
-        permission = True#去掉无效ip后所有请求再执行
+    while True:
+        for ip in ippool:
+            if ip[1] >= 5:#如果犯规次数大于5,则去除
+                ippool.remove(ip)
+                if len(ippool) < 5:
+                    permission = False
 
 
 
@@ -155,10 +182,9 @@ def dateRange(start, end, step=1, format="%Y-%m-%d"):#生成日期列表函数�
     days = (strptime(end, format) - strptime(start, format)).days + 1
     return [strftime(strptime(start, format) + timedelta(i), format) for i in range(0, days, step)]
 
-
-def jinruriqi(date):
+@randomUA
+def jinruriqi(date,header = None):
     global r
-    global header
     global ippool
     wangye = r.get('http://www.okooo.com/soccer/match/?date='+date,headers = header,verify=False,allow_redirects=False,timeout = 9.5,proxies=random.choice(ippool))
     content1 = wangye.content.decode('gb18030')#取出wangye的源代码
@@ -173,8 +199,8 @@ def jinruriqi(date):
 #    for i in datelist:#获得一个月内所有比赛的url
 #        bisailist = bisailist + jinruriqi(i)
 #    return bisailist
-def ajax(url,i):#从单个ajax请求的响应中获取赔率并入库
-    global header
+@randomUA
+def ajax(url,i,header = None):#从单个ajax请求的响应中获取赔率并入库
     a = r.get(url+'http://www.okooo.com/soccer/match/1052796/odds/ajax/?page=1&companytype=BaijiaBooks&type=0',headers = header)
     a.encoding = 'unicode-escape'#用这个格式解码
     a.text#其中一部分即为所需要的json文件
@@ -196,13 +222,85 @@ def dangtianbisai(bisailist,date):#对列表里比赛的网址同时进行爬取
     gevent.joinall(ge)
     print('日期'+date+'同步成功')
 
+@randomUA
+def Vorsetzen(ippool,header = None):#从打开首页到登录成功
+    global r
+    global ippool
+    #先进首页
+    error = True
+    while error == True:
+        try:
+            ip = getip(ippool)
+            r.proxies = ip[0]
+            r.get('http://www.okooo.com/jingcai/',headers = header,verify=False,allow_redirects=False,timeout = 31)#从首页开启会话
+            error = False
+        except Exception as e:
+            ip[1] += 1#加一次犯规次数
+            print('Error:',e)
+            print('Vorsetzen进入首页超时，正在重拨')
+            error = True
+    #获取验证码
+    error = True
+    while error == True:
+        try:
+            ip = getip(ippool)
+            r.proxies = ip[0]
+            yanzhengma = r.get('http://www.okooo.com/I/?method=ok.user.settings.authcodepic',headers = header,verify=False,allow_redirects=False,timeout = 31)#get请求登录的验证码
+            error = False
+        except Exception as e:
+            ip[1] += 1#加一次犯规次数
+            print('Error:',e)
+            print('Vorsetzen获取验证码超时，正在重拨,')
+            error = True
+    filepath = 'F:\\data\\yanzhengma.png'
+    with open(filepath,"wb") as f:
+        f.write(yanzhengma.content)#保存验证码到本地
+    print('已获得验证码')
+    #验证码识别
+    datas = randomdatas(filepath)#生成随机账户的datas
+    while len(datas['AuthCode']) != 5:#如果验证码识别有问题，那就重新来
+        r = requests.Session()#开启会话
+        error = True
+        while error == True:
+            try:
+                ip = getip(ippool)
+                r.proxies = ip[0]#使用随机IP
+                r.get('http://www.okooo.com/jingcai/',headers = header,verify=False,allow_redirects=False,timeout = 31)
+                error = False
+            except Exception as e:
+                ip[1] += 1#加一次犯规次数
+                print('Error:',e)
+                print('Vorsetzen验证码识别超时，正在重拨')
+                error = True               
+        error = True
+        while error == True:
+            try:
+                ip = getip(ippool)
+                r.proxies = ip[0]#使用随机IP
+                yanzhengma = r.get('http://www.okooo.com/I/?method=ok.user.settings.authcodepic',headers = header,verify=False,allow_redirects=False,timeout = 31)#get请求登录的验证码
+                error = False
+            except Exception as e:
+                ip[1] += 1#加一次犯规次数
+                print('Vorsetzen验证码识别超时，正在重拨4')
+                error = True
+        with open(filepath,"wb") as f:
+            f.write(yanzhengma.content)#保存验证码到本地
+        print('已重新获得验证码')
+        datas = randomdatas(filepath)#生成随机账户的datas
+        print('云打码已尝试一次')
+    login(datas)#登录账户
+    print('正在登录下面账户:')
+    print(str(datas))
+    print('登陆成功！')
+
 
 def monitoring(ippool):#总的监控程序
     while True:#无限循环
         today = time.strftime("%Y-%m-%d")#今天
-        nextmonth = datetime.strftime(datetime.now()+timedelta(35),"%Y-%m-%d")#下个月，威廉一些重要比赛甚至提前一个多月就出了
+        nextmonth = datetime.strftime(datetime.now()+timedelta(30),"%Y-%m-%d")#下个月，威廉一些重要比赛甚至提前一个多月就出了
         datelist = dateRange(today,nextmonth)#生成日期列表
         for i in datelist:
+            Vorsetzen(ippool)#每抓一天登陆一次
             bisailist = jinruriqi(i)
             dangtianbisai(bisailist,i)
         print('同步已完成')
@@ -212,6 +310,7 @@ def monitoring(ippool):#总的监控程序
 ippool = list()
 permission = False#设定一个允许提取ip的信号，初始为False
 pw = Process(target=writeip,args=(ippool,))#创建写入ippool的进程
+pd = Process(target=dropip,args=(ippool,))
 pm = Process(target=monitoring,args=(ippool,))
 pw.start()
 pm.start()
