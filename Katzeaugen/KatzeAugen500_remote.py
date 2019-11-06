@@ -53,16 +53,11 @@ header['Proxy-Connection'] = 'keep-alive'
 header['Accept'] = 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3'
 header['Accept-Encoding'] = 'gzip, deflate'
 header['Accept-Language'] =  'zh-CN,zh;q=0.9,en;q=0.8,de;q=0.7'
-
-UAcontent = urllib.request.urlopen('file:///D:/data/useragentswitcher.xml').read()
-UAcontent = str(UAcontent)
-UAname = re.findall('(useragent=")(.*?)(")',UAcontent)
 UAlist = list()
-for z in range(0,int(len(UAname))):
-    UAlist.append(UAname[z][1])
+with open('D:\\data\\UAlist.txt','r') as f:
+    UAlist = (f.read().splitlines())#按行读取为列表并且去掉换行符
 
-UAlist = UAlist[0:586]#这样就得到了一个拥有586个UA的UA池
-UAlist.append('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/77.0.3865.120 Safari/537.36')#再加一个
+UAlist.append('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/77.0.3865.120 Safari/537.36')#再加一个,总共456个
 
 def randomUA(func):#用与随机UA的装饰器
     global UAlist
