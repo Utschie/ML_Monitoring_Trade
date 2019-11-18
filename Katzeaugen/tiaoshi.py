@@ -19,9 +19,23 @@ import json#用来将字典写入json文件
 import psutil#用来获取内存使用信息以方便释放
 import copy #用来复制对象
 from multiprocessing import Process,Queue#采用多进程的方式建立ip池
+import ast#用来字符串转字典
 
 ippool = list()
 UAlist = list()
+r = requests.Session()
+header = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/77.0.3865.120 Safari/537.36'}
+header['Referer'] = 'http://www.okooo.com/soccer/'#必须加上这个才能进入足球日历
+header['Upgrade-Insecure-Requests'] = '1'#这个也得加上
+header['Proxy-Connection'] = 'keep-alive'
+header['Accept'] = 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3'
+header['Accept-Encoding'] = 'gzip, deflate'
+header['Accept-Language'] =  'zh-CN,zh;q=0.9,en;q=0.8,de;q=0.7'
+UAlist = list()
+with open('D:\\data\\UAlist.txt','r') as f:
+    UAlist = (f.read().splitlines())#按行读取为列表并且去掉换行符
+
+UAlist.append('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/77.0.3865.120 Safari/537.36')#再加一个,总共456个
 
 def randomUA(func):#用与随机UA的装饰器
     global UAlist
@@ -175,6 +189,7 @@ def ajax(url,i,header = None):#从单个ajax请求的响应中获取赔率并入
     a.text#其中一部分即为所需要的json文件
 
 
+
 def danchangbisai(url):#对单场比赛进行ajax请求以获得当前赔率
     ge = list()
     for i in (0,14):#这里的14好像涉及到翻页
@@ -287,6 +302,7 @@ yanzhengma = r.get('http://www.okooo.com/I/?method=ok.user.settings.authcodepic'
 filepath = 'D:\\data\\yanzhengma.png'
 with open(filepath,"wb") as f:
     f.write(yanzhengma.content)#保存验证码到本地
+
 #验证码识别
 datas = randomdatas(filepath)#生成随机账户的datas
 r.post('http://www.okooo.com/I/?method=ok.user.login.login',headers = header,verify=False,data = datas,allow_redirects=False,timeout = 16)#登陆
@@ -299,4 +315,10 @@ bisaiurl = re.findall(sucker1,content1)#获得当天的比赛列表
 url = bisaiurl[1]
 ajax = r.get('http://www.okooo.com'+url+'ajax/?page='+'1'+'&companytype=BaijiaBooks&type=0',headers = header)#请求当天某一场比赛的ajax
 ajax.encoding = 'unicode-escape'#用这个格式解码
-ajax.text#其中一部分即为所需要的json文件
+text = ajax.text#其中一部分即为所需要的json文件
+
+#下面开始提取数据
+sucker_ajax = 'var data_str = \'\[(.*)]\''
+peilv_str = re.search(sucker_ajax,text).group(1)#这样就得到了装有data_str的字符串
+peilv_dict = ast.literal_eval(peilv_str)#这样就得到了长度为30的tuple，每个元素是一个公司赔率，为字典的形式
+#接下来把字典写入mysql数据库

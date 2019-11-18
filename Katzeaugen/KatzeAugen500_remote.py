@@ -24,6 +24,9 @@
 #再写IP的同时，再开一个去IP的进程，把每个ip的“犯规次数”做个记录，超过一定次数则去除————20191021（已完成）
 #现在是通过一个全局变量permission来传递可以不可以请求的信息，或许用进程间通信会更好些————20191021（暂时不用）
 #有一些UA可能是无效的，需要整理一下UA列表————20191028
+#有时即便响应都是200也会出现没登录成功地情况，需要检查ajax.text的内容，如果里面有var needlogin ‘1’的字样，说明没登录上，需要重新登录————20191118
+#ajax翻页的问题或许可以修改一下————20191118
+#由ajax发现的登录异常也应该可以回跳回去重新登录————20191118
 from gevent import monkey;monkey.patch_all()
 import os
 import re
@@ -43,6 +46,7 @@ import json#用来将字典写入json文件
 import psutil#用来获取内存使用信息以方便释放
 import copy #用来复制对象
 from multiprocessing import Process,Queue#采用多进程的方式建立ip池
+import ast#用来字符串转字典
 
 
 r = requests.Session()
@@ -209,11 +213,14 @@ def ajax(url,i,header = None):#从单个ajax请求的响应中获取赔率并入
     a = r.get('http://www.okooo.com'+url+'ajax/?page='+i+'&companytype=BaijiaBooks&type=0',headers = header)
     a.encoding = 'unicode-escape'#用这个格式解码
     a.text#其中一部分即为所需要的json文件
+    sucker_error = 'var needLogin = \'1\''
+
+
 
 
 def danchangbisai(url):#对单场比赛进行ajax请求以获得当前赔率
     ge = list()
-    for i in (0,14):#这里的14好像涉及到翻页
+    for i in (0,14):#这里的14好像涉及到翻页,因为最多好像就14页，但是这里或许可以改一下
         ge.append(gevent.spawn(ajax,url,i))
     gevent.joinall(ge)
     print(url)
