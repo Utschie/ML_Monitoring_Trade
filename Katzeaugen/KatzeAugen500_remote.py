@@ -28,7 +28,7 @@
 #ajax翻页的问题或许可以修改一下————20191118
 #由ajax发现的登录异常也应该可以回跳回去重新登录————20191118（已解决，见下一行）
 #通过修改login函数和Vorsetzen函数确保Vorsetzen结束后已经确实登录————20191121
-#由于换ip需要重复的代码太多，比如login函数，可以写一个换ip函数，参数就是核心语句应该就可以————20191121
+#由于换ip需要重复的代码太多，比如login函数，可以写一个换ip函数，参数就是核心语句应该就可以，用exec动态执行————20191121
 from gevent import monkey;monkey.patch_all()
 import os
 import re
