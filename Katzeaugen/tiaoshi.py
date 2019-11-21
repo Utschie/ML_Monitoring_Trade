@@ -303,6 +303,7 @@ filepath = 'D:\\data\\yanzhengma.png'
 with open(filepath,"wb") as f:
     f.write(yanzhengma.content)#保存验证码到本地
 
+
 #验证码识别
 datas = randomdatas(filepath)#生成随机账户的datas
 r.post('http://www.okooo.com/I/?method=ok.user.login.login',headers = header,verify=False,data = datas,allow_redirects=False,timeout = 16)#登陆
@@ -313,6 +314,7 @@ content1 = wangye.content.decode('gb18030')#取出wangye的源代码
 sucker1 = '/soccer/match/.*?/odds/'
 bisaiurl = re.findall(sucker1,content1)#获得当天的比赛列表
 url = bisaiurl[1]
+#在ajax请求之前，一直到已经获得了未来的某一天都不需要登录，直到请求未来某一天的其中一场比赛时才要求登录
 ajax = r.get('http://www.okooo.com'+url+'ajax/?page='+'1'+'&companytype=BaijiaBooks&type=0',headers = header)#请求当天某一场比赛的ajax
 ajax.encoding = 'unicode-escape'#用这个格式解码
 text = ajax.text#其中一部分即为所需要的json文件

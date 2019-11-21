@@ -26,7 +26,9 @@
 #有一些UA可能是无效的，需要整理一下UA列表————20191028
 #有时即便响应都是200也会出现没登录成功地情况，需要检查ajax.text的内容，如果里面有var needlogin ‘1’的字样，说明没登录上，需要重新登录————20191118
 #ajax翻页的问题或许可以修改一下————20191118
-#由ajax发现的登录异常也应该可以回跳回去重新登录————20191118
+#由ajax发现的登录异常也应该可以回跳回去重新登录————20191118（已解决，见下一行）
+#通过修改login函数和Vorsetzen函数确保Vorsetzen结束后已经确实登录————20191121
+#由于换ip需要重复的代码太多，比如login函数，可以写一个装饰器————20191121
 from gevent import monkey;monkey.patch_all()
 import os
 import re
@@ -104,9 +106,72 @@ def randomdatas(filename):#把filepath传给它，它就能得到一个随机的
 
 
 @randomUA
-def login(datas,header = None):#把datas给它，它就能进行登录。应该同样也加入挂起功能
+def login(header = None):#把datas给它，它就能进行登录。应该同样也加入挂起功能
     global r
     global ippool
+    error = True
+    while error == True:
+        try:
+            ip = getip(ippool)
+            r.proxies = ip[0]
+            r.get('http://www.okooo.com/jingcai/',headers = header,verify=False,allow_redirects=False,timeout = 31)#从首页开启会话
+            error = False
+        except Exception as e:
+            ip[1] += 1#加一次犯规次数
+            print('Error:',e)
+            print('Vorsetzen进入首页超时，正在重拨')
+            error = True
+    #获取验证码
+    error = True
+    while error == True:
+        try:
+            ip = getip(ippool)
+            r.proxies = ip[0]
+            yanzhengma = r.get('http://www.okooo.com/I/?method=ok.user.settings.authcodepic',headers = header,verify=False,allow_redirects=False,timeout = 31)#get请求登录的验证码
+            error = False
+        except Exception as e:
+            ip[1] += 1#加一次犯规次数
+            print('Error:',e)
+            print('Vorsetzen获取验证码超时，正在重拨,')
+            error = True
+    filepath = 'D:\\data\\yanzhengma.png'
+    with open(filepath,"wb") as f:
+        f.write(yanzhengma.content)#保存验证码到本地
+    print('已获得验证码')
+    #验证码识别
+    datas = randomdatas(filepath)#生成随机账户的datas
+    while len(datas['AuthCode']) != 5:#如果验证码识别有问题，那就重新来
+        r = requests.Session()#开启会话
+        error = True
+        while error == True:
+            try:
+                ip = getip(ippool)
+                r.proxies = ip[0]#使用随机IP
+                r.get('http://www.okooo.com/jingcai/',headers = header,verify=False,allow_redirects=False,timeout = 31)
+                error = False
+            except Exception as e:
+                ip[1] += 1#加一次犯规次数
+                print('Error:',e)
+                print('Vorsetzen验证码识别超时，正在重拨')
+                error = True               
+        error = True
+        while error == True:
+            try:
+                ip = getip(ippool)
+                r.proxies = ip[0]#使用随机IP
+                yanzhengma = r.get('http://www.okooo.com/I/?method=ok.user.settings.authcodepic',headers = header,verify=False,allow_redirects=False,timeout = 31)#get请求登录的验证码
+                error = False
+            except Exception as e:
+                ip[1] += 1#加一次犯规次数
+                print('Vorsetzen验证码识别超时，正在重拨4')
+                error = True
+        with open(filepath,"wb") as f:
+            f.write(yanzhengma.content)#保存验证码到本地
+        print('已重新获得验证码')
+        datas = randomdatas(filepath)#生成随机账户的datas
+        print('云打码已尝试一次')
+    print('正在登录下面账户:')
+    print(str(datas))
     error = True
     while error == True:
         try:
@@ -142,7 +207,6 @@ def login(datas,header = None):#把datas给它，它就能进行登录。应该�
             ip[1] += 1#加一次犯规次数
             print('login超时，正在重拨')
             error = True
-
 
 
 
@@ -213,7 +277,6 @@ def ajax(url,i,header = None):#从单个ajax请求的响应中获取赔率并入
     a = r.get('http://www.okooo.com'+url+'ajax/?page='+i+'&companytype=BaijiaBooks&type=0',headers = header)
     a.encoding = 'unicode-escape'#用这个格式解码
     a.text#其中一部分即为所需要的json文件
-    sucker_error = 'var needLogin = \'1\''
 
 
 
@@ -238,71 +301,17 @@ def dangtianbisai(bisailist,date):#对列表里比赛的网址同时进行爬取
 def Vorsetzen(ippool,header = None):#从打开首页到登录成功
     global r
     #先进首页
-    error = True
-    while error == True:
-        try:
-            ip = getip(ippool)
-            r.proxies = ip[0]
-            r.get('http://www.okooo.com/jingcai/',headers = header,verify=False,allow_redirects=False,timeout = 31)#从首页开启会话
-            error = False
-        except Exception as e:
-            ip[1] += 1#加一次犯规次数
-            print('Error:',e)
-            print('Vorsetzen进入首页超时，正在重拨')
-            error = True
-    #获取验证码
-    error = True
-    while error == True:
-        try:
-            ip = getip(ippool)
-            r.proxies = ip[0]
-            yanzhengma = r.get('http://www.okooo.com/I/?method=ok.user.settings.authcodepic',headers = header,verify=False,allow_redirects=False,timeout = 31)#get请求登录的验证码
-            error = False
-        except Exception as e:
-            ip[1] += 1#加一次犯规次数
-            print('Error:',e)
-            print('Vorsetzen获取验证码超时，正在重拨,')
-            error = True
-    filepath = 'D:\\data\\yanzhengma.png'
-    with open(filepath,"wb") as f:
-        f.write(yanzhengma.content)#保存验证码到本地
-    print('已获得验证码')
-    #验证码识别
-    datas = randomdatas(filepath)#生成随机账户的datas
-    while len(datas['AuthCode']) != 5:#如果验证码识别有问题，那就重新来
-        r = requests.Session()#开启会话
-        error = True
-        while error == True:
-            try:
-                ip = getip(ippool)
-                r.proxies = ip[0]#使用随机IP
-                r.get('http://www.okooo.com/jingcai/',headers = header,verify=False,allow_redirects=False,timeout = 31)
-                error = False
-            except Exception as e:
-                ip[1] += 1#加一次犯规次数
-                print('Error:',e)
-                print('Vorsetzen验证码识别超时，正在重拨')
-                error = True               
-        error = True
-        while error == True:
-            try:
-                ip = getip(ippool)
-                r.proxies = ip[0]#使用随机IP
-                yanzhengma = r.get('http://www.okooo.com/I/?method=ok.user.settings.authcodepic',headers = header,verify=False,allow_redirects=False,timeout = 31)#get请求登录的验证码
-                error = False
-            except Exception as e:
-                ip[1] += 1#加一次犯规次数
-                print('Vorsetzen验证码识别超时，正在重拨4')
-                error = True
-        with open(filepath,"wb") as f:
-            f.write(yanzhengma.content)#保存验证码到本地
-        print('已重新获得验证码')
-        datas = randomdatas(filepath)#生成随机账户的datas
-        print('云打码已尝试一次')
-    login(datas)#登录账户
-    print('正在登录下面账户:')
-    print(str(datas))
-    print('登陆成功！')
+    while True:
+        login()#登录账户
+        wangye = r.get('http://www.okooo.com/soccer/match/?date='+'2017-01-01',headers = header,verify=False,allow_redirects=False,timeout = 9.5,proxies=random.choice(ippool))#检查是否登录成功
+        if (wangye.status_code != 200) and (wangye.status_code != 203):
+            print('登录失败，重新登录')
+            continue
+        else:
+            print('登陆成功！')
+            break#Vorsetzen结束
+            
+    
 
 
 def monitoring(ippool):#总的监控程序
