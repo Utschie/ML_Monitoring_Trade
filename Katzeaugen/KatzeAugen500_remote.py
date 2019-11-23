@@ -28,7 +28,7 @@
 #ajax翻页的问题或许可以修改一下————20191118
 #由ajax发现的登录异常也应该可以回跳回去重新登录————20191118（已解决，见下一行）
 #通过修改login函数和Vorsetzen函数确保Vorsetzen结束后已经确实登录————20191121
-#由于换ip需要重复的代码太多，比如login函数，可以写一个换ip函数，参数就是核心语句应该就可以，用exec动态执行————20191121
+#由于换ip需要重复的代码太多，比如login函数，可以写一个换ip函数，参数就是核心语句应该就可以，用exec函数动态执行————20191121(已完成)
 from gevent import monkey;monkey.patch_all()
 import os
 import re
@@ -64,6 +64,23 @@ with open('D:\\data\\UAlist.txt','r') as f:
     UAlist = (f.read().splitlines())#按行读取为列表并且去掉换行符
 
 UAlist.append('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/77.0.3865.120 Safari/537.36')#再加一个,总共456个
+def randomIP(code:str,position:str):
+    global ippool
+    global r
+    error = True
+    while error == True:
+        try:
+            ip = getip(ippool)
+            r.proxies = ip[0]#因为每个ip都是一个由ip值和犯规次数构成的一个数组
+            value = eval(code)
+            error = False
+            return value
+        except Exception as e:
+            ip[1] += 1#加一次犯规次数
+            print('Error:',e)
+            print(position+'超时，正在重拨')
+            error = True
+
 
 def randomUA(func):#用与随机UA的装饰器
     global UAlist
@@ -107,33 +124,16 @@ def randomdatas(filename):#把filepath传给它，它就能得到一个随机的
 
 @randomUA
 def login(header = None):#把datas给它，它就能进行登录。应该同样也加入挂起功能
+    code1 = "r.get('http://www.okooo.com/jingcai/',headers = header,verify=False,allow_redirects=False,timeout = 31)"#从首页开启会话
+    code2 = "r.post('http://www.okooo.com/I/?method=ok.user.login.login',headers = header,verify=False,data = datas,allow_redirects=False,timeout = 16)"#向对面服务器传送数据
+    code3 = "r.get('http://www.okooo.com/soccer/',headers = header,verify=False,allow_redirects=False,timeout = 16)"#进入足球中心
+    code4 = "r.get('http://www.okooo.com/soccer/match/',headers = header,verify=False,allow_redirects=False,timeout = 16)"#进入足球日历
+    code5 = "r.get('http://www.okooo.com/I/?method=ok.user.settings.authcodepic',headers = header,verify=False,allow_redirects=False,timeout = 31)"#get请求登录的验证码
     global r
     global ippool
-    error = True
-    while error == True:
-        try:
-            ip = getip(ippool)
-            r.proxies = ip[0]
-            r.get('http://www.okooo.com/jingcai/',headers = header,verify=False,allow_redirects=False,timeout = 31)#从首页开启会话
-            error = False
-        except Exception as e:
-            ip[1] += 1#加一次犯规次数
-            print('Error:',e)
-            print('Vorsetzen进入首页超时，正在重拨')
-            error = True
+    randomIP(code1,'Vorsetzen进入首页')
     #获取验证码
-    error = True
-    while error == True:
-        try:
-            ip = getip(ippool)
-            r.proxies = ip[0]
-            yanzhengma = r.get('http://www.okooo.com/I/?method=ok.user.settings.authcodepic',headers = header,verify=False,allow_redirects=False,timeout = 31)#get请求登录的验证码
-            error = False
-        except Exception as e:
-            ip[1] += 1#加一次犯规次数
-            print('Error:',e)
-            print('Vorsetzen获取验证码超时，正在重拨,')
-            error = True
+    yanzhengma = randomIP(code5,'login获取验证码')
     filepath = 'D:\\data\\yanzhengma.png'
     with open(filepath,"wb") as f:
         f.write(yanzhengma.content)#保存验证码到本地
@@ -142,29 +142,8 @@ def login(header = None):#把datas给它，它就能进行登录。应该同样�
     datas = randomdatas(filepath)#生成随机账户的datas
     while len(datas['AuthCode']) != 5:#如果验证码识别有问题，那就重新来
         r = requests.Session()#开启会话
-        error = True
-        while error == True:
-            try:
-                ip = getip(ippool)
-                r.proxies = ip[0]#使用随机IP
-                r.get('http://www.okooo.com/jingcai/',headers = header,verify=False,allow_redirects=False,timeout = 31)
-                error = False
-            except Exception as e:
-                ip[1] += 1#加一次犯规次数
-                print('Error:',e)
-                print('Vorsetzen验证码识别超时，正在重拨')
-                error = True               
-        error = True
-        while error == True:
-            try:
-                ip = getip(ippool)
-                r.proxies = ip[0]#使用随机IP
-                yanzhengma = r.get('http://www.okooo.com/I/?method=ok.user.settings.authcodepic',headers = header,verify=False,allow_redirects=False,timeout = 31)#get请求登录的验证码
-                error = False
-            except Exception as e:
-                ip[1] += 1#加一次犯规次数
-                print('Vorsetzen验证码识别超时，正在重拨4')
-                error = True
+        randomIP(code1,'login进入首页')
+        yanzhengma = randomIP(code5,'login验证码识别')
         with open(filepath,"wb") as f:
             f.write(yanzhengma.content)#保存验证码到本地
         print('已重新获得验证码')
@@ -172,41 +151,12 @@ def login(header = None):#把datas给它，它就能进行登录。应该同样�
         print('云打码已尝试一次')
     print('正在登录下面账户:')
     print(str(datas))
-    error = True
-    while error == True:
-        try:
-            ip = getip(ippool)
-            r.proxies = ip[0]
-            r.post('http://www.okooo.com/I/?method=ok.user.login.login',headers = header,verify=False,data = datas,allow_redirects=False,timeout = 16)#向对面服务器传送数据
-            error = False
-        except Exception:
-            ip[1] += 1#加一次犯规次数
-            print('login超时，正在重拨')
-            error = True
-    error = True
-    while error == True:
-        try:
-            ip = getip(ippool)
-            r.proxies = ip[0]
-            r.get('http://www.okooo.com/soccer/',headers = header,verify=False,allow_redirects=False,timeout = 16)#进入足球中心
-            error = False
-        except Exception:
-            ip[1] += 1#加一次犯规次数
-            print('login超时，正在重拨')
-            error = True
+    randomIP(code2,'post datas')
+    randomIP(code3,'login 进入足球中心')
     header['Referer'] = 'http://www.okooo.com/soccer/'#必须加上这个才能进入足球日历
     header['Upgrade-Insecure-Requests'] = '1'#这个也得加上
-    error = True
-    while error == True:
-        try:
-            ip = getip(ippool)
-            r.proxies = ip[0]
-            r.get('http://www.okooo.com/soccer/match/',headers = header,verify=False,allow_redirects=False,timeout = 16)#进入足球日历,成功
-            error = False
-        except Exception:
-            ip[1] += 1#加一次犯规次数
-            print('login超时，正在重拨')
-            error = True
+    randomIP(code4,'login 进入足球日历')
+    
 
 
 
