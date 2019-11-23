@@ -64,6 +64,8 @@ with open('D:\\data\\UAlist.txt','r') as f:
     UAlist = (f.read().splitlines())#按行读取为列表并且去掉换行符
 
 UAlist.append('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/77.0.3865.120 Safari/537.36')#再加一个,总共456个
+
+
 def randomIP(code:str,position:str):
     global ippool
     global r
