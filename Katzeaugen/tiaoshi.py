@@ -1,5 +1,6 @@
 #此程序是用来调试个别函数的程序，让每次调试都在最短时间做好准备工作
 #先把代码全都加载
+#妈的受疫情影响全球所有比赛都停了，博彩公司也不开赔率了————20200318
 from gevent import monkey;monkey.patch_all()
 import os
 import re
@@ -292,7 +293,10 @@ def monitoring(ippool):#总的监控程序
 ##########################################################下面是开始一步一步进入###########################################
 today = time.strftime("%Y-%m-%d")#今天
 nextmonth = datetime.strftime(datetime.now()+timedelta(30),"%Y-%m-%d")#下个月，威廉一些重要比赛甚至提前一个多月就出了
+#lastmonth = datetime.strftime(datetime.now()+timedelta(-30),"%Y-%m-%d")#上个月，因为受疫情影响全球比赛都没了，博彩公司也不开盘
 datelist = dateRange(today,nextmonth)#生成日期列表
+#datelist = dateRange(lastmonth,today)#生成上个月日期列表
+
 r = requests.Session()
 header = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/77.0.3865.120 Safari/537.36'}
 header['Host'] = 'www.okooo.com'#必须加上这个才能进入足球日历
