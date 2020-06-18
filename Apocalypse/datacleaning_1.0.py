@@ -5,7 +5,7 @@
 #一个76.5M的原文件写入dataframe要5472秒，压缩成csv变成28.6M，读取只需1秒，所以要先把所有的文件转成csv文件————20200618
 #按上面那个速度400G数据全转完需要8000多个小时，需要用并行的方式插入数据框————20200618（已解决）
 #找到问题了，其实数据转换很快，但是插入pandas的dataframe的过程特别慢，那就直接写入csv吧
-#直接写入csv用时18秒
+#直接写入csv用时18秒，非常棒
 import re
 import datetime
 import pandas as pd
@@ -52,6 +52,11 @@ with open('D:\\data_csv\\2014-11-30.csv','w',newline='') as f:
     w.writerows(dictlist)
 
 df=pd.read_csv('D:\\data_csv\\2014-11-30.csv',encoding='GBK')#再讲csv读入dataframe，注意编码
+#接下来进行数据重组处理
+
+
+
+
 end=time.time()
 print('耗时'+str(end-start)+'秒')
 
