@@ -53,6 +53,15 @@ with open('D:\\data_csv\\2014-11-30.csv','w',newline='') as f:
 
 df=pd.read_csv('D:\\data_csv\\2014-11-30.csv',encoding='GBK')#再讲csv读入dataframe，注意编码
 #接下来进行数据重组处理
+dfa=df.copy()#复制dfa用来做试验
+a=df['urlnum'].value_counts()#获得urlnum的所有值
+bisailist=list(a.index)#把urlnum的所有值转换成一个列表，可以用来循环处理
+dfb=dfa.loc[lambda dfa:dfa.urlnum==681079]#用调用callable的方式选择其中一场比赛（比如第一场）
+resttimelist=list(dfb.resttime.value_counts().sort_index(ascending=False).index)#得到单场比赛的不同变盘时间点作为一个列表并从早到晚排序，共变了2702次
+#下面按着剩余时间对数据切片，产生2702个切片，不知道是这样好一点还是保留时间戳处理好一点
+
+
+
 
 
 
