@@ -7,6 +7,7 @@
 #找到问题了，其实数据转换很快，但是插入pandas的dataframe的过程特别慢，那就直接写入csv吧
 #直接写入csv用时18秒，非常棒
 #resttime是以分钟为单位的
+#最终是要以每天做一个文件夹，每个文件夹里带有着以urlnum命名的当天比赛的名字的文件，每个文件里存放着密度棒序列————20200620
 import re
 import datetime
 import pandas as pd
@@ -60,8 +61,8 @@ bisailist=list(a.index)#把urlnum的所有值转换成一个列表，可以用�
 dfb=dfa.loc[lambda dfa:dfa.urlnum==681079]#用调用callable的方式选择其中一场比赛（比如第一场）
 resttimelist=list(dfb.resttime.value_counts().sort_index(ascending=False).index)#得到单场比赛的不同变盘时间点作为一个列表并从早到晚排序，共变了2702次
 #下面按着剩余时间对数据切片，产生2702个切片，不知道是这样好一点还是保留时间戳处理好一点
-
-
+dfc=dfb.loc[lambda dfb:dfb.resttime>=resttimelist[1000]]#选择某个时间点的列表，比如说到第1000次更新的时刻
+dfc.drop_duplicates('cid',keep='last')#只保留最大的resttime的那次更新，即为当时的状态（或许一开始的时候可以对数据集排个序，防止更新数据有误）
 
 
 
