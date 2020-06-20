@@ -1,6 +1,7 @@
 #这是datacleaning的完整运行文件,先仅限于2014-11-30.txt这一个文件，测试一下速度
 #bisai2excel即便是单场比赛也有5240次变盘，写入excel非常缓慢
-#即便转成json，写入后的文件居然有400M，因为拆分后每张表的keys都要重复一遍，这样就变得很大
+#即便转成json，单场比赛写入后的文件居然有400M，因为拆分后每张表的keys都要重复一遍，这样就变得很大
+#应该想办法把数据缩小，比如看能不能用多维数组之类的
 from gevent import monkey;monkey.patch_all()
 import gevent
 import re
