@@ -6,6 +6,7 @@
 #按上面那个速度400G数据全转完需要8000多个小时，需要用并行的方式插入数据框————20200618（已解决）
 #找到问题了，其实数据转换很快，但是插入pandas的dataframe的过程特别慢，那就直接写入csv吧
 #直接写入csv用时18秒，非常棒
+#resttime是以分钟为单位的
 import re
 import datetime
 import pandas as pd
@@ -59,6 +60,7 @@ bisailist=list(a.index)#把urlnum的所有值转换成一个列表，可以用�
 dfb=dfa.loc[lambda dfa:dfa.urlnum==681079]#用调用callable的方式选择其中一场比赛（比如第一场）
 resttimelist=list(dfb.resttime.value_counts().sort_index(ascending=False).index)#得到单场比赛的不同变盘时间点作为一个列表并从早到晚排序，共变了2702次
 #下面按着剩余时间对数据切片，产生2702个切片，不知道是这样好一点还是保留时间戳处理好一点
+
 
 
 
