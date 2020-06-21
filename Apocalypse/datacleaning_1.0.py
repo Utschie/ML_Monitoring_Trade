@@ -8,7 +8,8 @@
 #当前的速度是一天比赛的数据预处理需要668秒，但是数据大小是2.3G，下一步是改用netCDF格式，以及去除一些无用的部分数据，看是否速度提升体积下降————20200621
 #下一步是可能搞一个双索引（urlnum,frametime）,然后一天的比赛都存在一个dataframe里————20200621
 #单纯的netCDF，没有sparse，并不会使体积减小。暂时只能通过删数据来缩小体积
-#另外还有一种方案，就是在训练中实时处理数据，可以省空间
+#另外还有一种方案，就是在训练中动态处理数据并提交，可以省空间
+#把gailv等于fanhuanlv除以peilv，所以把这个删掉
 
 from gevent import monkey;monkey.patch_all()
 import gevent
@@ -38,9 +39,6 @@ def str2dict(str):#讲datalist中的单个元素转换插入dataframe的函数
     dic['peilv_fair']=dic['peilv'][1]
     dic['peilv_guest']=dic['peilv'][2]
     del dic['peilv']
-    dic['gailv_host']=dic['gailv'][0]
-    dic['gailv_fair']=dic['gailv'][1]
-    dic['gailv_guest']=dic['gailv'][2]
     del dic['gailv']
     dic['kailizhishu_host']=dic['kailizhishu'][0]
     dic['kailizhishu_fair']=dic['kailizhishu'][1]
