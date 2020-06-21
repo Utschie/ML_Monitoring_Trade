@@ -2,6 +2,10 @@
 #bisai2excel即便是单场比赛也有5240次变盘，写入excel非常缓慢
 #即便转成json，单场比赛写入后的文件居然有400M，因为拆分后每张表的keys都要重复一遍，这样就变得很大
 #应该想办法把数据缩小，比如看能不能用多维数组之类的
+#尝试用xarray然后以netCDF格式（.nc）存储，但是出了个问题，float object has no attribute 'encode'
+#可能是因为数据集里有缺失值nan被当做字符串了，但是后面又有浮点数据，所以出错。
+#只要设一个frametime作为索引，然后把所有的表连起来就可以了
+#下一步是可能搞一个双索引（urlnum,frametime）,然后一天的比赛都存在一个dataframe里————20200621
 from gevent import monkey;monkey.patch_all()
 import gevent
 import re
@@ -55,20 +59,22 @@ urlnumlist=list(df['urlnum'].value_counts().index)#获得比赛列表
 bisailist=list(map(bisaiquery,urlnumlist))#获得由各个比赛的dataframe组成的表
 
 
-def bisai2excel(bisai):#把单场比赛转换成用有多个表格的excel文件
+def bisai2netCDF(bisai):#把单场比赛转换成netCDF文件
     urlnum=str(bisai.urlnum.values[0])
     resttimelist=list(bisai.resttime.value_counts().sort_index(ascending=False).index)#获得该场比赛的变盘列表并排序
-    dfdict=dict()
+    dfdict=list()
     for i in resttimelist:
         df=bisai.loc[lambda bisai:bisai.resttime>=i]
-        dfdict[str(i)]=df.drop_duplicates('cid',keep='last')
-    pn=pd.Panel(dfdict)
-    pn.to_excel('D\\data_excel\\'+urlnum+'.xlsx')
+        df['frametime']=i
+        df=df.set_index('frametime')
+        dfdict.append(df.drop_duplicates('cid',keep='last'))
+    newdict=pd.concat(dfdict)#一个新的
+    
     
 def coprocess(bisailist):#用协程的方式并发写入
     ge = list()
     for i in bisailist:
-        ge.append(gevent.spawn(bisai2excel,i))
+        ge.append(gevent.spawn(bisai2netCDF,i))
     gevent.joinall(ge)
 
 coprocess(bisailist)
@@ -79,18 +85,5 @@ coprocess(bisailist)
 
 
 
-dfb=pd.DataFrame()
-resttimelist=list(dfb.resttime.value_counts().sort_index(ascending=False).index)
-dfc=dfb.loc[lambda dfb:dfb.resttime>=resttimelist[1000]]#选择某个时间点的列表，比如说到第1000次更新的时刻
-dfc=dfc.drop_duplicates('cid',keep='last')#只保留最大的resttime的那次更新，即为当时的状态（或许一开始的时候可以对数据集排个序，防止更新数据有误）
-dfd=dfb.loc[lambda dfb:dfb.resttime>=resttimelist[600]]
-dfd=dfd.drop_duplicates('cid',keep='last')#又一个数据帧
-datadict={'1000':dfc,'600':dfd}#讲所有数据帧写入字典
-pn=pd.Panel(datadict)#将字典转成panel
-pn.to_excel('D:\\data\\pn.xlsx')#将panel写入excel，且一个数据帧作为一个sheet，此时各个表相同行都是相同的公司赔率
-pnnew1=pd.read_excel('D:\\data\\pn.xlsx',sheet_name=0)#读取第一张表
-pnnew1=pnnew1.dropna(axis=0,how='all')#读出表后去除空行
-pnnew=pd.read_excel('D:\\data\\pn.xlsx',sheet_name=None)#读出每一张表构成一个OrderedDict
-keylist=list(pnnew.keys())#获得各个表的名字，通常时以更新时间点命名的
-pnnew1=pnnew[keylist[0]]#通过更新时间点的名字获得单个表
+
 
