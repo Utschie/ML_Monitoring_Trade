@@ -1,5 +1,6 @@
 #此文件是datacleaning_1.5，比1.0提升部分性能
 #删除了冗余数据，只保留与最简单的模型相关的数据后，时间变成470秒，数据体积767MB————20200621
+#最原始的txt数据大小是76.5M,转换后变成767M，数据体积扩大了10倍。还算可以接受的范围
 from gevent import monkey;monkey.patch_all()
 import gevent
 import re
