@@ -82,12 +82,16 @@ def coprocess(bisailist):#用协程的方式并发写入
 filelist = os.listdir('D:\\data\\20141130-20160630')#读出这一年半的数据文件名
 datelist=[i[0:-4] for i in filelist]
 for i in datelist:
-    outputpath='F:\\cleaned_data_20141130-20160630\\'+i#为每一天建立一个文件夹
+    start=time.time()
+    outputpath='F:\\cleaned_data_20141130-20160630\\'+i#为这一天建立一个文件夹
     os.makedirs(outputpath)#建立文件夹
-    df=txt2csv(i)#讲txt文件导出csv后读入dataframe
+    df=txt2csv(i)#将txt文件导出csv后读入dataframe
     urlnumlist=list(df['urlnum'].value_counts().index)#获得当天比赛列表
     bisailist=list(map(bisaiquery,urlnumlist))#获得由各个比赛的dataframe组成的表
-    coprocess(bisailist)#协程并发分
+    coprocess(bisailist)#协程并发分别写入文件
+    end=time.time()
+    str='日期：'+i+'已清洗完成\n'+'耗时：'+str(end-start)+'秒\n'
+    print(str)
 
 
 
