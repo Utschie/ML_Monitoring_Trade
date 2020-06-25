@@ -2,6 +2,8 @@
 #删除了冗余数据，只保留与最简单的模型相关的数据后，时间变成470秒，数据体积767MB————20200621
 #最原始的txt数据大小是76.5M,转换后变成767M，数据体积扩大了10倍。还算可以接受的范围
 #暂时还没有测试————20200624
+#最好还加一个多进程，开3个核跑,cpu利用率大约50%
+#把文件拷入F盘，然后conda里切换盘符到F盘，执行python datacleaning_1.5.py
 from gevent import monkey;monkey.patch_all()
 import gevent
 import re
@@ -9,6 +11,7 @@ import datetime
 import pandas as pd
 import time
 import csv
+from multiprocessing import Process
 import os#用与建立文件夹
 '''先转成csv'''
 #进入文件夹，生成文件名序列
@@ -32,8 +35,8 @@ def txt2csv(date):
     return df
 
 #把列表中各个元素转成字典,并且把peilv，gailv和kailizhishu分拆成三列，否则无法正确读入pandas
-def str2dict(str):#讲datalist中的单个元素转换插入dataframe的函数
-    dic=eval(str)
+def str2dict(string):#讲datalist中的单个元素转换插入dataframe的函数
+    dic=eval(string)
     del dic['timestamp']
     del dic['zhudui']
     del dic['kedui']
@@ -51,9 +54,13 @@ def str2dict(str):#讲datalist中的单个元素转换插入dataframe的函数
     return dic
 
 
-def bisaiquery(num):
-    bisai=df.loc[lambda dfa:dfa.urlnum==num]
-    return bisai
+def bisaiquery(df):#因为后面的map函数只能接受一个参数的列表，所以在此嵌套一下，然后返回相应的函数
+    def bisaiquery_in(num):
+        bisai=df.loc[lambda dfa:dfa.urlnum==num]
+        return bisai
+    return bisaiquery_in
+
+    
 
 def bisai2csv(bisai):#把单场比赛转换成csv文件
     urlnum=str(bisai.urlnum.values[0])
@@ -79,19 +86,44 @@ def coprocess(bisailist):#用协程的方式并发写入
     gevent.joinall(ge)
 
 
-filelist = os.listdir('D:\\data\\20141130-20160630')#读出这一年半的数据文件名
-datelist=[i[0:-4] for i in filelist]
-for i in datelist:
-    start=time.time()
-    outputpath='F:\\cleaned_data_20141130-20160630\\'+i#为这一天建立一个文件夹
-    os.makedirs(outputpath)#建立文件夹
-    df=txt2csv(i)#将txt文件导出csv后读入dataframe
-    urlnumlist=list(df['urlnum'].value_counts().index)#获得当天比赛列表
-    bisailist=list(map(bisaiquery,urlnumlist))#获得由各个比赛的dataframe组成的表
-    coprocess(bisailist)#协程并发分别写入文件
-    end=time.time()
-    str='日期：'+i+'已清洗完成\n'+'耗时：'+str(end-start)+'秒\n'
-    print(str)
+def proc(datelist):
+    for i in datelist:
+        start=time.time()
+        outputpath='F:\\cleaned_data_20141130-20160630\\'+i#为这一天建立一个文件夹
+        os.makedirs(outputpath)#建立文件夹
+        df=txt2csv(i)#将txt文件导出csv后读入dataframe
+        urlnumlist=list(df['urlnum'].value_counts().index)#获得当天比赛列表
+        bisailist=list(map(bisaiquery(df),urlnumlist))#获得由各个比赛的dataframe组成的表
+        coprocess(bisailist)#协程并发分别写入文件
+        end=time.time()
+        outputstr='日期：'+i+'已清洗完成\n'+'耗时：'+str(end-start)+'秒\n'
+        print(outputstr)
+
+
+def listdivision(listTemp, n):
+    list_list=list()
+    for i in range(0, len(listTemp), n):
+        list_list.append(listTemp[i:i + n])
+    return list_list
+
+    
+
+if __name__ == '__main__':
+    filelist = os.listdir('D:\\data\\20141130-20160630')#读出这一年半的数据文件名
+    datelist=[i[0:-4] for i in filelist]
+    datelist_list=listdivision(datelist,146)
+    process_list = []
+    for i in datelist_list:
+        p = Process(target=proc,args=(i,))
+        p.start()
+        process_list.append(p)
+
+
+    for i in process_list:
+        p.join()
+
+
+
 
 
 
