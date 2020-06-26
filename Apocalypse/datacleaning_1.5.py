@@ -4,6 +4,7 @@
 #暂时还没有测试————20200624
 #最好还加一个多进程，开3个核跑,cpu利用率大约50%
 #把文件拷入F盘，然后conda里切换盘符到F盘，执行python datacleaning_1.5.py
+#在清洗数据是出现了一个问题，就是memory_error，应该建立一个写入log文件，来查看可能出现的错误————20200626
 from gevent import monkey;monkey.patch_all()
 import gevent
 import re
