@@ -58,4 +58,5 @@ Apocalypse 1.0系列 可能模型：
 
 
 
-#conda activate tf-gpu   进入tf-gpu环境
+#conda activate tf  进入tf-gpu环境
+#python 进入python
