@@ -8,3 +8,9 @@
 
 
 #先写一个神经网络类
+import tensorflow as tf
+
+class Q_Model(tf.keras.Model):
+    def __init__(self):
+        super().__init__()#调用tf.keras.Model的类初始化方法
+        
