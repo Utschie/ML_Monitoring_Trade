@@ -33,6 +33,13 @@ class Dataloader():#需要定义一个数据预处理器，把每次不同大小
 
 
 class Q_Model(tf.keras.Model):
-    def __init__(self):
+    def __init__(self,batch_size,
+                      n_companies,
+                      n_features,
+                      n_actions):
+        self.batch_size = 50
+        self.n_companies = n_companies
+        self.n_features = n_features
+        self.n_actions = n_actions
         super().__init__()#调用tf.keras.Model的类初始化方法
         
