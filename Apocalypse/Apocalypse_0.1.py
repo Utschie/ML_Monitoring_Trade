@@ -5,10 +5,30 @@
 #Q网络把当前状态（即每个时刻对应的那张表）和当前动作作为x，把由下一状态和当前回报组成的tagaet值作为标签y，然后使损失函数最小
 #算法见https://zhuanlan.zhihu.com/p/21421729
 #莫烦的github上用的是Nature Q网络，即单独做了一个Target Q网络
+#神经网络传入的数据是一个3维张量，batch_size*公司数*指标数，但是由于更新时间差异，公司数会有所不同，就好像图像尺寸大小不一一样
+#上述情况或者是把其他未更新数据用东西填充，或者是把公司数*指标数这样一个当前状态的矩阵转化成一个固定大小的东西，比如“密度棒”
 
 
 #先写一个神经网络类
 import tensorflow as tf
+class Dataloader():#需要定义一个数据预处理器，把每次不同大小的状态矩阵转成固定大小
+    def __init__(self):
+        #传入原始数据，为一个不定长张量对象
+        print('数据预处理器初始化完成')
+        
+
+    def load(self,origin:tf.RaggedTensor):
+        self.origin=origin
+
+
+
+
+        return #返回固定尺寸张量
+
+
+
+
+
 
 class Q_Model(tf.keras.Model):
     def __init__(self):
