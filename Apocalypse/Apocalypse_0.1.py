@@ -11,11 +11,16 @@
 #把公司id按从小到大排列然后组成一个公司数*指标数的矩阵，保证传入的每个矩阵的对应行都对应相同的公司
 #另外给定的环境模型除了赔率矩阵外，还要有终止状态，一个就是钱花完了的状态，还有一个就是终赔出来的状态
 #还是应该先数据预处理，处理成一个水位的n_company*1的向量，然后根据得出的q值解码出怎么买，来减小策略空间的数量————20200724
-
+'''
+两种可能：第一种是把矩阵数据预处理成一个向量，然后输出一个向量再解码成策略
+         第二种是前面输入数据不用处理成向量，然后后面的q值函数处理成一个向量，然后把这个向量解码成策略
+最重要的其实是找到一个可能的q值函数和策略的对应关系，因为每个状态其实都有一个最高水位和最低水位，所以其实每次的动作只有6*11种可能
+即在最高/最低水位买入胜/平/负0,10,20...100元
+'''
 
 #先写一个神经网络类
 import tensorflow as tf
-class Dataloader():#需要定义一个数据预处理器，把每次的状态矩阵转化成一个向量
+class Dataloader():#需要定义一个数据预处理器，除了对输入数据处理外，还要把策略的空间搞出来，在所有的公司随机选
     def __init__(self):
         #传入原始数据，为一个不定长张量对象
         print('数据预处理器初始化完成')
@@ -46,6 +51,6 @@ class Q_Model(tf.keras.Model):
         super().__init__()#调用tf.keras.Model的类初始化方法
         self.flatten = tf.keras.layers.Flatten() #把单个矩阵展平
         self.dense1 = tf.keras.layers.Dense(units=100, activation=tf.nn.relu)#第一个全连接层
-        self.dense2 = tf.keras.layers.Dense(units=self.n_companies*3)#暂时是觉得有这么多种策略，但还是觉得怪怪的
+        self.dense2 = tf.keras.layers.Dense(units=66)#在最高/最低水位买入胜/平/负各多少钱
         
         
