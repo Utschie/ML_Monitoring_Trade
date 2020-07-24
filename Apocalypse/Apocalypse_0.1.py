@@ -58,7 +58,7 @@ class Q_Model(tf.keras.Model):
         super().__init__()#调用tf.keras.Model的类初始化方法
         self.flatten = tf.keras.layers.Flatten() #把单个矩阵展平
         self.dense1 = tf.keras.layers.Dense(units=100, activation=tf.nn.relu)#第一个全连接层
-        self.dense2 = tf.keras.layers.Dense(units=6)#在赔率最高处，买/不买
+        self.dense2 = tf.keras.layers.Dense(units=6)#代表着在当前最大赔率前，买和不买的六种行动的价值
 
 
 
