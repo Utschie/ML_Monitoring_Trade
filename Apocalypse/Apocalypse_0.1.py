@@ -18,15 +18,26 @@
 #第三，要让一次比赛的操作步骤尽量少；第四，要用整数
 #所以q函数应该决定，要不要买入这里面的赔率最大值，然后还需要一个策略，就是买多少的策略。
 #最后q函数的值应该是还是代表着行动价值，q函数出选择，然后还需要定义一个决策器，用来接收q函数的决策计算要买多少————20200724
+#其实可以把后面的决策器部分也合并进来，这样就把最后一层节点就会很多，所以本版先把决策器分出来，确定好买入卖出决策后，具体数量就用线性方程组求，使收益恒定
+#记忆回溯部分之后或许可以尝试利用统计距离选取与当前状态最相近的50个训练
+#批量梯度下降是在损失函数迭代的过程中算法不同，神经网络结构本身不需要把batch_size当做一个维度————20200724
 '''
 两种可能：第一种是把矩阵数据预处理成一个向量，然后输出一个向量再解码成策略
          第二种是前面输入数据不用处理成向量，然后后面的q值函数处理成一个向量，然后把这个向量解码成策略
 最重要的其实是找到一个可能的q值函数和策略的对应关系，因为每个状态其实都有一个最高水位和最低水位，所以其实每次的动作只有6*11种可能
 即在最高/最低水位买入胜/平/负0,10,20...100元
 '''
-
+'''
+批量梯度下降方法如下
+opt = tf.keras.optimizers.RMSprop()  设定最优化方法
+var_list=......
+loss=。。。。。。   设定损失函数
+其中loss对象要继承tensorflow的基础loss类然后重写，loss类本身就是支持y_true和y_pred是以batch的list传入
+opt.minimize( loss, var_list, grad_loss=None, name=None) 传入损失函数，变量列表，然后更新var_list
+'''
 #先写一个神经网络类
 import tensorflow as tf
+from collections import deque
 class Dataloader():#需要定义一个数据预处理器，除了对输入数据处理外，还要把策略的空间搞出来，在所有的公司随机选
     def __init__(self):
         #传入原始数据，为一个不定长张量对象
@@ -47,18 +58,30 @@ class Dataloader():#需要定义一个数据预处理器，除了对输入数据
 
 
 class Q_Model(tf.keras.Model):
-    def __init__(self,batch_size,
+    def __init__(self,
                       n_companies,
                       n_features,
                       n_actions):
-        self.batch_size = 50
         self.n_companies = n_companies
         self.n_features = n_features
         self.n_actions = n_actions
         super().__init__()#调用tf.keras.Model的类初始化方法
         self.flatten = tf.keras.layers.Flatten() #把单个矩阵展平
-        self.dense1 = tf.keras.layers.Dense(units=100, activation=tf.nn.relu)#第一个全连接层
-        self.dense2 = tf.keras.layers.Dense(units=6)#代表着在当前最大赔率前，买和不买的六种行动的价值
+        self.dense1 = tf.keras.layers.Dense(units=int(3*self.n_companies*self.n_features), activation=tf.nn.relu)#输入层
+        self.dense2 = tf.keras.layers.Dense(units=int(0.75*self.n_companies*self.n_features), activation=tf.nn.relu)#一个隐藏层
+        self.dense3 = tf.keras.layers.Dense(units=6)#输出层代表着在当前最大赔率前，买和不买的六种行动的价值
+
+    def call(self,inputs): #输入
+        x = self.flatten(inputs)#输出[2100,1]
+        x = self.dense1(x)#输出[6300,1]
+        x = self.dense2(x)#输出= [4725,1]
+        output = self.dense3(x)#输出= [6,1]
+        return output
+
+
+         
+         
+
 
 
 
