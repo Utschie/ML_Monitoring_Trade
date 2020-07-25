@@ -21,6 +21,7 @@
 #其实可以把后面的决策器部分也合并进来，这样就把最后一层节点就会很多，所以本版先把决策器分出来，确定好买入卖出决策后，具体数量就用线性方程组求，使收益恒定
 #记忆回溯部分之后或许可以尝试利用统计距离选取与当前状态最相近的50个训练
 #批量梯度下降是在损失函数迭代的过程中算法不同，神经网络结构本身不需要把batch_size当做一个维度————20200724
+#需要知道所有数据中有多少个cid，这就很烦，因为你也不知道是不是有新公司之类的，而且一年的数据就已经很多了，遍历一遍很讨厌————20200726
 '''
 两种可能：第一种是把矩阵数据预处理成一个向量，然后输出一个向量再解码成策略
          第二种是前面输入数据不用处理成向量，然后后面的q值函数处理成一个向量，然后把这个向量解码成策略
@@ -38,6 +39,8 @@ opt.minimize( loss, var_list, grad_loss=None, name=None) 传入损失函数，�
 #先写一个神经网络类
 import tensorflow as tf
 from collections import deque
+import numpy as np
+import pandas as pd
 class Dataloader():#需要定义一个数据预处理器，除了对输入数据处理外，还要把策略的空间搞出来，在所有的公司随机选
     def __init__(self):
         #传入原始数据，为一个不定长张量对象
@@ -57,7 +60,7 @@ class Dataloader():#需要定义一个数据预处理器，除了对输入数据
 
 
 
-class Q_Model(tf.keras.Model):
+class Q_Network(tf.keras.Model):
     def __init__(self,
                       n_companies,
                       n_features,
@@ -97,4 +100,16 @@ class Decision_maker():
 
 
         return    
-        
+
+
+
+if __name__ == "__main__":
+    filepath = 'D:\\data\\2014-11-30\\702655.csv'#文件路径
+    data = data = pd.read_csv(filepath)#读取文件
+    frametimelist=data.frametime.value_counts().sort_index(ascending=False).index#将frametime的值读取成列表
+    for i in frametimelist:
+        state = data.groupby('frametime').get_group(i)#从第一次变盘开始得到当次转移
+        state = np.array(state)#转成numpy多维数组
+        #在填充成矩阵之前需要知道所有数据中到底有多少个cid
+
+
