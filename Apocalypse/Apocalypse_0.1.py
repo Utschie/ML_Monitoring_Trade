@@ -179,7 +179,7 @@ if __name__ == "__main__":
         if len(replay_buffer) >= batch_size:
             batch_state, batch_action, batch_revenue, batch_next_state = zip(*random.sample(replay_buffer, batch_size))#zip(*...)解开分给别人的意思
             y_true = eval_Q.predict(batch_state)
-            y_pred = batch_revenue+target_Q.predict(batch_next_state)
+            y_pred = batch_revenue+target_Q.predict(batch_next_state)#这里好像不太对，q值和收益也不同维啊
             loss =  tf.keras.losses.mean_squared_error(y_true = y_true,y_pred = y_pred)
             opt.minimize(loss,eval_Q.variables,grad_loss=None, name=None)
 
