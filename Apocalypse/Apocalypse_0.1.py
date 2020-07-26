@@ -105,7 +105,7 @@ class Decision_maker():
 
 if __name__ == "__main__":
     filepath = 'D:\\data\\2014-11-30\\702655.csv'#文件路径
-    data = data = pd.read_csv(filepath)#读取文件
+    data = pd.read_csv(filepath)#读取文件
     frametimelist=data.frametime.value_counts().sort_index(ascending=False).index#将frametime的值读取成列表
     for i in frametimelist:
         state = data.groupby('frametime').get_group(i)#从第一次变盘开始得到当次转移
