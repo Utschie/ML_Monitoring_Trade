@@ -44,6 +44,7 @@ from collections import deque
 import numpy as np
 import pandas as pd
 import csv
+import random
 class Env():#定义一个环境用来与网络交互
     def __init__(self,filepath):
         with open('D:\\data\\cidlist.csv') as f:
@@ -73,8 +74,15 @@ class Env():#定义一个环境用来与网络交互
             yield statematrix
 
         
-    def get_transition(self):
-        return self.episode.__next__()#网络从此取出下一幕
+    def get_state(self):
+        try:
+            next_state=self.episode.__next__()
+            done = False
+        except:
+            next_state = np.zeros((410,8))
+            done = True
+
+        return next_state, done#网络从此取出下一幕
 
 
 
@@ -100,13 +108,17 @@ class Q_Network(tf.keras.Model):
         self.dense2 = tf.keras.layers.Dense(units=int(0.75*self.n_companies*self.n_features), activation=tf.nn.relu)#一个隐藏层
         self.dense3 = tf.keras.layers.Dense(units=self.n_actions)#输出层代表着在当前最大赔率前，买和不买的六种行动的价值
 
-    def call(self,inputs): #输入从env那里获得的statematrix
-        self.inputs = inputs
-        x = self.flatten(inputs)#输出[2100,1]
+    def call(self,state): #输入从env那里获得的statematrix
+        self.state = state
+        x = self.flatten(self.state)#输出[2100,1]
         x = self.dense1(x)#输出[6300,1]
         x = self.dense2(x)#输出= [4725,1]
-        output = self.dense3(x)#输出= [6,1]
-        return output
+        q_value = self.dense3(x)#输出= [6,1]
+        return q_value
+
+    def predict(self, state):
+        q_values = self(state)
+        return tf.argmax(q_values, axis=-1)#
 
 
 
@@ -121,37 +133,61 @@ class Q_Network(tf.keras.Model):
 
 
 
-class Decision_maker():#作为决策器，要做决策，还要存储已买入的情况，以及计算收益，并传出去
-    def __init__(self,q_value_vector):
-        self.q_value_vector = q_value_vector#从Q网络获得q_value_vector
+class Decider_Revenuecaculator():#决策器+收益计算器，要做决策，还要存储已买入的情况，以及计算收益，并传出去
+    def __init__(self):
+        self.capital = 100#假设每场比赛有100欧的额度可用               
         self.gekauft = np.array((2,3))#作为存储以买入情况的数组，2行3列，分别对应胜平负的等价赔率，以及各自的买入额度
 
-    def maker(self):#用来根据q_value找到响应的公司，然后根据已买入的情况出一个决策
+    def decider(self,q_value):#用来根据q_value找到响应的公司，然后根据已买入的情况返回一个决策和相应收益
+        self.q_value = q_value#从Q网络获得q_value_vector
+        action = q_value
+        revenue = q_value
 
 
 
-        return    
+        return action, revenue
 
 
 
 if __name__ == "__main__":
-    with open('D:\\data\\cidlist.csv') as f:
-        reader = csv.reader(f)
-        cidlist = [row[1] for row in reader]#得到cid对应表
-    cidlist = list(map(float,cidlist))#把各个元素字符串类型转成浮点数类型
+    learning_rate = 1e-3#学习率
+    initial_epsilon = 1.            # 探索起始时的探索率
+    final_epsilon = 0.01            # 探索终止时的探索率
+    batch_size = 50
     filepath = 'D:\\data\\2014-11-30\\702655.csv'#文件路径
-    data = pd.read_csv(filepath)#读取文件
-    frametimelist=data.frametime.value_counts().sort_index(ascending=False).index#将frametime的值读取成列表
-    for i in frametimelist:
-        state = data.groupby('frametime').get_group(i)#从第一次变盘开始得到当次转移
-        state = np.array(state)#转成numpy多维数组
-        #在填充成矩阵之前需要知道所有数据中到底有多少个cid
-        statematrix=np.zeros((410,9))#生成410*9的0矩阵
-        for i in state:
-            cid = i[1]#得到浮点数类型的cid
-            index = cidlist.index(cid)
-            statematrix[index,:] = i#把对应矩阵那一行给它
-        statematrix=np.delete(statematrix, 1, axis=1)#去掉cid后，最后得到一个410*8的矩阵
+    bianpan_env = Env(filepath)#每场比赛做一个环境
+    decider_and_Rcalc = Decider_Revenuecaculator()#初始化决策器+收益计算器
+    eval_Q = Q_Network()#初始化行动Q网络
+    target_Q = Q_Network()#初始化目标Q网络
+    replay_buffer = deque(maxlen=10000)#建立一个记忆回放区
+    state = np.zeros((410,8))#初始化状态
+    opt = tf.keras.optimizers.RMSprop(learning_rate)#设定最优化方法
+    step_counter = 0
+    while True:
+        q_eval = eval_Q.predict(state)#获得行动q_value
+        action,revenue = decider_and_Rcalc.decider(q_eval)#返回决策和相应收益
+        next_state, done = bianpan_env.get_state()#获得下一个状态,终止状态的next_state为0矩阵
+        q_target = target_Q(next_state)
+        #这里需要标识一下终止状态，钱花光了就终止了
+        if decider_and_Rcalc.capital ==0 or done:#如果钱花光了或者变盘结束了，则终止,开始下一场比赛
+            replay_buffer.append((state, action, revenue, next_state))
+            break
+        else:
+            replay_buffer.append((state, action, revenue, next_state))
+        
+        state = next_state
+        if len(replay_buffer) >= batch_size:
+            batch_state, batch_action, batch_revenue, batch_next_state = zip(*random.sample(replay_buffer, batch_size))#zip(*...)解开分给别人的意思
+            y_true = eval_Q.predict(batch_state)
+            y_pred = batch_revenue+target_Q.predict(batch_next_state)
+            loss =  tf.keras.losses.mean_squared_error(y_true = y_true,y_pred = y_pred)
+            opt.minimize(loss,eval_Q.variables,grad_loss=None, name=None)
+
+
+
+
+    
+    
             
 
         
