@@ -11,3 +11,6 @@ for i in filelist:
         cid = data.cid.drop_duplicates().values.tolist()
         cidlist = list(set(cidlist+cid))
 
+filepath = 'F:\\cidlist.csv'
+ser=pd.Series(cidlist)#转成series
+ser.to_csv(filepath)#写入csv
