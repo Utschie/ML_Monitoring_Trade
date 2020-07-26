@@ -42,19 +42,43 @@ import tensorflow as tf
 from collections import deque
 import numpy as np
 import pandas as pd
-class Dataloader():#需要定义一个数据预处理器，除了对输入数据处理外，还要把策略的空间搞出来，在所有的公司随机选
-    def __init__(self):
+import csv
+class Env():#定义一个环境用来与网络交互
+    def __init__(self,filepath):
+        with open('D:\\data\\cidlist.csv') as f:
+            reader = csv.reader(f)
+            cidlist = [row[1] for row in reader]#得到cid对应表
+        self.cidlist = list(map(float,cidlist))#把各个元素字符串类型转成浮点数类型
+        self.filepath = filepath
+        self.episode = self.episode_generator(self.filepath)#通过load_toNet函数得到当场比赛的episode生成器对象
+
         #传入原始数据，为一个不定长张量对象
         print('数据预处理器初始化完成')
         
 
-    def load(self,origin):
-        self.origin=origin
+    def episode_generator(self,filepath):#传入单场比赛文件路径，得到一个每一幕的generator
+        data = pd.read_csv(filepath)#读取文件
+        frametimelist=data.frametime.value_counts().sort_index(ascending=False).index#将frametime的值读取成列表
+        for i in frametimelist:
+            state = data.groupby('frametime').get_group(i)#从第一次变盘开始得到当次转移
+            state = np.array(state)#转成numpy多维数组
+            #在填充成矩阵之前需要知道所有数据中到底有多少个cid
+            statematrix=np.zeros((410,9))#生成410*9的0矩阵
+            for i in state:
+                cid = i[1]#得到浮点数类型的cid
+                index = self.cidlist.index(cid)
+                statematrix[index,:] = i#把对应矩阵那一行给它
+            statematrix=np.delete(statematrix, 1, axis=1)#去掉cid后，最后得到一个410*8的矩阵
+            yield statematrix
+
+        
+    def get_transition(self):
+        return self.episode.__next__()#网络从此取出下一幕
 
 
 
+        
 
-        return #返回固定尺寸张量
 
 
 
@@ -63,9 +87,9 @@ class Dataloader():#需要定义一个数据预处理器，除了对输入数据
 
 class Q_Network(tf.keras.Model):
     def __init__(self,
-                      n_companies,
-                      n_features,
-                      n_actions):
+                      n_companies=410,
+                      n_features=7,
+                      n_actions=6):#有默认值的属性必须放在没默认值属性的后面
         self.n_companies = n_companies
         self.n_features = n_features
         self.n_actions = n_actions
@@ -73,9 +97,10 @@ class Q_Network(tf.keras.Model):
         self.flatten = tf.keras.layers.Flatten() #把单个矩阵展平
         self.dense1 = tf.keras.layers.Dense(units=int(3*self.n_companies*self.n_features), activation=tf.nn.relu)#输入层
         self.dense2 = tf.keras.layers.Dense(units=int(0.75*self.n_companies*self.n_features), activation=tf.nn.relu)#一个隐藏层
-        self.dense3 = tf.keras.layers.Dense(units=6)#输出层代表着在当前最大赔率前，买和不买的六种行动的价值
+        self.dense3 = tf.keras.layers.Dense(units=self.n_actions)#输出层代表着在当前最大赔率前，买和不买的六种行动的价值
 
-    def call(self,inputs): #输入
+    def call(self,inputs): #输入从env那里获得的statematrix
+        self.inputs = inputs
         x = self.flatten(inputs)#输出[2100,1]
         x = self.dense1(x)#输出[6300,1]
         x = self.dense2(x)#输出= [4725,1]
@@ -83,6 +108,8 @@ class Q_Network(tf.keras.Model):
         return output
 
 
+
+
          
          
 
@@ -93,11 +120,13 @@ class Q_Network(tf.keras.Model):
 
 
 
-class Decision_maker():
+class Decision_maker():#作为决策器，要做决策，还要存储已买入的情况，以及计算收益，并传出去
     def __init__(self,q_value_vector):
-        self.q_value_vector = q_value_vector
+        self.q_value_vector = q_value_vector#从Q网络获得q_value_vector
+        self.gekauft = np.array((2,3))#作为存储以买入情况的数组，2行3列，分别对应胜平负的等价赔率，以及各自的买入额度
 
     def maker(self):#用来根据q_value找到响应的公司，然后根据已买入的情况出一个决策
+
 
 
         return    
@@ -105,6 +134,10 @@ class Decision_maker():
 
 
 if __name__ == "__main__":
+    with open('D:\\data\\cidlist.csv') as f:
+        reader = csv.reader(f)
+        cidlist = [row[1] for row in reader]#得到cid对应表
+    cidlist = list(map(float,cidlist))#把各个元素字符串类型转成浮点数类型
     filepath = 'D:\\data\\2014-11-30\\702655.csv'#文件路径
     data = pd.read_csv(filepath)#读取文件
     frametimelist=data.frametime.value_counts().sort_index(ascending=False).index#将frametime的值读取成列表
@@ -112,5 +145,15 @@ if __name__ == "__main__":
         state = data.groupby('frametime').get_group(i)#从第一次变盘开始得到当次转移
         state = np.array(state)#转成numpy多维数组
         #在填充成矩阵之前需要知道所有数据中到底有多少个cid
+        statematrix=np.zeros((410,9))#生成410*9的0矩阵
+        for i in state:
+            cid = i[1]#得到浮点数类型的cid
+            index = cidlist.index(cid)
+            statematrix[index,:] = i#把对应矩阵那一行给它
+        statematrix=np.delete(statematrix, 1, axis=1)#去掉cid后，最后得到一个410*8的矩阵
+            
+
+        
+
 
 
