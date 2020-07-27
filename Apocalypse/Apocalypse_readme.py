@@ -51,7 +51,7 @@ Apocalypse 1.0 数据清洗过程：
 
 '''
 Apocalypse 1.0系列 可能模型：
-0.0 DQN，Dueling DQN（竞争构架Q网络），DRQN（深度循环Q网络，把DQN的全连接层换成LSTM），DDPG（连续动作空间的算法）
+0.0 DQN，Dueling DQN（竞争构架Q网络），DRQN（深度循环Q网络，把DQN的全连接层换成LSTM），DDPG（连续动作空间的算法），RainbowDQN,Ape-X
 1.0 Dyna-Q(强化学习第8章)
 1.1 TD(λ)，然后价值函数用神经网络逼近，即TD-Gammon（强化学习第12章）
 1.2 策略梯度，策略用神经网络，价值函数也用神经网络（强化学习第13章）
