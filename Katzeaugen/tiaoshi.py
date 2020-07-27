@@ -13,7 +13,6 @@ import pytz#用来设置时区信息
 import os#用来获取文件名列表
 import requests
 import urllib
-import YDM
 import time
 import csv
 import json#用来将字典写入json文件
