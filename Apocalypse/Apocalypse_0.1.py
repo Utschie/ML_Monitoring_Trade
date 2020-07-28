@@ -53,8 +53,10 @@ import numpy as np
 import pandas as pd
 import csv
 import random
+import re
 class Env():#定义一个环境用来与网络交互
-    def __init__(self,filepath):
+    def __init__(self,filepath,result):
+        self.result = result#获得赛果
         with open('D:\\data\\cidlist.csv') as f:
             reader = csv.reader(f)
             cidlist = [row[1] for row in reader]#得到cid对应表
@@ -80,6 +82,11 @@ class Env():#定义一个环境用来与网络交互
                 statematrix[index,:] = i#把对应矩阵那一行给它
             statematrix=np.delete(statematrix, 1, axis=1)#去掉cid后，最后得到一个410*8的矩阵
             yield statematrix
+
+    def revenue(self,action,done):#收益计算器，根据行动和终止与否，计算收益给出
+        return
+
+
 
         
     def get_state(self):
@@ -158,12 +165,17 @@ class Decider_Revenuecaculator():#决策器+收益计算器，要做决策，还
 
 
 if __name__ == "__main__":
+    #########设置超参数
     learning_rate = 1e-3#学习率
     initial_epsilon = 1.            # 探索起始时的探索率
     final_epsilon = 0.01            # 探索终止时的探索率
     batch_size = 50
+    resultlist = pd.read_csv('D:\\data\\results_20141130-20160630.csv',index_col = 0)#得到赛果和比赛ID的对应表
+    ################下面是单场比赛的流程
     filepath = 'D:\\data\\2014-11-30\\702655.csv'#文件路径
-    bianpan_env = Env(filepath)#每场比赛做一个环境
+    bisai_id = int(re.findall('\\\\(\d*?).csv',filepath)[0])#从filepath中得到bisai代码的整型数
+    result = resultlist.loc[bisai_id]#其中result.host即为主队进球，result.guest则为客队进球
+    bianpan_env = Env(filepath,result)#每场比赛做一个环境
     decider_and_Rcalc = Decider_Revenuecaculator()#初始化决策器+收益计算器
     eval_Q = Q_Network()#初始化行动Q网络
     target_Q = Q_Network()#初始化目标Q网络
