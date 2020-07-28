@@ -63,6 +63,7 @@ class Env():#定义一个环境用来与网络交互
         self.cidlist = list(map(float,cidlist))#把各个元素字符串类型转成浮点数类型
         self.filepath = filepath
         self.episode = self.episode_generator(self.filepath)#通过load_toNet函数得到当场比赛的episode生成器对象
+        self.invested = [[0.,0.],[0.,0.],[0.,0.]]#已投入资本，每个元素记录着一对赔率-已投入资本的二元组，分别对应胜平负三种赛果的投入
 
         #传入原始数据，为一个不定长张量对象
         print('数据预处理器初始化完成')
@@ -84,19 +85,17 @@ class Env():#定义一个环境用来与网络交互
             yield statematrix
 
     def revenue(self,action,done):#收益计算器，根据行动和终止与否，计算收益给出
-        return
+        return 0
 
 
 
         
     def get_state(self):
-        try:
-            next_state=self.episode.__next__()
+        next_state=self.episode.__next__()
+        if next_state[0,0] == 0:#如果next_state的frametime为0
+            done = True#则视为终盘，该幕中止
+        else:
             done = False
-        except:
-            next_state = np.zeros((410,8))
-            done = True
-
         return next_state, done#网络从此取出下一幕
 
 
@@ -133,7 +132,7 @@ class Q_Network(tf.keras.Model):
 
     def predict(self, state):
         q_values = self(state)
-        return tf.argmax(q_values, axis=-1)#
+        return tf.argmax(q_values, axis=-1)#tf.argmax函数是返回最大数值的下标，axis=-1是
 
 
 
@@ -171,21 +170,31 @@ if __name__ == "__main__":
     final_epsilon = 0.01            # 探索终止时的探索率
     batch_size = 50
     resultlist = pd.read_csv('D:\\data\\results_20141130-20160630.csv',index_col = 0)#得到赛果和比赛ID的对应表
+    actions_table = [[a,b,c] for a in range(0,55,5) for b in range(0,55,5) for c in range(0,55,5)]#给神经网络输出层对应一个行动表
     ################下面是单场比赛的流程
+
+
+
     filepath = 'D:\\data\\2014-11-30\\702655.csv'#文件路径
     bisai_id = int(re.findall('\\\\(\d*?).csv',filepath)[0])#从filepath中得到bisai代码的整型数
     result = resultlist.loc[bisai_id]#其中result.host即为主队进球，result.guest则为客队进球
+    epsilon = initial_epsilon#得有一个当前epsilon的计算公式
     bianpan_env = Env(filepath,result)#每场比赛做一个环境
     decider_and_Rcalc = Decider_Revenuecaculator()#初始化决策器+收益计算器
     eval_Q = Q_Network()#初始化行动Q网络
     target_Q = Q_Network()#初始化目标Q网络
     replay_buffer = deque(maxlen=10000)#建立一个记忆回放区
     state = np.zeros((410,8))#初始化状态
+    done = False
     opt = tf.keras.optimizers.RMSprop(learning_rate)#设定最优化方法
     step_counter = 0
     while True:
         q_eval = eval_Q.predict(state)#获得行动q_value
-        action,revenue = decider_and_Rcalc.decider(q_eval)#返回决策和相应收益
+        if random.random() < epsilon:#如果落在随机区域
+            action = random.choice(actions_table)
+        else:
+            action = actions_table[eval_Q.predict(eval_Q)]#否则按着贪心选
+        revenue = bianpan_env.revenue(action,done)#根据行动和是否终赔计算收益
         next_state, done = bianpan_env.get_state()#获得下一个状态,终止状态的next_state为0矩阵
         q_target = target_Q(next_state)
         #这里需要标识一下终止状态，钱花光了就终止了
