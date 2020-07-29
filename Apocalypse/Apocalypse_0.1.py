@@ -28,10 +28,11 @@
 #Q函数设置有误，首先Q网络输出策略不是6种，而是2^3=8种，或者最高赔率下每个都有投0,5,10,……,50，11种动作，则策略集为11^3=1331种策略————20200727
 #然后应该给策略做一个表格，然后按照index进行收益的计算————20200727
 #损失函数设置错误，在损失函数中，r是当前的随机贪心策略出，而q_target则是由最优策略出，q_eval是当前动作的那个q值而不是全部动作的q值————20200727
-#当前的网络参数是爆炸的，即便有策略空间只有6个，参数数量也高达5600多万————20200727
+#当前的网络参数是爆炸的，参数数量高达5900多万————20200729
 #20141130-20160630这段时间共有7500多万次转移，考虑到样本至少为参数数量的10倍，所以参数数量要控制在750万以下————20200727
 #所以还是要数据降维————20200727
 #过段时间要把赛果爬出来，至少是20141130-20160630的，把比赛代号和赛果配对起来（已完成）
+#状态虽然是个列表，但是传入前应该再加一位，即变成（1,410,8）的张量，才能正常展平张开，切记！！！——————20200729
 '''
 两种可能：第一种是把矩阵数据预处理成一个向量，然后输出一个向量再解码成策略
          第二种是前面输入数据不用处理成向量，然后后面的q值函数处理成一个向量，然后把这个向量解码成策略
@@ -76,12 +77,12 @@ class Env():#定义一个环境用来与网络交互
             state = data.groupby('frametime').get_group(i)#从第一次变盘开始得到当次转移
             state = np.array(state)#转成numpy多维数组
             #在填充成矩阵之前需要知道所有数据中到底有多少个cid
-            statematrix=np.zeros((410,9))#生成410*9的0矩阵
+            statematrix=np.zeros((1,410,9))##statematrix应该是一个（1,410,8）的张量,元素为一个生成410*9的0矩阵
             for i in state:
                 cid = i[1]#得到浮点数类型的cid
                 index = self.cidlist.index(cid)
-                statematrix[index,:] = i#把对应矩阵那一行给它
-            statematrix=np.delete(statematrix, 1, axis=1)#去掉cid后，最后得到一个410*8的矩阵
+                statematrix[0,index,:] = i#把对应矩阵那一行给它
+            statematrix=np.delete(statematrix, 1, axis=2)#去掉cid后，最后得到一个1*410*8的张量，这里axis是2或者-1（代表最后一个）都行
             yield statematrix
 
     def revenue(self,action,done):#收益计算器，根据行动和终止与否，计算收益给出
@@ -128,11 +129,11 @@ class Q_Network(tf.keras.Model):
         x = self.dense1(x)#输出[6300,1]
         x = self.dense2(x)#输出= [4725,1]
         q_value = self.dense3(x)#输出= [6,1]
-        return q_value
+        return q_value#q_value是一个410*3的矩阵
 
     def predict(self, state):
         q_values = self(state)
-        return tf.argmax(q_values, axis=-1)#tf.argmax函数是返回最大数值的下标，axis=-1是
+        return tf.argmax(q_values)#tf.argmax函数是返回最大数值的下标
 
 
 
@@ -150,7 +151,7 @@ class Q_Network(tf.keras.Model):
 class Decider_Revenuecaculator():#决策器+收益计算器，要做决策，还要存储已买入的情况，以及计算收益，并传出去
     def __init__(self):
         self.capital = 100#假设每场比赛有100欧的额度可用               
-        self.gekauft = np.array((2,3))#作为存储以买入情况的数组，2行3列，分别对应胜平负的等价赔率，以及各自的买入额度
+        self.gekauft = np.array((2,3),dtype='float32')#作为存储以买入情况的数组，2行3列，分别对应胜平负的等价赔率，以及各自的买入额度
 
     def decider(self,q_value):#用来根据q_value找到响应的公司，然后根据已买入的情况返回一个决策和相应收益
         self.q_value = q_value#从Q网络获得q_value_vector
@@ -184,7 +185,7 @@ if __name__ == "__main__":
     eval_Q = Q_Network()#初始化行动Q网络
     target_Q = Q_Network()#初始化目标Q网络
     replay_buffer = deque(maxlen=10000)#建立一个记忆回放区
-    state = np.zeros((410,8))#初始化状态
+    state = np.zeros((410,8),dtype='float32')#初始化状态
     done = False
     opt = tf.keras.optimizers.RMSprop(learning_rate)#设定最优化方法
     step_counter = 0
