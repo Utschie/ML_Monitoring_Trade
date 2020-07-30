@@ -36,6 +36,7 @@
 #invested——已投入资本可以有两种算法，一是用一个求平均的向量存储，二是把每一次的交易存储，然后最后进行计算，感觉后一次比较好————20200729
 #计算器写是大概写完了，但还是感觉程序执行顺序有点儿不对，状态和收益的对应关系好像错开了————20200730（好像又没啥问题）
 #但是要保证终止状态的收益永远为0，可能代表终止状态的矩阵需要换个矩阵来表示————20200730（已解决，把第一个状态作为初始化状态就可以了）
+#参数更新过程要注意让终止状态0矩阵的收益为0————20200730
 '''
 两种可能：第一种是把矩阵数据预处理成一个向量，然后输出一个向量再解码成策略
          第二种是前面输入数据不用处理成向量，然后后面的q值函数处理成一个向量，然后把这个向量解码成策略
@@ -230,6 +231,7 @@ if __name__ == "__main__":
             replay_buffer.append((state, action, revenue, next_state))
         
         state = next_state
+        #下面是参数更新过程
         if len(replay_buffer) >= batch_size:
             batch_state, batch_action, batch_revenue, batch_next_state = zip(*random.sample(replay_buffer, batch_size))#zip(*...)解开分给别人的意思
             y_true = eval_Q.predict(batch_state)
