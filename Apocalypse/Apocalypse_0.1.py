@@ -92,9 +92,9 @@ class Env():#定义一个环境用来与网络交互
 
     def revenue(self,action):#收益计算器，根据行动和终止与否，计算收益给出
         #先把行动存起来
-        max_host = self.statematrix[0][tf.argmax(self.statematrix[0],axis = 0)[2].numpy()][2]
-        max_fair = self.statematrix[0][tf.argmax(self.statematrix[0],axis = 0)[3].numpy()][3]
-        max_guest = self.statematrix[0][tf.argmax(self.statematrix[0],axis = 0)[4].numpy()][4]
+        max_host = self.statematrix[0][tf.argmax(self.statematrix[0])[2].numpy()][2]
+        max_fair = self.statematrix[0][tf.argmax(self.statematrix[0])[3].numpy()][3]
+        max_guest = self.statematrix[0][tf.argmax(self.statematrix[0])[4].numpy()][4]
         peilv = [max_host,max_fair,max_guest]#得到最高赔率向量
         peilv_action = list(zip(peilv,action))
         self.invested.append(peilv_action)#把本次投资存入invested已投入资本
