@@ -34,6 +34,7 @@
 #过段时间要把赛果爬出来，至少是20141130-20160630的，把比赛代号和赛果配对起来（已完成）
 #状态虽然是个列表，但是传入前应该再加一位，即变成（1,410,8）的张量，才能正常展平张开，切记！！！——————20200729
 #invested——已投入资本可以有两种算法，一是用一个求平均的向量存储，二是把每一次的交易存储，然后最后进行计算，感觉后一次比较好————20200729
+#计算器写是大概写完了，但还是感觉程序执行顺序有点儿不对，状态和收益的对应关系好像错开了————20200730
 '''
 两种可能：第一种是把矩阵数据预处理成一个向量，然后输出一个向量再解码成策略
          第二种是前面输入数据不用处理成向量，然后后面的q值函数处理成一个向量，然后把这个向量解码成策略
@@ -65,8 +66,9 @@ class Env():#定义一个环境用来与网络交互
         self.cidlist = list(map(float,cidlist))#把各个元素字符串类型转成浮点数类型
         self.filepath = filepath
         self.episode = self.episode_generator(self.filepath)#通过load_toNet函数得到当场比赛的episode生成器对象
+        self.capital = 500#每场比赛有500欧可支配资金
         self.invested = [[(0.,0.),(0.,0.),(0.,0.)]]#已投入资本，每个元素记录着一次投资的赔率和投入，分别对应胜平负三种赛果的投入，这里不用np.array因为麻烦
-
+        self.statematrix = np.zeros((1,410,9))#初始化状态矩阵
         #传入原始数据，为一个不定长张量对象
         print('环境初始化完成')
         
@@ -84,20 +86,39 @@ class Env():#定义一个环境用来与网络交互
                 index = self.cidlist.index(cid)
                 statematrix[0,index,:] = i#把对应矩阵那一行给它
             statematrix=np.delete(statematrix, 1, axis=2)#去掉cid后，最后得到一个1*410*8的张量，这里axis是2或者-1（代表最后一个）都行
-            yield statematrix
+            self.statematrix = statematrix#把状态矩阵保存在环境对象里，用来算收益
+            yield self.statematrix
 
-    def revenue(self,action,done):#收益计算器，根据行动和终止与否，计算收益给出
-        return 0
+    def revenue(self,action):#收益计算器，根据行动和终止与否，计算收益给出
+        #先把行动存起来
+        max_host = self.statematrix[0][tf.argmax(self.statematrix[0],axis = 0)[2].numpy()][2]
+        max_fair = self.statematrix[0][tf.argmax(self.statematrix[0],axis = 0)[3].numpy()][3]
+        max_guest = self.statematrix[0][tf.argmax(self.statematrix[0],axis = 0)[4].numpy()][4]
+        peilv = [max_host,max_fair,max_guest]#得到最高赔率向量
+        peilv_action = list(zip(peilv,action))
+        self.invested.append(peilv_action)#把本次投资存入invested已投入资本
+        #计算本次行动的收益
+        if self.statematrix[0][0][0] ==0:#如果当前的状态是终盘状态,则清算所有赢的钱
+            if self.result.host > self.result.guest:#主胜
+                revenue = sum(i[0][0]*i[0][1] for i in self.invested )
+            elif self.result.host == self.result.guest:#平
+                revenue = sum(i[1][0]*i[1][1] for i in self.invested )
+            else:#主负
+                revenue = sum(i[2][0]*i[2][1] for i in self.invested )
+        else:#如果没到终盘，则收益为负值
+            revenue = -sum(action)
+        return revenue
 
 
 
         
     def get_state(self):
-        next_state=self.episode.__next__()
-        if next_state[0,0] == 0:#如果next_state的frametime为0
-            done = True#则视为终盘，该幕中止
-        else:
+        try:
+            next_state=self.episode.__next__()
             done = False
+        except:
+            next_state = np.zeros((1,410,9))
+            done = True
         return next_state, done#网络从此取出下一幕
 
 
@@ -186,7 +207,7 @@ if __name__ == "__main__":
     eval_Q = Q_Network()#初始化行动Q网络
     target_Q = Q_Network()#初始化目标Q网络
     replay_buffer = deque(maxlen=10000)#建立一个记忆回放区
-    state = np.zeros((410,8),dtype='float32')#初始化状态
+    state = np.zeros((1,410,8),dtype='float32')#初始化状态
     done = False
     opt = tf.keras.optimizers.RMSprop(learning_rate)#设定最优化方法
     step_counter = 0
@@ -195,12 +216,12 @@ if __name__ == "__main__":
         if random.random() < epsilon:#如果落在随机区域
             action = random.choice(actions_table)
         else:
-            action = actions_table[eval_Q.predict(eval_Q)]#否则按着贪心选
-        revenue = bianpan_env.revenue(action,done)#根据行动和是否终赔计算收益
+            action = actions_table[eval_Q.predict(eval_Q)[0]]#否则按着贪心选，这里[0]是因为predict返回的是一个单元素列表
+        revenue = bianpan_env.revenue(action)#根据行动和是否终赔计算收益
         next_state, done = bianpan_env.get_state()#获得下一个状态,终止状态的next_state为0矩阵
         q_target = target_Q(next_state)
         #这里需要标识一下终止状态，钱花光了就终止了
-        if decider_and_Rcalc.capital ==0 or done:#如果钱花光了或者变盘结束了，则终止,开始下一场比赛
+        if bianpan_env.capital <=0 or done:#如果钱超过500欧或者变盘结束了，则终止,开始下一场比赛
             replay_buffer.append((state, action, revenue, next_state))
             break
         else:
