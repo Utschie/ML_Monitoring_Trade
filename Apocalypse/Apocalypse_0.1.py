@@ -108,6 +108,7 @@ class Env():#定义一个环境用来与网络交互
                 revenue = sum(i[2][0]*i[2][1] for i in self.invested )
         else:#如果没到终盘，则收益为负值
             revenue = -sum(action)
+            self.capital += revenue#同时从剩余资金里扣
         return revenue
 
 
