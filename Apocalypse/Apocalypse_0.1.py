@@ -36,7 +36,12 @@
 #invested——已投入资本可以有两种算法，一是用一个求平均的向量存储，二是把每一次的交易存储，然后最后进行计算，感觉后一次比较好————20200729
 #计算器写是大概写完了，但还是感觉程序执行顺序有点儿不对，状态和收益的对应关系好像错开了————20200730（好像又没啥问题）
 #但是要保证终止状态的收益永远为0，可能代表终止状态的矩阵需要换个矩阵来表示————20200730（已解决，把第一个状态作为初始化状态就可以了）
-#参数更新过程要注意让终止状态0矩阵的收益为0————20200730
+#参数更新过程要注意让终止状态0矩阵的收益为0————20200730(已解决)
+#不对，中间钱花光了跳出去的也应该结算一次(已解决)
+#或许不需要中间结算，只要capital小于0了，那之后的一律无法行动，这样的话，capital也可以作为一个状态变量传入神经网络————20200731
+#最后出可视化的时候应该把算一下收益率————20200731
+#环境的结算方法可能存在一些问题————20200731
+
 '''
 两种可能：第一种是把矩阵数据预处理成一个向量，然后输出一个向量再解码成策略
          第二种是前面输入数据不用处理成向量，然后后面的q值函数处理成一个向量，然后把这个向量解码成策略
@@ -68,7 +73,7 @@ class Env():#定义一个环境用来与网络交互
         self.cidlist = list(map(float,cidlist))#把各个元素字符串类型转成浮点数类型
         self.filepath = filepath
         self.episode = self.episode_generator(self.filepath)#通过load_toNet函数得到当场比赛的episode生成器对象
-        self.capital = 500#每场比赛有500欧可支配资金
+        self.capital = 100#每场比赛有500欧可支配资金
         self.invested = [[(0.,0.),(0.,0.),(0.,0.)]]#已投入资本，每个元素记录着一次投资的赔率和投入，分别对应胜平负三种赛果的投入，这里不用np.array因为麻烦
         self.statematrix = np.zeros((1,410,9))#初始化状态矩阵
         #传入原始数据，为一个不定长张量对象
@@ -91,7 +96,7 @@ class Env():#定义一个环境用来与网络交互
             self.statematrix = statematrix#把状态矩阵保存在环境对象里，用来算收益
             yield self.statematrix
 
-    def revenue(self,action):#收益计算器，根据行动和终止与否，计算收益给出
+    def revenue(self,action):#收益计算器，根据行动和终止与否，计算收益给出，每次算一次revenue，capital都会变化，除了终盘
         #先把行动存起来
         max_host = self.statematrix[0][tf.argmax(self.statematrix[0])[2].numpy()][2]
         max_fair = self.statematrix[0][tf.argmax(self.statematrix[0])[3].numpy()][3]
@@ -110,6 +115,13 @@ class Env():#定义一个环境用来与网络交互
         else:#如果没到终盘，则收益为负值
             revenue = -sum(action)
             self.capital += revenue#同时从剩余资金里扣
+            if self.capital <= 0:#如果扣完之后没有钱了，则执行清算
+                if self.result.host > self.result.guest:#主胜
+                    revenue += sum(i[0][0]*i[0][1] for i in self.invested )
+                elif self.result.host == self.result.guest:#平
+                    revenue += sum(i[1][0]*i[1][1] for i in self.invested )
+                else:#主负
+                    revenue += sum(i[2][0]*i[2][1] for i in self.invested )
         return revenue
 
 
@@ -156,37 +168,12 @@ class Q_Network(tf.keras.Model):
         q_value = self.dense3(x)#输出= [6,1]
         return q_value#q_value是一个410*3的矩阵
 
-    def predict(self, state):
+    def predict(self, state):#用来对应动作
         q_values = self(state)
-        return tf.argmax(q_values)#tf.argmax函数是返回最大数值的下标
+        return tf.argmax(q_values)#tf.argmax函数是返回最大数值的下标，用来对应动作
 
-
-
-
+      
          
-         
-
-
-
-
-
-
-
-
-class Decider_Revenuecaculator():#决策器+收益计算器，要做决策，还要存储已买入的情况，以及计算收益，并传出去
-    def __init__(self):
-        self.capital = 100#假设每场比赛有100欧的额度可用               
-        self.gekauft = np.array((2,3),dtype='float32')#作为存储以买入情况的数组，2行3列，分别对应胜平负的等价赔率，以及各自的买入额度
-
-    def decider(self,q_value):#用来根据q_value找到响应的公司，然后根据已买入的情况返回一个决策和相应收益
-        self.q_value = q_value#从Q网络获得q_value_vector
-        action = q_value
-        revenue = q_value
-
-
-
-        return action, revenue
-
 
 
 if __name__ == "__main__":
@@ -206,7 +193,6 @@ if __name__ == "__main__":
     result = resultlist.loc[bisai_id]#其中result.host即为主队进球，result.guest则为客队进球
     epsilon = initial_epsilon#得有一个当前epsilon的计算公式
     bianpan_env = Env(filepath,result)#每场比赛做一个环境
-    decider_and_Rcalc = Decider_Revenuecaculator()#初始化决策器+收益计算器
     eval_Q = Q_Network()#初始化行动Q网络
     target_Q = Q_Network()#初始化目标Q网络
     replay_buffer = deque(maxlen=10000)#建立一个记忆回放区
@@ -217,26 +203,30 @@ if __name__ == "__main__":
     while True:
         q_eval = eval_Q.predict(state)#获得行动q_value
         if random.random() < epsilon:#如果落在随机区域
-            action = random.choice(actions_table)
+            action = random.choice(range(0,1331))#action是一个坐标
         else:
-            action = actions_table[eval_Q.predict(eval_Q)[0]]#否则按着贪心选，这里[0]是因为predict返回的是一个单元素列表
-        revenue = bianpan_env.revenue(action)#根据行动和是否终赔计算收益
+            action =eval_Q.predict(eval_Q)[0]#否则按着贪心选，这里[0]是因为predict返回的是一个单元素列表
+        revenue = bianpan_env.revenue(actions_table[eval_Q.predict(eval_Q)[0]])#根据行动和是否终赔计算收益
         next_state, done = bianpan_env.get_state()#获得下一个状态,终止状态的next_state为0矩阵
         q_target = target_Q(next_state)
         #这里需要标识一下终止状态，钱花光了就终止了
-        if bianpan_env.capital <=0 or done:#如果钱超过500欧或者变盘结束了，则终止,开始下一场比赛
-            replay_buffer.append((state, action, revenue, next_state))
+        if done:#如果终盘了，跳出
+            replay_buffer.append((state, action, revenue, next_state,1))
             break
-        else:
-            replay_buffer.append((state, action, revenue, next_state))
-        
+        else:#如果没终盘
+            if bianpan_env.capital <=0:#如果钱超过500欧或者变盘结束了，则跳出
+                replay_buffer.append((state, action, revenue, next_state,0))
+                break
+            else:
+                replay_buffer.append((state, action, revenue, next_state,0))
         state = next_state
         #下面是参数更新过程
         if len(replay_buffer) >= batch_size:
-            batch_state, batch_action, batch_revenue, batch_next_state = zip(*random.sample(replay_buffer, batch_size))#zip(*...)解开分给别人的意思
-            y_true = eval_Q.predict(batch_state)
-            y_pred = batch_revenue+target_Q.predict(batch_next_state)#这里好像不太对，q值和收益也不同维啊
-            loss =  tf.keras.losses.mean_squared_error(y_true = y_true,y_pred = y_pred)
+            batch_state, batch_action, batch_revenue, batch_next_state ,batch_done= zip(*random.sample(replay_buffer, batch_size))#zip(*...)解开分给别人的意思
+            y_true = batch_revenue+tf.reduce_max(target_Q.predict(batch_next_state),axis = 1)*(1-batch_done)#reduce_max来返回最大值，暂不考虑折现率gamma,
+            #tensorflow中张量相乘是对应行相乘，所以eval_Q(batch_state)有多少列，one_hot就得有多少列，如下
+            y_pred = tf.reduce_sum(eval_Q(batch_state)*tf.one_hot(batch_action,depth=1331,on_value=1.0, off_value=0.0),axis=1)#one_hot来生成对应位置为1的矩阵，depth是列数，reduce_sum(axis=1)来求各行和转成一维张量
+            loss =  tf.keras.losses.mean_squared_error(y_true = y_true,y_pred = y_pred)#y_true和y_pred都是第0维为batch_size的张量
             opt.minimize(loss,eval_Q.variables,grad_loss=None, name=None)
 
 
