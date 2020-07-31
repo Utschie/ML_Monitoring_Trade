@@ -43,6 +43,9 @@
 #环境的结算方法可能存在一些问题————20200731
 #只在终盘时结算，其他时候收益都是负值，因为如果提前跳出会导致浪费样本————20200731
 #算revenue时给超出资金量的策略的收益赋予很大的负值，然后把capital也放在变量里送给神经网络(已解决)
+#可以直接应用pca降维，在statematrix里去掉frametime和cid之后降到一维，然后再把frametime作为一个单独的值和它连起来放入神经网络
+#但是env里也必须保存原statematrix，就在神经网络里增加降维这一项就好了
+#这样就不需要flatten层了，然后也不需要把statematrix做成3维张量了
 
 '''
 两种可能：第一种是把矩阵数据预处理成一个向量，然后输出一个向量再解码成策略
@@ -66,7 +69,7 @@ import pandas as pd
 import csv
 import random
 import re
-import sklearn
+from sklearn.decomposition import PCA
 class Env():#定义一个环境用来与网络交互
     def __init__(self,filepath,result):
         self.result = result#获得赛果
@@ -89,12 +92,12 @@ class Env():#定义一个环境用来与网络交互
             state = data.groupby('frametime').get_group(i)#从第一次变盘开始得到当次转移
             state = np.array(state)#转成numpy多维数组
             #在填充成矩阵之前需要知道所有数据中到底有多少个cid
-            statematrix=np.zeros((1,410,9))##statematrix应该是一个（1,410,8）的张量,元素为一个生成410*9的0矩阵
-            for i in state:
-                cid = i[1]#得到浮点数类型的cid
+            statematrix=np.zeros((410,9))##statematrix应该是一个（1,410,8）的张量,元素为一个生成410*9的0矩阵（后来由于降维则不用这么用了）
+            for j in state:
+                cid = j[1]#得到浮点数类型的cid
                 index = self.cidlist.index(cid)
-                statematrix[0,index,:] = i#把对应矩阵那一行给它
-            statematrix=np.delete(statematrix, 1, axis=2)#去掉cid后，最后得到一个1*410*8的张量，这里axis是2或者-1（代表最后一个）都行
+                statematrix[index,:] = j#把对应矩阵那一行给它
+            statematrix=np.delete(statematrix, 1, axis=-1)#去掉cid后，最后得到一个1*410*8的张量，这里axis是2或者-1（代表最后一个）都行
             self.statematrix = statematrix#把状态矩阵保存在环境对象里，用来算收益
             yield self.statematrix
 
@@ -142,27 +145,32 @@ class Env():#定义一个环境用来与网络交互
 class Q_Network(tf.keras.Model):
     def __init__(self,
                       n_companies=410,
-                      n_features=8,
                       n_actions=1331):#有默认值的属性必须放在没默认值属性的后面
         self.n_companies = n_companies
-        self.n_features = n_features
         self.n_actions = n_actions
         super().__init__()#调用tf.keras.Model的类初始化方法
-        self.flatten = tf.keras.layers.Flatten() #把单个矩阵展平
-        self.dense1 = tf.keras.layers.Dense(units=int(3*self.n_companies*self.n_features), activation=tf.nn.relu)#输入层
-        self.dense2 = tf.keras.layers.Dense(units=int(0.75*self.n_companies*self.n_features), activation=tf.nn.relu)#一个隐藏层
+        self.dense1 = tf.keras.layers.Dense(units=int(3*self.n_companies), activation=tf.nn.relu)#输入层
+        self.dense2 = tf.keras.layers.Dense(units=int(0.75*self.n_companies), activation=tf.nn.relu)#一个隐藏层
         self.dense3 = tf.keras.layers.Dense(units=self.n_actions)#输出层代表着在当前最大赔率前，买和不买的六种行动的价值
 
     def call(self,state,capital): #输入从env那里获得的statematrix
-        x = tf.concat((self.flatten(state),[capital]),-1)#把拉直后的state和capital拼接在一起,-1是axis
-        x = self.dense1(x)#输出[6300,1]
-        x = self.dense2(x)#输出= [4725,1]
-        q_value = self.dense3(x)#输出= [6,1]
-        return q_value#q_value是一个410*3的矩阵
+        frametime = state[0][0]#取出frametime时间
+        state=np.delete(state, 0, axis=-1)#把frametime去掉，则state变成了（410,7）的矩阵
+        state = self.pca(state)#降维成（410,1）的矩阵
+        state = tf.concat((state.flatten(),[capital],[frametime]),-1)#把降好维的state和capital与frametime连在一起，此时是412长度的一维张量
+        x = tf.reshape(state,(1,412))#改变输入成（1,412）的二维张量
+        x = self.dense1(x)#输出神经网络
+        x = self.dense2(x)#
+        q_value = self.dense3(x)#
+        return q_value#q_value是一个（1,1331）的张量
+
+    def pca(self,state):
+        pca = PCA(n_components=1)#只保留第一个主成分
+        return pca.fit_transform(state)
 
     def predict(self, state,capital):#用来对应动作
         q_values = self(state,capital)
-        return tf.argmax(q_values)#tf.argmax函数是返回最大数值的下标，用来对应动作
+        return tf.argmax(q_values,axis=-1)#tf.argmax函数是返回最大数值的下标，用来对应动作
 
       
          
