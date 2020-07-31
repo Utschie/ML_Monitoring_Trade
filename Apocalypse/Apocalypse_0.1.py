@@ -47,6 +47,7 @@
 #但是env里也必须保存原statematrix，就在神经网络里增加降维这一项就好了
 #这样就不需要flatten层了，然后也不需要把statematrix做成3维张量了
 #经过降维，把参数降到了1,295,855个————20200731
+#现在暂时采用这样6层，每层单元数740多个，参数数量为350万————20200731
 
 '''
 两种可能：第一种是把矩阵数据预处理成一个向量，然后输出一个向量再解码成策略
@@ -145,14 +146,17 @@ class Env():#定义一个环境用来与网络交互
 
 class Q_Network(tf.keras.Model):
     def __init__(self,
-                      n_companies=410,
+                      n_companies=412,
                       n_actions=1331):#有默认值的属性必须放在没默认值属性的后面
         self.n_companies = n_companies
         self.n_actions = n_actions
         super().__init__()#调用tf.keras.Model的类初始化方法
-        self.dense1 = tf.keras.layers.Dense(units=int(3*self.n_companies), activation=tf.nn.relu)#输入层
-        self.dense2 = tf.keras.layers.Dense(units=int(0.75*self.n_companies), activation=tf.nn.relu)#一个隐藏层
-        self.dense3 = tf.keras.layers.Dense(units=self.n_actions)#输出层代表着在当前最大赔率前，买和不买的六种行动的价值
+        self.dense1 = tf.keras.layers.Dense(units=int(1.8*self.n_companies), activation=tf.nn.relu)#输入层
+        self.dense2 = tf.keras.layers.Dense(units=int(1.8*self.n_companies), activation=tf.nn.relu)#一个隐藏层
+        self.dense3 = tf.keras.layers.Dense(units=int(1.8*self.n_companies), activation=tf.nn.relu)
+        self.dense4 = tf.keras.layers.Dense(units=int(1.8*self.n_companies), activation=tf.nn.relu)
+        self.dense5 = tf.keras.layers.Dense(units=int(1.8*self.n_companies), activation=tf.nn.relu)
+        self.dense6 = tf.keras.layers.Dense(units=self.n_actions)#输出层代表着在当前最大赔率前，买和不买的六种行动的价值
 
     def call(self,state,capital): #输入从env那里获得的statematrix
         frametime = state[0][0]#取出frametime时间
@@ -162,7 +166,10 @@ class Q_Network(tf.keras.Model):
         x = tf.reshape(state,(1,412))#改变输入成（1,412）的二维张量
         x = self.dense1(x)#输出神经网络
         x = self.dense2(x)#
-        q_value = self.dense3(x)#
+        x = self.dense3(x)
+        x = self.dense4(x)
+        x = self.dense5(x)
+        q_value = self.dense6(x)#
         return q_value#q_value是一个（1,1331）的张量
 
     def pca(self,state):
@@ -173,7 +180,7 @@ class Q_Network(tf.keras.Model):
         q_values = self(state,capital)
         return tf.argmax(q_values,axis=-1)#tf.argmax函数是返回最大数值的下标，用来对应动作
 
-      
+ 
          
 
 
