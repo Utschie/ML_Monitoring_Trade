@@ -153,7 +153,7 @@ class Q_Network(tf.keras.Model):
         self.dense3 = tf.keras.layers.Dense(units=self.n_actions)#输出层代表着在当前最大赔率前，买和不买的六种行动的价值
 
     def call(self,state,capital): #输入从env那里获得的statematrix
-        x = np.append(self.flatten(state),[capital])#输出[2100,1]
+        x = tf.concat((self.flatten(state),[capital]),-1)#把拉直后的state和capital拼接在一起,-1是axis
         x = self.dense1(x)#输出[6300,1]
         x = self.dense2(x)#输出= [4725,1]
         q_value = self.dense3(x)#输出= [6,1]
