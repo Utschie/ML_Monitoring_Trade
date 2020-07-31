@@ -114,7 +114,7 @@ class Env():#定义一个环境用来与网络交互
             else:#主负
                 revenue = sum(i[2][0]*i[2][1] for i in self.invested )
         elif self.capital < sum(action):#如果没到终盘，且action的总投资比所剩资本还多
-            revenue = -100#则收益是个很大的负值（正常来讲revenue最大-50）
+            revenue = -1000#则收益是个很大的负值（正常来讲revenue最大-50）
         else:
             revenue = -sum(action)
             self.capital += revenue#该局游戏的capital随着操作减少
