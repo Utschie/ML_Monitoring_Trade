@@ -66,6 +66,7 @@ import pandas as pd
 import csv
 import random
 import re
+import sklearn
 class Env():#定义一个环境用来与网络交互
     def __init__(self,filepath,result):
         self.result = result#获得赛果
