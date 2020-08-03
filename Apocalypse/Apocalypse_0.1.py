@@ -58,6 +58,7 @@
 #在修修补补之后终于可以破破烂烂地跑起来了————20200803
 #刚刚把minibatch的size改成500，不知道怎么样————20200803 11:39
 #minibatch调成500用cpu跑会变很慢
+#由于tensorboard显示不全，所以改成一场比赛画一个点
 '''
 两种可能：第一种是把矩阵数据预处理成一个向量，然后输出一个向量再解码成策略
          第二种是前面输入数据不用处理成向量，然后后面的q值函数处理成一个向量，然后把这个向量解码成策略
@@ -219,6 +220,7 @@ if __name__ == "__main__":
     step_counter = 0
     learn_step_counter = 0
     target_repalce_counter = 0 
+    bisai_counter = 1
     memory_size = 10000
     replay_buffer = deque(maxlen=memory_size)#建立一个记忆回放区
     eval_Q = Q_Network()#初始化行动Q网络
@@ -237,12 +239,11 @@ if __name__ == "__main__":
         bianpan_env = Env(filepath,result)#每场比赛做一个环境
         state,done,capital =  bianpan_env.get_state()#把第一个状态作为初始化状态
         opt = tf.keras.optimizers.RMSprop(learning_rate)#设定最优化方法
+        with summary_writer.as_default():
+            tf.summary.scalar("Capital", capital,step = bisai_counter)
         while True:
             if step_counter % 1000 ==0:
                 epsilon = epsilon-0.01 
-            with summary_writer.as_default():
-                tf.summary.scalar("Capital", capital,step = step_counter)
-                tf.summary.scalar('Zinsen',bianpan_env.get_zinsen(),step = step_counter)
             state = jiangwei(state,capital)#先降维，并整理形状，把capital放进去
             action_index = eval_Q.predict(state)[0]#获得行动q_value
             if random.random() < epsilon:#如果落在随机区域
@@ -254,6 +255,8 @@ if __name__ == "__main__":
             #这里需要标识一下终止状态，钱花光了就终止了
             if done:#如果终盘了，跳出
                 replay_buffer.append((state, action, revenue,jiangwei(next_state,next_capital),1))
+                with summary_writer.as_default():
+                    tf.summary.scalar('Zinsen',bianpan_env.get_zinsen(),step = bisai_counter)
                 break
             else:#如果没终盘
                 replay_buffer.append((state, action, revenue,jiangwei(next_state,next_capital),0))
@@ -284,6 +287,7 @@ if __name__ == "__main__":
                     print('目标Q网络已更新'+str(target_repalce_counter)+'次')
             step_counter+=1#每转移一次，步数+1
         end=time.time()
+        bisai_counter+=1
         print('比赛'+filepath+'已完成'+'\n'+'用时'+str(end-start)+'秒\n')
 
 
