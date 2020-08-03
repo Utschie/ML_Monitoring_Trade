@@ -54,7 +54,8 @@
 #尝试写成用TPU跑的版本————之后要写成TPU跑的版本
 #可以在jupyter notebook 进行测试了，首先要%load_ext tensorboard和%tensorboard --logdir=./tensorboard 从而让jupyter notebook可以使用tensorboard
 #好像如果神经网络重写后设定了两个参数，那所谓的batch_size这一项就不存在了，所以应该把capital和state连起来
-#降维活动应该在神经网络外进行
+#降维活动应该在神经网络外进行（已解决）
+#在修修补补之后终于可以破破烂烂地跑起来了————20200803
 '''
 两种可能：第一种是把矩阵数据预处理成一个向量，然后输出一个向量再解码成策略
          第二种是前面输入数据不用处理成向量，然后后面的q值函数处理成一个向量，然后把这个向量解码成策略
@@ -90,7 +91,7 @@ class Env():#定义一个环境用来与网络交互
         self.filepath = filepath
         self.episode = self.episode_generator(self.filepath)#通过load_toNet函数得到当场比赛的episode生成器对象
         self.capital = 500#每场比赛有500欧可支配资金
-        self.gesamt_revenue = 0
+        self.gesamt_revenue = 0#初始化实际收益
         self.invested = [[(0.,0.),(0.,0.),(0.,0.)]]#已投入资本，每个元素记录着一次投资的赔率和投入，分别对应胜平负三种赛果的投入，这里不用np.array因为麻烦
         self.statematrix = np.zeros((410,9))#初始化状态矩阵
         #传入原始数据，为一个不定长张量对象
@@ -128,12 +129,13 @@ class Env():#定义一个环境用来与网络交互
                 revenue = sum(i[1][0]*i[1][1] for i in self.invested )
             else:#主负
                 revenue = sum(i[2][0]*i[2][1] for i in self.invested )
-        elif self.capital < sum(action):#如果没到终盘，且action的总投资比所剩资本还多
-            revenue = -1000#则收益是个很大的负值（正常来讲revenue最大-50）
+            self.gesamt_revenue += revenue
+        elif self.capital < sum(action):#如果没到终盘，且action的总投资比所剩资本还多，则给revenue一个很大的负值给神经网络，但是对capital不操作，实际资本也不更改
+            revenue = -200#则收益是个很大的负值（正常来讲revenue最大-50）
         else:
             revenue = -sum(action)
             self.capital += revenue#该局游戏的capital随着操作减少
-        self.gesamt_revenue += revenue
+            self.gesamt_revenue += revenue
         return revenue
        
     def get_state(self):
@@ -146,7 +148,7 @@ class Env():#定义一个环境用来与网络交互
         return next_state, done,self.capital#网络从此取出下一幕
     
     def get_zinsen(self):
-        return self.gesamt_revenue/500-self.capital
+        return self.gesamt_revenue/500
     
 
         
@@ -237,6 +239,9 @@ if __name__ == "__main__":
         while True:
             if step_counter % 1000 ==0:
                 epsilon = epsilon-0.01 
+            with summary_writer.as_default():
+                tf.summary.scalar("Capital", capital,step = step_counter)
+                tf.summary.scalar('Zinsen',bianpan_env.get_zinsen(),step = step_counter)
             state = jiangwei(state,capital)#先降维，并整理形状，把capital放进去
             action_index = eval_Q.predict(state)[0]#获得行动q_value
             if random.random() < epsilon:#如果落在随机区域
@@ -253,9 +258,7 @@ if __name__ == "__main__":
                 replay_buffer.append((state, action, revenue,jiangwei(next_state,next_capital),0))
             state = next_state
             capital = next_capital
-            with summary_writer.as_default():
-                 tf.summary.scalar("Capital", capital,step = step_counter)
-                 tf.summary.scalar('Zinsen',bianpan_env.get_zinsen(),step = step_counter)
+            
             #下面是参数更新过程
             if (step_counter >1000) and (step_counter% 10 == 0) :#1000步之后每转移10次进行一次eval_Q的学习
                 if step_counter >= batch_size:
