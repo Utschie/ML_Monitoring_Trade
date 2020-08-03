@@ -59,6 +59,7 @@
 #刚刚把minibatch的size改成500，不知道怎么样————20200803 11:39
 #minibatch调成500用cpu跑会变很慢
 #由于tensorboard显示不全，所以改成一场比赛画一个点
+#self.gesamt_revenue以及收益率的计算有些问题，因为把所有的都计入了，连钱不够的也计入了————20200803
 '''
 两种可能：第一种是把矩阵数据预处理成一个向量，然后输出一个向量再解码成策略
          第二种是前面输入数据不用处理成向量，然后后面的q值函数处理成一个向量，然后把这个向量解码成策略
@@ -124,7 +125,8 @@ class Env():#定义一个环境用来与网络交互
         max_guest = self.statematrix[tf.argmax(self.statematrix)[4].numpy()][4]
         peilv = [max_host,max_fair,max_guest]#得到最高赔率向量
         peilv_action = list(zip(peilv,action))
-        self.invested.append(peilv_action)#把本次投资存入invested已投入资本
+        if self.capital >= sum(action):#如果剩下的资本还够执行行动，则把此次交易计入
+            self.invested.append(peilv_action)#把本次投资存入invested已投入资本
         #计算本次行动的收益
         if self.statematrix.max(0)[0] ==0:#如果当前的状态是终盘状态,则清算所有赢的钱
             if self.result.host > self.result.guest:#主胜
