@@ -57,6 +57,7 @@
 #降维活动应该在神经网络外进行（已解决）
 #在修修补补之后终于可以破破烂烂地跑起来了————20200803
 #刚刚把minibatch的size改成500，不知道怎么样————20200803 11:39
+#minibatch调成500用cpu跑会变很慢
 '''
 两种可能：第一种是把矩阵数据预处理成一个向量，然后输出一个向量再解码成策略
          第二种是前面输入数据不用处理成向量，然后后面的q值函数处理成一个向量，然后把这个向量解码成策略
@@ -109,7 +110,7 @@ class Env():#定义一个环境用来与网络交互
             for j in state:
                 cid = j[1]#得到浮点数类型的cid
                 index = self.cidlist.index(cid)
-                statematrix[index,:] = j#把对应矩阵那一行给它
+                statematrix[index] = j#把对应矩阵那一行给它
             statematrix=np.delete(statematrix, 1, axis=-1)#去掉cid后，最后得到一个1*410*8的张量，这里axis是2或者-1（代表最后一个）都行
             self.statematrix = statematrix#把状态矩阵保存在环境对象里，用来算收益
             yield self.statematrix
@@ -123,20 +124,20 @@ class Env():#定义一个环境用来与网络交互
         peilv_action = list(zip(peilv,action))
         self.invested.append(peilv_action)#把本次投资存入invested已投入资本
         #计算本次行动的收益
-        if self.statematrix.max(axis=1).max() ==0:#如果当前的状态是终盘状态,则清算所有赢的钱
+        if self.statematrix.max(0)[0] ==0:#如果当前的状态是终盘状态,则清算所有赢的钱
             if self.result.host > self.result.guest:#主胜
                 revenue = sum(i[0][0]*i[0][1] for i in self.invested )
             elif self.result.host == self.result.guest:#平
                 revenue = sum(i[1][0]*i[1][1] for i in self.invested )
             else:#主负
                 revenue = sum(i[2][0]*i[2][1] for i in self.invested )
-            self.gesamt_revenue += revenue
+            self.gesamt_revenue =self.gesamt_revenue + revenue
         elif self.capital < sum(action):#如果没到终盘，且action的总投资比所剩资本还多，则给revenue一个很大的负值给神经网络，但是对capital不操作，实际资本也不更改
-            revenue = -200#则收益是个很大的负值（正常来讲revenue最大-50）
+            revenue = -500#则收益是个很大的负值（正常来讲revenue最大-50）
         else:
             revenue = -sum(action)
             self.capital += revenue#该局游戏的capital随着操作减少
-            self.gesamt_revenue += revenue
+            self.gesamt_revenue = self.gesamt_revenue + revenue
         return revenue
        
     def get_state(self):
@@ -149,7 +150,7 @@ class Env():#定义一个环境用来与网络交互
         return next_state, done,self.capital#网络从此取出下一幕
     
     def get_zinsen(self):
-        return self.gesamt_revenue/500
+        return self.gesamt_revenue/500.0#这里必须是500.0，否则出来的是结果自动取整数部分，也就是0
     
 
         
@@ -209,10 +210,10 @@ def jiangwei(state,capital):
 if __name__ == "__main__":
     summary_writer = tf.summary.create_file_writer('./tensorboard') #在代码所在文件夹同目录下创建tensorboard文件夹（本代码在jupyternotbook里跑，所以在jupyternotebook里可以看到）
     #########设置超参数
-    learning_rate = 1e-3#学习率
-    initial_epsilon = 1.            # 探索起始时的探索率
-    final_epsilon = 0.01            # 探索终止时的探索率
-    batch_size = 500
+    learning_rate = 0.01#学习率
+    epsilon = 1.            # 探索起始时的探索率
+    #final_epsilon = 0.01            # 探索终止时的探索率
+    batch_size = 50
     resultlist = pd.read_csv('D:\\data\\results_20141130-20160630.csv',index_col = 0)#得到赛果和比赛ID的对应表
     actions_table = [[a,b,c] for a in range(0,55,5) for b in range(0,55,5) for c in range(0,55,5)]#给神经网络输出层对应一个行动表
     step_counter = 0
@@ -233,9 +234,8 @@ if __name__ == "__main__":
         filepath = 'D:\\data\\2014-11-30\\'+i#文件路径
         bisai_id = int(re.findall(r'\\(\d*?).csv',filepath)[0])#从filepath中得到bisai代码的整型数
         result = resultlist.loc[bisai_id]#其中result.host即为主队进球，result.guest则为客队进球
-        epsilon = initial_epsilon#得有一个当前epsilon的计算公式
         bianpan_env = Env(filepath,result)#每场比赛做一个环境
-        state,done,capital=  bianpan_env.get_state()#把第一个状态作为初始化状态
+        state,done,capital =  bianpan_env.get_state()#把第一个状态作为初始化状态
         opt = tf.keras.optimizers.RMSprop(learning_rate)#设定最优化方法
         while True:
             if step_counter % 1000 ==0:
@@ -271,7 +271,7 @@ if __name__ == "__main__":
                 #y_pred = tf.reduce_sum(tf.squeeze(eval_Q(np.array(batch_state)))*tf.one_hot(np.array(batch_action),depth=1331,on_value=1.0, off_value=0.0),axis=1)#one_hot来生成对应位置为1的矩阵，depth是列数，reduce_sum(axis=1)来求各行和转成一维张量
                 #tf.squeeze是用来去掉张量里所有为1的维度
                 with tf.GradientTape() as tape:
-                    loss =  tf.keras.losses.mean_squared_error(y_true = batch_revenue+tf.reduce_max(target_Q.predict(np.array(batch_next_state)),axis = 1)*(1-np.array(batch_done))
+                    loss =  tf.keras.losses.mean_squared_error(y_true = batch_revenue+tf.reduce_max(tf.squeeze(target_Q(np.array(batch_next_state))),axis = -1)*(1-np.array(batch_done))
                     ,y_pred =tf.reduce_sum(tf.squeeze(eval_Q(np.array(batch_state)))*tf.one_hot(np.array(batch_action),depth=1331,on_value=1.0, off_value=0.0),axis=1))#y_true和y_pred都是第0维为batch_size的张量
                 grads = tape.gradient(loss, eval_Q.variables)
                 opt.apply_gradients(grads_and_vars=zip(grads, eval_Q.variables))
