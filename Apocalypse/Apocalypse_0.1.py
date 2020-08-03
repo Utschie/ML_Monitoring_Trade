@@ -53,7 +53,8 @@
 #这还不考虑每次迭代的最优化过程。960M显卡的算力是5.0TFLOPS，即5*10^12次FLOP每秒，则跑完至少需要525000秒，即8750分钟即146小时即6天多————20200802
 #尝试写成用TPU跑的版本————之后要写成TPU跑的版本
 #可以在jupyter notebook 进行测试了，首先要%load_ext tensorboard和%tensorboard --logdir=./tensorboard 从而让jupyter notebook可以使用tensorboard
-
+#好像如果神经网络重写后设定了两个参数，那所谓的batch_size这一项就不存在了，所以应该把capital和state连起来
+#降维活动应该在神经网络外进行
 '''
 两种可能：第一种是把矩阵数据预处理成一个向量，然后输出一个向量再解码成策略
          第二种是前面输入数据不用处理成向量，然后后面的q值函数处理成一个向量，然后把这个向量解码成策略
@@ -91,7 +92,7 @@ class Env():#定义一个环境用来与网络交互
         self.capital = 500#每场比赛有500欧可支配资金
         self.gesamt_revenue = 0
         self.invested = [[(0.,0.),(0.,0.),(0.,0.)]]#已投入资本，每个元素记录着一次投资的赔率和投入，分别对应胜平负三种赛果的投入，这里不用np.array因为麻烦
-        self.statematrix = np.zeros((1,410,9))#初始化状态矩阵
+        self.statematrix = np.zeros((410,9))#初始化状态矩阵
         #传入原始数据，为一个不定长张量对象
         print('环境初始化完成')
      
@@ -113,14 +114,14 @@ class Env():#定义一个环境用来与网络交互
 
     def revenue(self,action):#收益计算器，根据行动和终止与否，计算收益给出，每次算一次revenue，capital都会变化，除了终盘
         #先把行动存起来
-        max_host = self.statematrix[0][tf.argmax(self.statematrix[0])[2].numpy()][2]
-        max_fair = self.statematrix[0][tf.argmax(self.statematrix[0])[3].numpy()][3]
-        max_guest = self.statematrix[0][tf.argmax(self.statematrix[0])[4].numpy()][4]
+        max_host = self.statematrix[tf.argmax(self.statematrix)[2].numpy()][2]
+        max_fair = self.statematrix[tf.argmax(self.statematrix)[3].numpy()][3]
+        max_guest = self.statematrix[tf.argmax(self.statematrix)[4].numpy()][4]
         peilv = [max_host,max_fair,max_guest]#得到最高赔率向量
         peilv_action = list(zip(peilv,action))
         self.invested.append(peilv_action)#把本次投资存入invested已投入资本
         #计算本次行动的收益
-        if self.statematrix[0][0][0] ==0:#如果当前的状态是终盘状态,则清算所有赢的钱
+        if self.statematrix.max(axis=1).max() ==0:#如果当前的状态是终盘状态,则清算所有赢的钱
             if self.result.host > self.result.guest:#主胜
                 revenue = sum(i[0][0]*i[0][1] for i in self.invested )
             elif self.result.host == self.result.guest:#平
@@ -140,7 +141,7 @@ class Env():#定义一个环境用来与网络交互
             next_state=self.episode.__next__()
             done = False
         except:
-            next_state = np.zeros((1,410,9))
+            next_state = np.zeros((410,9))
             done = True
         return next_state, done,self.capital#网络从此取出下一幕
     
@@ -170,13 +171,8 @@ class Q_Network(tf.keras.Model):
         self.dense5 = tf.keras.layers.Dense(units=int(1.8*self.n_companies), activation=tf.nn.relu)
         self.dense6 = tf.keras.layers.Dense(units=self.n_actions)#输出层代表着在当前最大赔率前，买和不买的六种行动的价值
 
-    def call(self,state,capital): #输入从env那里获得的statematrix
-        frametime = state[0][0]#取出frametime时间
-        state=np.delete(state, 0, axis=-1)#把frametime去掉，则state变成了（410,7）的矩阵
-        state = self.pca(state)#降维成（410,1）的矩阵
-        state = tf.concat((state.flatten(),[capital],[frametime]),-1)#把降好维的state和capital与frametime连在一起，此时是412长度的一维张量
-        x = tf.reshape(state,(1,412))#改变输入成（1,412）的二维张量
-        x = self.dense1(x)#输出神经网络
+    def call(self,state): #输入从env那里获得的statematrix
+        x = self.dense1(state)#输出神经网络
         x = self.dense2(x)#
         x = self.dense3(x)
         x = self.dense4(x)
@@ -188,10 +184,20 @@ class Q_Network(tf.keras.Model):
         pca = PCA(n_components=1)#只保留第一个主成分
         return pca.fit_transform(state)
 
-    def predict(self, state,capital):#用来对应动作
-        q_values = self(state,capital)
+    def predict(self, state):#用来对应动作
+        q_values = self(state)
         return tf.argmax(q_values,axis=-1)#tf.argmax函数是返回最大数值的下标，用来对应动作
     
+
+
+def jiangwei(state,capital):
+    pca = PCA(n_components=1)
+    frametime = state[0][0]#取出frametime时间
+    state=np.delete(state, 0, axis=-1)#把frametime去掉，则state变成了（410,7）的矩阵
+    state = pca.fit_transform(state)#降维成（410,1）的矩阵
+    state = tf.concat((state.flatten(),[capital],[frametime]),-1)#把降好维的state和capital与frametime连在一起，此时是412长度的一维张量
+    state = tf.reshape(state,(1,412))
+    return state
 
  
          
@@ -203,7 +209,7 @@ if __name__ == "__main__":
     learning_rate = 1e-3#学习率
     initial_epsilon = 1.            # 探索起始时的探索率
     final_epsilon = 0.01            # 探索终止时的探索率
-    batch_size = 500
+    batch_size = 50
     resultlist = pd.read_csv('D:\\data\\results_20141130-20160630.csv',index_col = 0)#得到赛果和比赛ID的对应表
     actions_table = [[a,b,c] for a in range(0,55,5) for b in range(0,55,5) for c in range(0,55,5)]#给神经网络输出层对应一个行动表
     step_counter = 0
@@ -229,7 +235,10 @@ if __name__ == "__main__":
         state,done,capital=  bianpan_env.get_state()#把第一个状态作为初始化状态
         opt = tf.keras.optimizers.RMSprop(learning_rate)#设定最优化方法
         while True:
-            action_index = eval_Q.predict(state,capital)[0]#获得行动q_value
+            if step_counter % 1000 ==0:
+                epsilon = epsilon-0.01 
+            state = jiangwei(state,capital)#先降维，并整理形状，把capital放进去
+            action_index = eval_Q.predict(state)[0]#获得行动q_value
             if random.random() < epsilon:#如果落在随机区域
                 action = random.choice(range(0,1331))#action是一个坐标
             else:
@@ -238,34 +247,37 @@ if __name__ == "__main__":
             next_state,done,next_capital = bianpan_env.get_state()#获得下一个状态,终止状态的next_state为0矩阵
             #这里需要标识一下终止状态，钱花光了就终止了
             if done:#如果终盘了，跳出
-                replay_buffer.append((state, action, revenue, next_state,capital,next_capital,1))
+                replay_buffer.append((state, action, revenue,jiangwei(next_state,next_capital),1))
                 break
             else:#如果没终盘
-                replay_buffer.append((state, action, revenue, next_state,capital,next_capital,0))
+                replay_buffer.append((state, action, revenue,jiangwei(next_state,next_capital),0))
             state = next_state
             capital = next_capital
             with summary_writer.as_default():
-                 tf.summary.scalar("Capital", capital,step = 1)
-                 tf.summary.scalar('Zinsen',bianpan_env.get_zinsen(),step = 1)
+                 tf.summary.scalar("Capital", capital,step = step_counter)
+                 tf.summary.scalar('Zinsen',bianpan_env.get_zinsen(),step = step_counter)
             #下面是参数更新过程
             if (step_counter >1000) and (step_counter% 10 == 0) :#1000步之后每转移10次进行一次eval_Q的学习
                 if step_counter >= batch_size:
-                    batch_state, batch_action, batch_revenue, batch_next_state ,batch_capital,batch_done,batch_next_capital= zip(*random.sample(replay_buffer, batch_size))#zip(*...)解开分给别人的意思 
+                    batch_state, batch_action, batch_revenue, batch_next_state ,batch_done= zip(*random.sample(replay_buffer, batch_size))#zip(*...)解开分给别人的意思 
                 else:
-                    batch_state, batch_action, batch_revenue, batch_next_state ,batch_capital,batch_done,batch_next_capital= zip(*random.sample(replay_buffer, step_counter))
-                y_true = batch_revenue+tf.reduce_max(target_Q.predict(batch_next_state,batch_next_capital),axis = 1)*(1-batch_done)#reduce_max来返回最大值，暂不考虑折现率gamma,
+                    batch_state, batch_action, batch_revenue, batch_next_state ,batch_done= zip(*random.sample(replay_buffer, step_counter))
+                #y_true = batch_revenue+tf.reduce_max(target_Q.predict(np.array(batch_next_state)),axis = 1)*(1-np.array(batch_done))#reduce_max来返回最大值，暂不考虑折现率gamma,
                     #tensorflow中张量相乘是对应行相乘，所以eval_Q(batch_state)有多少列，one_hot就得有多少列，如下
-                y_pred = tf.reduce_sum(eval_Q(batch_state,batch_capital)*tf.one_hot(batch_action,depth=1331,on_value=1.0, off_value=0.0),axis=1)#one_hot来生成对应位置为1的矩阵，depth是列数，reduce_sum(axis=1)来求各行和转成一维张量
-                loss =  tf.keras.losses.mean_squared_error(y_true = y_true,y_pred = y_pred)#y_true和y_pred都是第0维为batch_size的张量
-                opt.minimize(loss,eval_Q.variables,grad_loss=None, name=None)
+                #y_pred = tf.reduce_sum(tf.squeeze(eval_Q(np.array(batch_state)))*tf.one_hot(np.array(batch_action),depth=1331,on_value=1.0, off_value=0.0),axis=1)#one_hot来生成对应位置为1的矩阵，depth是列数，reduce_sum(axis=1)来求各行和转成一维张量
+                #tf.squeeze是用来去掉张量里所有为1的维度
+                with tf.GradientTape() as tape:
+                    loss =  tf.keras.losses.mean_squared_error(y_true = batch_revenue+tf.reduce_max(target_Q.predict(np.array(batch_next_state)),axis = 1)*(1-np.array(batch_done))
+                    ,y_pred =tf.reduce_sum(tf.squeeze(eval_Q(np.array(batch_state)))*tf.one_hot(np.array(batch_action),depth=1331,on_value=1.0, off_value=0.0),axis=1))#y_true和y_pred都是第0维为batch_size的张量
+                grads = tape.gradient(loss, eval_Q.variables)
+                opt.apply_gradients(grads_and_vars=zip(grads, eval_Q.variables))
                 learn_step_counter+=1#每学习一次，学习步数+1
                 print('已学习'+str(learn_step_counter)+'次')
-
-            if learn_step_counter % 300 == 0:#每走300步，target_Q网络参数进行一次变量替换
-                eval_Q.save_weights(weights_path, overwrite=True)#保存并覆盖之前的检查点，储存权重
-                target_Q.load_weights(weights_path)#读取eval_Q刚刚保存的权重
-                target_repalce_counter+=1
-                print('目标Q网络已更新'+str(target_repalce_counter)+'次')
+                if (learn_step_counter % 300 == 0) and (learn_step_counter > 0):#每学习300次，target_Q网络参数进行一次变量替换
+                    eval_Q.save_weights(weights_path, overwrite=True)#保存并覆盖之前的检查点，储存权重
+                    target_Q.load_weights(weights_path)#读取eval_Q刚刚保存的权重
+                    target_repalce_counter+=1
+                    print('目标Q网络已更新'+str(target_repalce_counter)+'次')
             step_counter+=1#每转移一次，步数+1
         end=time.time()
         print('比赛'+filepath+'已完成'+'\n'+'用时'+str(end-start)+'秒\n')
