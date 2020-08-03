@@ -103,7 +103,7 @@ class Env():#定义一个环境用来与网络交互
     def episode_generator(self,filepath):#传入单场比赛文件路径，得到一个每一幕的generator
         data = pd.read_csv(filepath)#读取文件
         frametimelist=data.frametime.value_counts().sort_index(ascending=False).index#将frametime的值读取成列表
-        for i in frametimelist:
+        for i in frametimelist:#其中frametimelist里的数据是整型
             state = data.groupby('frametime').get_group(i)#从第一次变盘开始得到当次转移
             state = np.array(state)#转成numpy多维数组
             #在填充成矩阵之前需要知道所有数据中到底有多少个cid
@@ -114,7 +114,8 @@ class Env():#定义一个环境用来与网络交互
                 statematrix[index] = j#把对应矩阵那一行给它
             statematrix=np.delete(statematrix, 1, axis=-1)#去掉cid后，最后得到一个1*410*8的张量，这里axis是2或者-1（代表最后一个）都行
             self.statematrix = statematrix#把状态矩阵保存在环境对象里，用来算收益
-            yield self.statematrix
+            self.frametime = i
+            yield self.statematrix,self.frametime
 
     def revenue(self,action):#收益计算器，根据行动和终止与否，计算收益给出，每次算一次revenue，capital都会变化，除了终盘
         #先把行动存起来
@@ -134,7 +135,7 @@ class Env():#定义一个环境用来与网络交互
                 revenue = sum(i[2][0]*i[2][1] for i in self.invested )
             self.gesamt_revenue =self.gesamt_revenue + revenue
         elif self.capital < sum(action):#如果没到终盘，且action的总投资比所剩资本还多，则给revenue一个很大的负值给神经网络，但是对capital不操作，实际资本也不更改
-            revenue = -500#则收益是个很大的负值（正常来讲revenue最大-50）
+            revenue = -200#则收益是个很大的负值（正常来讲revenue最大-50）
         else:
             revenue = -sum(action)
             self.capital += revenue#该局游戏的capital随着操作减少
@@ -143,15 +144,17 @@ class Env():#定义一个环境用来与网络交互
        
     def get_state(self):
         try:
-            next_state=self.episode.__next__()
+            next_state,frametime=self.episode.__next__()
             done = False
         except:
             next_state = np.zeros((410,9))
+            frametime = 0
             done = True
-        return next_state, done,self.capital#网络从此取出下一幕
+        return next_state, frametime,done,self.capital#网络从此取出下一幕
     
     def get_zinsen(self):
-        return self.gesamt_revenue/500.0#这里必须是500.0，否则出来的是结果自动取整数部分，也就是0
+        zinsen  = self.gesamt_revenue/500.0
+        return zinsen#这里必须是500.0，否则出来的是结果自动取整数部分，也就是0
     
 
         
@@ -237,7 +240,7 @@ if __name__ == "__main__":
         bisai_id = int(re.findall(r'\\(\d*?).csv',filepath)[0])#从filepath中得到bisai代码的整型数
         result = resultlist.loc[bisai_id]#其中result.host即为主队进球，result.guest则为客队进球
         bianpan_env = Env(filepath,result)#每场比赛做一个环境
-        state,done,capital =  bianpan_env.get_state()#把第一个状态作为初始化状态
+        state,frametime,done,capital =  bianpan_env.get_state()#把第一个状态作为初始化状态
         opt = tf.keras.optimizers.RMSprop(learning_rate)#设定最优化方法
         with summary_writer.as_default():
             tf.summary.scalar("Capital", capital,step = bisai_counter)
@@ -251,12 +254,14 @@ if __name__ == "__main__":
             else:
                 action = action_index#否则按着贪心选，这里[0]是因为predict返回的是一个单元素列表
             revenue = bianpan_env.revenue(actions_table[action])#根据行动和是否终赔计算收益
-            next_state,done,next_capital = bianpan_env.get_state()#获得下一个状态,终止状态的next_state为0矩阵
+            if frametime == 0:
+                with summary_writer.as_default():
+                    tf.summary.scalar('Zinsen',bianpan_env.get_zinsen(),step = bisai_counter)
+                    tf.summary.scalar('rest_capital',bianpan_env.gesamt_revenue,step = bisai_counter)
+            next_state,frametime,done,next_capital = bianpan_env.get_state()#获得下一个状态,终止状态的next_state为0矩阵
             #这里需要标识一下终止状态，钱花光了就终止了
             if done:#如果终盘了，跳出
                 replay_buffer.append((state, action, revenue,jiangwei(next_state,next_capital),1))
-                with summary_writer.as_default():
-                    tf.summary.scalar('Zinsen',bianpan_env.get_zinsen(),step = bisai_counter)
                 break
             else:#如果没终盘
                 replay_buffer.append((state, action, revenue,jiangwei(next_state,next_capital),0))
