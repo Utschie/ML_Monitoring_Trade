@@ -59,7 +59,8 @@
 #刚刚把minibatch的size改成500，不知道怎么样————20200803 11:39
 #minibatch调成500用cpu跑会变很慢
 #由于tensorboard显示不全，所以改成一场比赛画一个点
-#self.gesamt_revenue以及收益率的计算有些问题，因为把所有的都计入了，连钱不够的也计入了————20200803
+#self.gesamt_revenue以及收益率的计算有些问题，因为把所有的都计入了，连钱不够的也计入了————20200803(已解决)
+#rest_capital应该在self.gesamt_revenue的基础上加500，来表示最后剩下了多少钱
 '''
 两种可能：第一种是把矩阵数据预处理成一个向量，然后输出一个向量再解码成策略
          第二种是前面输入数据不用处理成向量，然后后面的q值函数处理成一个向量，然后把这个向量解码成策略
@@ -259,7 +260,7 @@ if __name__ == "__main__":
             if frametime == 0:
                 with summary_writer.as_default():
                     tf.summary.scalar('Zinsen',bianpan_env.get_zinsen(),step = bisai_counter)
-                    tf.summary.scalar('rest_capital',bianpan_env.gesamt_revenue,step = bisai_counter)
+                    tf.summary.scalar('rest_capital',bianpan_env.gesamt_revenue+500,step = bisai_counter)
             next_state,frametime,done,next_capital = bianpan_env.get_state()#获得下一个状态,终止状态的next_state为0矩阵
             #这里需要标识一下终止状态，钱花光了就终止了
             if done:#如果终盘了，跳出
