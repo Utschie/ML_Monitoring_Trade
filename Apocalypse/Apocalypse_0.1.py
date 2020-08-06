@@ -61,7 +61,8 @@
 #由于tensorboard显示不全，所以改成一场比赛画一个点
 #self.gesamt_revenue以及收益率的计算有些问题，因为把所有的都计入了，连钱不够的也计入了————20200803(已解决)
 #rest_capital应该在self.gesamt_revenue的基础上加500，来表示最后剩下了多少钱，比如gesamt_revenue=-500,则剩下了0————20200804
-#先改成GPU算法小测一下这一天的速度
+#先改成GPU算法小测一下这一天的速度，但是GPU用不了
+#那就试试TPU如何————20200806
 '''
 两种可能：第一种是把矩阵数据预处理成一个向量，然后输出一个向量再解码成策略
          第二种是前面输入数据不用处理成向量，然后后面的q值函数处理成一个向量，然后把这个向量解码成策略
@@ -216,6 +217,7 @@ def jiangwei(state,capital):
 
 
 if __name__ == "__main__":
+    start0 = time.time()
     summary_writer = tf.summary.create_file_writer('./tensorboard') #在代码所在文件夹同目录下创建tensorboard文件夹（本代码在jupyternotbook里跑，所以在jupyternotebook里可以看到）
     #########设置超参数
     learning_rate = 0.01#学习率
@@ -298,6 +300,8 @@ if __name__ == "__main__":
         end=time.time()
         bisai_counter+=1
         print('比赛'+filepath+'已完成'+'\n'+'用时'+str(end-start)+'秒\n')
+    end0 = time.time()
+    print('共用时'+str(end0-start0)+'秒')
 
 
 

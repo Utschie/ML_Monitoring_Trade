@@ -154,7 +154,7 @@ if __name__ == "__main__":
     target_Q = Q_Network()#初始化目标Q网络
     weights_path = 'D:\\data\\eval_Q_weights.ckpt'
     filelist = os.listdir('D:\\data\\2014-11-30')#读取这一天的文件名
-    filefolderlist = os.listdir('F:\cleaned_data_20141130-20160630')
+    filefolderlist = os.listdir('F:\\cleaned_data_20141130-20160630')
     ################下面是单场比赛的流程
 
 
