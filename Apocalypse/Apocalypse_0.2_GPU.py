@@ -1,6 +1,7 @@
 #0.2版本主要是为了解决以下几个问题
 #tensorflow-GPU版本已在win10下安装好，可与jupyter notebook连用————20200806
 #但是GPU没法使用
+#把tensorflow降到了2.1.0版本，于是可以了
 '''
 1.使用GPU
 2.研究一下checkpoint以方便断点后继续训练
