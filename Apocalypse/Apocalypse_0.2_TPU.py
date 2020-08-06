@@ -3,6 +3,8 @@
 
 
 
+import os
+os.environ["CUDA_VISIBLE_DEVICES"]="-1"
 import tensorflow as tf
 from collections import deque
 import numpy as np
@@ -11,7 +13,6 @@ import csv
 import random
 import re
 from sklearn.decomposition import PCA
-import os
 import time
 class Env():#定义一个环境用来与网络交互
     def __init__(self,filepath,result):
@@ -137,7 +138,7 @@ if __name__ == "__main__":
     learning_rate = 0.01#学习率
     epsilon = 1.            # 探索起始时的探索率
     #final_epsilon = 0.01            # 探索终止时的探索率
-    batch_size = 50
+    batch_size = 32
     resultlist = pd.read_csv('D:\\data\\results_20141130-20160630.csv',index_col = 0)#得到赛果和比赛ID的对应表
     actions_table = [[a,b,c] for a in range(0,55,5) for b in range(0,55,5) for c in range(0,55,5)]#给神经网络输出层对应一个行动表
     step_counter = 0
@@ -149,7 +150,6 @@ if __name__ == "__main__":
     eval_Q = Q_Network()#初始化行动Q网络
     target_Q = Q_Network()#初始化目标Q网络
     weights_path = 'D:\\data\\eval_Q_weights.ckpt'
-    filelist = os.listdir('D:\\data\\2014-11-30')#读取这一天的文件名
     filefolderlist = os.listdir('F:\\cleaned_data_20141130-20160630')
     ################下面是单场比赛的流程
 
@@ -157,9 +157,9 @@ if __name__ == "__main__":
 
     for i in filefolderlist:#挨个文件夹训练
         filelist = os.listdir('F:\\cleaned_data_20141130-20160630\\'+i)
-        for i in filelist:#挨场比赛训练
+        for j in filelist:#挨场比赛训练
             start=time.time()
-            filepath = 'D:\\data\\2014-11-30\\'+i#文件路径
+            filepath = 'F:\\cleaned_data_20141130-20160630\\'+i+'\\'+j#文件路径
             bisai_id = int(re.findall(r'\\(\d*?).csv',filepath)[0])#从filepath中得到bisai代码的整型数
             result = resultlist.loc[bisai_id]#其中result.host即为主队进球，result.guest则为客队进球
             bianpan_env = Env(filepath,result)#每场比赛做一个环境
@@ -168,7 +168,7 @@ if __name__ == "__main__":
             with summary_writer.as_default():
                 tf.summary.scalar("Capital", capital,step = bisai_counter)
             while True:
-                if step_counter % 1000 ==0:
+                if (step_counter % 1000 ==0) and (epsilon>0.05):
                     epsilon = epsilon-0.01 
                 state = jiangwei(state,capital)#先降维，并整理形状，把capital放进去
                 action_index = eval_Q.predict(state)[0]#获得行动q_value
@@ -192,7 +192,7 @@ if __name__ == "__main__":
                 capital = next_capital
                 
                 #下面是参数更新过程
-                if (step_counter >1000) and (step_counter% 10 == 0) :#1000步之后每转移10次进行一次eval_Q的学习
+                if (step_counter >1000) and (step_counter%10 == 0) :#1000步之后每转移10次进行一次eval_Q的学习
                     if step_counter >= batch_size:
                         batch_state, batch_action, batch_revenue, batch_next_state ,batch_done= zip(*random.sample(replay_buffer, batch_size))#zip(*...)解开分给别人的意思 
                     else:
