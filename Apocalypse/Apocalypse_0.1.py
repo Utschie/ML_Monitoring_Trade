@@ -61,8 +61,10 @@
 #由于tensorboard显示不全，所以改成一场比赛画一个点
 #self.gesamt_revenue以及收益率的计算有些问题，因为把所有的都计入了，连钱不够的也计入了————20200803(已解决)
 #rest_capital应该在self.gesamt_revenue的基础上加500，来表示最后剩下了多少钱，比如gesamt_revenue=-500,则剩下了0————20200804
-#先改成GPU算法小测一下这一天的速度，但是GPU用不了
+#先改成GPU算法小测一下这一天的速度，但是GPU用不了（已解决）
 #那就试试TPU如何————20200806
+#前面1000次转移差不多用了45-50秒，也就是说如果没有学习的部分，差不多80分钟就完成一天了————20200806
+#现阶段重点是提升性能，利用并行，tf.data,Intel的mkl等等工具进行大概，现在的cpu使用率只有最多30%，gpu只有12%，太慢————20200806
 '''
 两种可能：第一种是把矩阵数据预处理成一个向量，然后输出一个向量再解码成策略
          第二种是前面输入数据不用处理成向量，然后后面的q值函数处理成一个向量，然后把这个向量解码成策略
@@ -140,7 +142,7 @@ class Env():#定义一个环境用来与网络交互
                 revenue = sum(i[2][0]*i[2][1] for i in self.invested )
             self.gesamt_revenue =self.gesamt_revenue + revenue
         elif self.capital < sum(action):#如果没到终盘，且action的总投资比所剩资本还多，则给revenue一个很大的负值给神经网络，但是对capital不操作，实际资本也不更改
-            revenue = -200#则收益是个很大的负值（正常来讲revenue最大-50）
+            revenue = -500#则收益是个很大的负值（正常来讲revenue最大-50）
         else:
             revenue = -sum(action)
             self.capital += revenue#该局游戏的capital随着操作减少
@@ -160,15 +162,7 @@ class Env():#定义一个环境用来与网络交互
     def get_zinsen(self):
         zinsen  = self.gesamt_revenue/500.0
         return zinsen#这里必须是500.0，否则出来的是结果自动取整数部分，也就是0
-    
-
-        
-
-
-
-
-
-
+   
 
 class Q_Network(tf.keras.Model):
     def __init__(self,
@@ -192,10 +186,6 @@ class Q_Network(tf.keras.Model):
         x = self.dense5(x)
         q_value = self.dense6(x)#
         return q_value#q_value是一个（1,1331）的张量
-
-    def pca(self,state):
-        pca = PCA(n_components=1)#只保留第一个主成分
-        return pca.fit_transform(state)
 
     def predict(self, state):#用来对应动作
         q_values = self(state)
@@ -253,6 +243,7 @@ if __name__ == "__main__":
         while True:
             if step_counter % 1000 ==0:
                 epsilon = epsilon-0.01 
+                print(epsilon)
             state = jiangwei(state,capital)#先降维，并整理形状，把capital放进去
             action_index = eval_Q.predict(state)[0]#获得行动q_value
             if random.random() < epsilon:#如果落在随机区域
@@ -297,6 +288,7 @@ if __name__ == "__main__":
                     target_repalce_counter+=1
                     print('目标Q网络已更新'+str(target_repalce_counter)+'次')
             step_counter+=1#每转移一次，步数+1
+            print(str(step_counter))
         end=time.time()
         bisai_counter+=1
         print('比赛'+filepath+'已完成'+'\n'+'用时'+str(end-start)+'秒\n')
