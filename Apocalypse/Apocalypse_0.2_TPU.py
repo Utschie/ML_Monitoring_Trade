@@ -1,10 +1,14 @@
 #此版本是Apocalypse_0.1的TPU版本
 #由于之前的GPU版本在本电脑没法用，所以先尝试TPU版本
+#把batch_size改成32后速度显著加快
+#其实提升速度的关键问题在于cpu并行度，从而可以充分利用cpu资源，现在的速度是2秒学习一次，即一秒5次转移————20200806
+#暂时把epislon递减步长调为0.001,即100万次转移过后，也就是大概是跑了10天的数据后，开始贪心策略
+#这个问题调参的关键在于由于总转移次数高达7500万次，所以学习步长，目标Q替换步长值得研究一下
 
 
 
 import os
-os.environ["CUDA_VISIBLE_DEVICES"]="-1"
+os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
 import tensorflow as tf
 from collections import deque
 import numpy as np
@@ -169,7 +173,7 @@ if __name__ == "__main__":
                 tf.summary.scalar("Capital", capital,step = bisai_counter)
             while True:
                 if (step_counter % 1000 ==0) and (epsilon>0.05):
-                    epsilon = epsilon-0.01 
+                    epsilon = epsilon-0.001#也就是经过100万次转移epsilon才缩小到95%的贪心策略
                 state = jiangwei(state,capital)#先降维，并整理形状，把capital放进去
                 action_index = eval_Q.predict(state)[0]#获得行动q_value
                 if random.random() < epsilon:#如果落在随机区域
