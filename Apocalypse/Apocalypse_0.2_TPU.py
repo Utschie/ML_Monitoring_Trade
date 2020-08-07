@@ -8,7 +8,7 @@
 #然后学习率要有动态的变化，比如学习率衰减或者增高之类的，反正应该搞一个————20200807
 #收益率数据可以改成总收入/总投资，因为并不是每次都把钱砸完————20200807（已搞定）
 #然后应该还可以整一个投资率，即投资总额占500欧起始资金的比例————20200807
-#还应该设一个比率，即不可能投资率，即好的模型应该在投资策略大于剩余资金时不选择这个策略，如果选择了，即为不可能投资，应该看一下会不会减少————20200807
+#还应该设一个比率，即不可能投资率，即好的模型应该在投资策略大于剩余资金时不选择这个策略，如果选择了，即为不可能投资，应该看一下会不会减少————20200807(已解决)
 #episilon贪心率应该最后变成0，因为一场比赛动辄几千次转移，即便5%也意味着随机选择了上百次，那么难免有投资错误的时候。这样也能看到最后效果————20200808（已解决）
 
 
@@ -37,6 +37,8 @@ class Env():#定义一个环境用来与网络交互
         self.gesamt_revenue = 0#初始化实际收益
         self.invested = [[(0.,0.),(0.,0.),(0.,0.)]]#已投入资本，每个元素记录着一次投资的赔率和投入，分别对应胜平负三种赛果的投入，这里不用np.array因为麻烦
         self.statematrix = np.zeros((410,9))#初始化状态矩阵
+        self.action_counter=0.0
+        self.wrong_action_counter = 0.0
         #传入原始数据，为一个不定长张量对象
         print('环境初始化完成')
      
@@ -66,6 +68,10 @@ class Env():#定义一个环境用来与网络交互
         peilv_action = list(zip(peilv,action))
         if self.capital >= sum(action):#如果剩下的资本还够执行行动，则把此次交易计入
             self.invested.append(peilv_action)#把本次投资存入invested已投入资本
+            self.action_counter+=1
+        else:
+            self.action_counter+=1
+            self.wrong_action_counter+=1
         #计算本次行动的收益
         if self.statematrix.max(0)[0] ==0:#如果当前的状态是终盘状态,则清算所有赢的钱
             if self.result.host > self.result.guest:#主胜
@@ -95,7 +101,7 @@ class Env():#定义一个环境用来与网络交互
     
     def get_zinsen(self):
         gesamt_touzi = np.sum(np.sum(self.invested,axis=1),axis=0)[1]
-        zinsen  = self.gesamt_revenue/gesamt_touzi
+        zinsen  = float(self.gesamt_revenue)/float(gesamt_touzi)
         return zinsen#这里必须是500.0，否则出来的是结果自动取整数部分，也就是0
         
 
@@ -195,6 +201,7 @@ if __name__ == "__main__":
                     with summary_writer.as_default():
                         tf.summary.scalar('Zinsen',bianpan_env.get_zinsen(),step = bisai_counter)
                         tf.summary.scalar('rest_capital',bianpan_env.gesamt_revenue+500,step = bisai_counter)
+                        tf.summary.scalar('wrong_action_rate',bianpan_env.wrong_action_counter/bianpan_env.action_counter,step = bisai_counter)
                 next_state,frametime,done,next_capital = bianpan_env.get_state()#获得下一个状态,终止状态的next_state为0矩阵
                 #这里需要标识一下终止状态，钱花光了就终止了
                 if done:#如果终盘了，跳出
