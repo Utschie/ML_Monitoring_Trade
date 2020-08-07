@@ -9,7 +9,7 @@
 #收益率数据可以改成总收入/总投资，因为并不是每次都把钱砸完————20200807（已搞定）
 #然后应该还可以整一个投资率，即投资总额占500欧起始资金的比例————20200807
 #还应该设一个比率，即不可能投资率，即好的模型应该在投资策略大于剩余资金时不选择这个策略，如果选择了，即为不可能投资，应该看一下会不会减少————20200807
-#episilon贪心率应该最后变成0，因为一场比赛动辄几千次转移，即便5%也意味着随机选择了上百次，那么难免有投资错误的时候。这样也能看到最后效果————20200808
+#episilon贪心率应该最后变成0，因为一场比赛动辄几千次转移，即便5%也意味着随机选择了上百次，那么难免有投资错误的时候。这样也能看到最后效果————20200808（已解决）
 
 
 
@@ -182,7 +182,7 @@ if __name__ == "__main__":
             with summary_writer.as_default():
                 tf.summary.scalar("Capital", capital,step = bisai_counter)
             while True:
-                if (step_counter % 1000 ==0) and (epsilon>0.05):
+                if (step_counter % 1000 ==0) and (epsilon>0):
                     epsilon = epsilon-0.0005#也就是经过200万次转移epsilon才缩小到95%的贪心策略
                 state = jiangwei(state,capital)#先降维，并整理形状，把capital放进去
                 action_index = eval_Q.predict(state)[0]#获得行动q_value
