@@ -5,6 +5,7 @@
 #暂时把epislon递减步长调为0.001,即100万次转移过后，也就是大概是跑了10天的数据后，开始贪心策略
 #这个问题调参的关键在于由于总转移次数高达7500万次，所以学习步长，目标Q替换步长，学习率值得研究一下————20200807
 #由于主要占用时间在于每次和环境交互的硬盘读写时间，所以除了增加算法并行度以外还可以尝试一次把大量数据载入内存，充分利用内存读取速度————20200807
+#然后学习率要有动态的变化，比如学习率衰减或者增高之类的，反正应该搞一个————20200807
 
 
 
@@ -140,7 +141,7 @@ if __name__ == "__main__":
     start0 = time.time()
     summary_writer = tf.summary.create_file_writer('./tensorboard') #在代码所在文件夹同目录下创建tensorboard文件夹（本代码在jupyternotbook里跑，所以在jupyternotebook里可以看到）
     #########设置超参数
-    learning_rate = 0.01#学习率
+    learning_rate = 0.00001#学习率
     epsilon = 1.            # 探索起始时的探索率
     #final_epsilon = 0.01            # 探索终止时的探索率
     batch_size = 32
@@ -166,7 +167,10 @@ if __name__ == "__main__":
             start=time.time()
             filepath = 'F:\\cleaned_data_20141130-20160630\\'+i+'\\'+j#文件路径
             bisai_id = int(re.findall(r'\\(\d*?).csv',filepath)[0])#从filepath中得到bisai代码的整型数
-            result = resultlist.loc[bisai_id]#其中result.host即为主队进球，result.guest则为客队进球
+            try:
+                result = resultlist.loc[bisai_id]#其中result.host即为主队进球，result.guest则为客队进球
+            except Exception:#因为有的比赛结果没有存进去
+                continue
             bianpan_env = Env(filepath,result)#每场比赛做一个环境
             state,frametime,done,capital =  bianpan_env.get_state()#把第一个状态作为初始化状态
             opt = tf.keras.optimizers.RMSprop(learning_rate)#设定最优化方法
@@ -174,7 +178,7 @@ if __name__ == "__main__":
                 tf.summary.scalar("Capital", capital,step = bisai_counter)
             while True:
                 if (step_counter % 1000 ==0) and (epsilon>0.05):
-                    epsilon = epsilon-0.001#也就是经过100万次转移epsilon才缩小到95%的贪心策略
+                    epsilon = epsilon-0.0005#也就是经过200万次转移epsilon才缩小到95%的贪心策略
                 state = jiangwei(state,capital)#先降维，并整理形状，把capital放进去
                 action_index = eval_Q.predict(state)[0]#获得行动q_value
                 if random.random() < epsilon:#如果落在随机区域
