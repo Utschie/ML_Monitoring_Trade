@@ -11,6 +11,7 @@
 #还应该设一个比率，即不可能投资率，即好的模型应该在投资策略大于剩余资金时不选择这个策略，如果选择了，即为不可能投资，应该看一下会不会减少————20200807(已解决)
 #episilon贪心率应该最后变成0，因为一场比赛动辄几千次转移，即便5%也意味着随机选择了上百次，那么难免有投资错误的时候。这样也能看到最后效果————20200808（已解决）
 #在batch_size为32或者50的时候，GPU是没有CPU快的，应该尝试一下多大的batch_size时，GPU可以显出优势来————20200808
+#在计算zinsen的时候，应该加上一个极小的数，因为有可能本场比赛不投资，那么0为除数就会出错————20200808（已解决）
 
 
 import os
@@ -101,7 +102,7 @@ class Env():#定义一个环境用来与网络交互
     
     def get_zinsen(self):
         self.gesamt_touzi = np.sum(np.sum(self.invested,axis=1),axis=0)[1]
-        zinsen  = float(self.gesamt_revenue)/float(self.gesamt_touzi)
+        zinsen  = float(self.gesamt_revenue)/float(self.gesamt_touzi+0.000001)
         return zinsen#这里必须是500.0，否则出来的是结果自动取整数部分，也就是0
         
 
