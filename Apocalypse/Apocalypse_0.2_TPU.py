@@ -7,10 +7,10 @@
 #由于主要占用时间在于每次和环境交互的硬盘读写时间，所以除了增加算法并行度以外还可以尝试一次把大量数据载入内存，充分利用内存读取速度————20200807
 #然后学习率要有动态的变化，比如学习率衰减或者增高之类的，反正应该搞一个————20200807
 #收益率数据可以改成总收入/总投资，因为并不是每次都把钱砸完————20200807（已搞定）
-#然后应该还可以整一个投资率，即投资总额占500欧起始资金的比例————20200807
+#然后应该还可以整一个投资率，即投资总额占500欧起始资金的比例————20200807(已解决)
 #还应该设一个比率，即不可能投资率，即好的模型应该在投资策略大于剩余资金时不选择这个策略，如果选择了，即为不可能投资，应该看一下会不会减少————20200807(已解决)
 #episilon贪心率应该最后变成0，因为一场比赛动辄几千次转移，即便5%也意味着随机选择了上百次，那么难免有投资错误的时候。这样也能看到最后效果————20200808（已解决）
-
+#在batch_size为32或者50的时候，GPU是没有CPU快的，
 
 
 import os
@@ -100,8 +100,8 @@ class Env():#定义一个环境用来与网络交互
         return next_state, frametime,done,self.capital#网络从此取出下一幕
     
     def get_zinsen(self):
-        gesamt_touzi = np.sum(np.sum(self.invested,axis=1),axis=0)[1]
-        zinsen  = float(self.gesamt_revenue)/float(gesamt_touzi)
+        self.gesamt_touzi = np.sum(np.sum(self.invested,axis=1),axis=0)[1]
+        zinsen  = float(self.gesamt_revenue)/float(self.gesamt_touzi)
         return zinsen#这里必须是500.0，否则出来的是结果自动取整数部分，也就是0
         
 
@@ -202,6 +202,7 @@ if __name__ == "__main__":
                         tf.summary.scalar('Zinsen',bianpan_env.get_zinsen(),step = bisai_counter)
                         tf.summary.scalar('rest_capital',bianpan_env.gesamt_revenue+500,step = bisai_counter)
                         tf.summary.scalar('wrong_action_rate',bianpan_env.wrong_action_counter/bianpan_env.action_counter,step = bisai_counter)
+                        tf.summary.scalar('investion_rate',bianpan_env.gesamt_touzi/500.0,step = bisai_counter)
                 next_state,frametime,done,next_capital = bianpan_env.get_state()#获得下一个状态,终止状态的next_state为0矩阵
                 #这里需要标识一下终止状态，钱花光了就终止了
                 if done:#如果终盘了，跳出
