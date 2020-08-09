@@ -14,7 +14,7 @@
 #在计算zinsen的时候，应该加上一个极小的数，因为有可能本场比赛不投资，那么0为除数就会出错————20200808（已解决）
 #应该有一个最重要的状态变量，即已购买的平均赔率及对应的投入加进去，否则可能无法找出稳定最低收益的策略————20200808(已解决)
 #增加到418个输入节点后的神经网络共有3,582,355个参数————20200808
-#或许可以把每次状态的最大赔率单独提出来加到变量里，使输入节点变成421个————20200809
+#或许可以把每次状态的最大赔率单独提出来加到变量里，使输入节点变成421个,不知道有没有效果————20200809（已解决）
 #或许可以尝试找一下继续降维的方法，即把410个维度进一步降低————20200809
 
 
@@ -123,7 +123,7 @@ class Env():#定义一个环境用来与网络交互
 
 class Q_Network(tf.keras.Model):
     def __init__(self,
-                      n_companies=418,
+                      n_companies=421,
                       n_actions=1331):#有默认值的属性必须放在没默认值属性的后面
         self.n_companies = n_companies
         self.n_actions = n_actions
@@ -152,11 +152,15 @@ class Q_Network(tf.keras.Model):
 
 def jiangwei(state,capital,mean_invested):
     pca = PCA(n_components=1)
+    max_host = state[tf.argmax(state)[2].numpy()][2]
+    max_fair = state[tf.argmax(state)[3].numpy()][3]
+    max_guest = state[tf.argmax(state)[4].numpy()][4]
+    max = [max_host,max_fair,max_guest]
     frametime = state[0][0]#取出frametime时间
     state=np.delete(state, 0, axis=-1)#把frametime去掉，则state变成了（410,7）的矩阵
     state = pca.fit_transform(state)#降维成（410,1）的矩阵
-    state = tf.concat((state.flatten(),[capital],[frametime],mean_invested),-1)#把降好维的state和capital与frametime连在一起，此时是412长度的一维张量
-    state = tf.reshape(state,(1,418))
+    state = tf.concat((state.flatten(),[capital],[frametime],mean_invested,max),-1)#把降好维的state和capital与frametime连在一起，此时是412长度的一维张量
+    state = tf.reshape(state,(1,421))
     return state
 
  
