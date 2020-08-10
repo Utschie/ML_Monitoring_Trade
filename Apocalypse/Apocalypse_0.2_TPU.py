@@ -19,6 +19,7 @@
 #如果假设把矩阵转置，就假装那7个指标是样本，然后410个公司是指标，这样进行主成分分析，也是只需要一个主成分就够，或者TruncatedSVD也可以————20200810
 #如果像上面说的可以的话，那么输入值就可以是7+11=18个值，这样神经网络参数就可以降到20000以下————20200810
 #epsilon不能增长那么慢，因为到了100万次转移后，wrong_action_rate就突然上升回100%，这意味着好像出了些问题————20200810
+#可能是错误决定的负回报还不够大？现在改成-500了————20200810
 
 
 import os
@@ -101,7 +102,7 @@ class Env():#定义一个环境用来与网络交互
                 revenue = sum(i[2][0]*i[2][1] for i in self.invested )
             self.gesamt_revenue =self.gesamt_revenue + revenue
         elif self.capital < sum(action):#如果没到终盘，且action的总投资比所剩资本还多，则给revenue一个很大的负值给神经网络，但是对capital不操作，实际资本也不更改
-            revenue = -200#则收益是个很大的负值（正常来讲revenue最大-50）
+            revenue = -500#则收益是个很大的负值（正常来讲revenue最大-50）
         else:
             revenue = -sum(action)
             self.capital += revenue#该局游戏的capital随着操作减少
