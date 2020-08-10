@@ -112,7 +112,7 @@ class Env():#定义一个环境用来与网络交互
             next_state,frametime=self.episode.__next__()
             done = False
         except:
-            next_state = np.zeros((410,9))
+            next_state = np.zeros((410,8))
             frametime = 0
             done = True
         return next_state, frametime,done,self.capital#网络从此取出下一幕
