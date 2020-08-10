@@ -35,6 +35,7 @@ import random
 import re
 from sklearn.decomposition import PCA
 import time
+import sklearn
 class Env():#定义一个环境用来与网络交互
     def __init__(self,filepath,result):
         self.result = result#获得赛果
@@ -165,6 +166,7 @@ def jiangwei(state,capital,mean_invested):
     frametime = state[0][0]#取出frametime时间
     state=np.delete(state, 0, axis=-1)#把frametime去掉，则state变成了（410,7）的矩阵
     state = pca.fit_transform(state)#降维成（410,1）的矩阵
+    state = sklearn.preprocessing.scale(state)#数据标准化一下
     state = tf.concat((state.flatten(),[capital],[frametime],mean_invested,max),-1)#把降好维的state和capital与frametime连在一起，此时是412长度的一维张量
     state = tf.reshape(state,(1,421))
     return state
