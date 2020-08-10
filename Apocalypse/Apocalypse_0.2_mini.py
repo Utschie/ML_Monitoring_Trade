@@ -187,7 +187,7 @@ if __name__ == "__main__":
                 tf.summary.scalar("Capital", capital,step = bisai_counter)
             while True:
                 if (step_counter % 1000 ==0) and (epsilon>0):
-                    epsilon = epsilon-0.001#也就是经过100万次转移epsilon才缩小到95%的贪心策略
+                    epsilon = epsilon-0.01#也就是经过100万次转移epsilon才缩小到95%的贪心策略
                 state = jiangwei(state,capital,bianpan_env.mean_invested)#先降维，并整理形状，把capital放进去
                 action_index = eval_Q.predict(state)[0]#获得行动q_value
                 if random.random() < epsilon:#如果落在随机区域
