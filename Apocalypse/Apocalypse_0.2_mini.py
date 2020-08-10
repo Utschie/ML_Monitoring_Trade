@@ -152,6 +152,7 @@ if __name__ == "__main__":
     summary_writer = tf.summary.create_file_writer('./tensorboard2') #在代码所在文件夹同目录下创建tensorboard文件夹（本代码在jupyternotbook里跑，所以在jupyternotebook里可以看到）
     #########设置超参数
     learning_rate = 0.0001#学习率
+    opt = tf.keras.optimizers.RMSprop(learning_rate)#设定最优化方法
     epsilon = 1.            # 探索起始时的探索率
     #final_epsilon = 0.01            # 探索终止时的探索率
     batch_size = 500
@@ -183,7 +184,6 @@ if __name__ == "__main__":
                 continue
             bianpan_env = Env(filepath,result)#每场比赛做一个环境
             state,frametime,done,capital =  bianpan_env.get_state()#把第一个状态作为初始化状态
-            opt = tf.keras.optimizers.RMSprop(learning_rate)#设定最优化方法
             with summary_writer.as_default():
                 tf.summary.scalar("Capital", capital,step = bisai_counter)
             while True:
