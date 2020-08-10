@@ -3,6 +3,7 @@
 #batch_size改成500和350万个参数下32大小的batch_size相同都是1秒5次转移，学习率提高了一个数量级暂时用0.001，然后随机episilong提高一个数量级，即随机10万次，跑一天，看看情况————20200810
 #还是要增加一个能在tensorboard查看损失函数的语句————20200810
 #损失函数出现nan，据说是梯度爆炸的原因————20200810
+#但是我怀疑也可能是隐藏层单元太少，现在调成每层300也才70多万个参数————20200810
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
 import tensorflow as tf
@@ -113,11 +114,11 @@ class Q_Network(tf.keras.Model):
         self.n_companies = n_companies
         self.n_actions = n_actions
         super().__init__()#调用tf.keras.Model的类初始化方法
-        self.dense1 = tf.keras.layers.Dense(units=int(1.8*self.n_companies), activation=tf.nn.relu)#输入层
-        self.dense2 = tf.keras.layers.Dense(units=int(1.8*self.n_companies), activation=tf.nn.relu)#一个隐藏层
-        self.dense3 = tf.keras.layers.Dense(units=int(1.8*self.n_companies), activation=tf.nn.relu)
-        self.dense4 = tf.keras.layers.Dense(units=int(1.8*self.n_companies), activation=tf.nn.relu)
-        self.dense5 = tf.keras.layers.Dense(units=int(1.8*self.n_companies), activation=tf.nn.relu)
+        self.dense1 = tf.keras.layers.Dense(units=300, activation=tf.nn.relu)#输入层
+        self.dense2 = tf.keras.layers.Dense(units=300, activation=tf.nn.relu)#一个隐藏层
+        self.dense3 = tf.keras.layers.Dense(units=300, activation=tf.nn.relu)
+        self.dense4 = tf.keras.layers.Dense(units=300, activation=tf.nn.relu)
+        self.dense5 = tf.keras.layers.Dense(units=300, activation=tf.nn.relu)
         self.dense6 = tf.keras.layers.Dense(units=self.n_actions)#输出层代表着在当前最大赔率前，买和不买的六种行动的价值
 
     def call(self,state): #输入从env那里获得的statematrix
@@ -228,6 +229,7 @@ if __name__ == "__main__":
                         loss =  tf.keras.losses.mean_squared_error(y_true = batch_revenue+tf.reduce_max(tf.squeeze(target_Q(np.array(batch_next_state))),axis = -1)*(1-np.array(batch_done))
                         ,y_pred =tf.reduce_sum(tf.squeeze(eval_Q(np.array(batch_state)))*tf.one_hot(np.array(batch_action),depth=1331,on_value=1.0, off_value=0.0),axis=1))#y_true和y_pred都是第0维为batch_size的张量
                     grads = tape.gradient(loss, eval_Q.variables)
+                    grads = [tf.clip_by_norm(g, 2000)for g in grads]#通过tensorflow截断梯度
                     with summary_writer.as_default():
                         tf.summary.scalar('loss',loss,step = learn_step_counter)
                     opt.apply_gradients(grads_and_vars=zip(grads, eval_Q.variables))
