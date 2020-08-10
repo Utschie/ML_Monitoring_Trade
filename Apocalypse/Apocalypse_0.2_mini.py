@@ -227,6 +227,8 @@ if __name__ == "__main__":
                         loss =  tf.keras.losses.mean_squared_error(y_true = batch_revenue+tf.reduce_max(tf.squeeze(target_Q(np.array(batch_next_state))),axis = -1)*(1-np.array(batch_done))
                         ,y_pred =tf.reduce_sum(tf.squeeze(eval_Q(np.array(batch_state)))*tf.one_hot(np.array(batch_action),depth=1331,on_value=1.0, off_value=0.0),axis=1))#y_true和y_pred都是第0维为batch_size的张量
                     grads = tape.gradient(loss, eval_Q.variables)
+                    with summary_writer.as_default():
+                        tf.summary.scalar('loss',loss,step = bisai_counter)
                     opt.apply_gradients(grads_and_vars=zip(grads, eval_Q.variables))
                     learn_step_counter+=1#每学习一次，学习步数+1
                     print('已学习'+str(learn_step_counter)+'次')
