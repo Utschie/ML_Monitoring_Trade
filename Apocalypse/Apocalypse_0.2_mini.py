@@ -2,6 +2,7 @@
 #不过batch_size还没有改，需要试一下————20200810
 #batch_size改成500和350万个参数下32大小的batch_size相同都是1秒5次转移，学习率提高了一个数量级暂时用0.001，然后随机episilong提高一个数量级，即随机10万次，跑一天，看看情况————20200810
 #还是要增加一个能在tensorboard查看损失函数的语句————20200810
+#损失函数出现nan，据说是梯度爆炸的原因————20200810
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
 import tensorflow as tf
