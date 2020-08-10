@@ -1,5 +1,6 @@
 #用截断奇异值分解法降维可以把网络参数降到20000以下，这样可以用更大的batch_size,有更快的速度以及更大的学习率————20200810
 #不过batch_size还没有改，需要试一下————20200810
+#batch_size改成500也比350万个参数下32大小的batch_size快，学习率提高了一个数量级暂时用0.001，然后随机episilong提高一个数量级，即随机10万次，跑一天，看看情况————20200810
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
 import tensorflow as tf
@@ -140,7 +141,7 @@ def jiangwei(state,capital,mean_invested):
     max = [max_host,max_fair,max_guest]
     frametime = state[0][0]#取出frametime时间
     state=np.delete(state, 0, axis=-1)#把frametime去掉，则state变成了（410,7）的矩阵
-    state = tsvd.fit_transform(state)#降维成（410,1）的矩阵
+    state = tsvd.fit_transform(np.transpose(state))#降维成（410,1）的矩阵
     state = tf.concat((state.flatten(),[capital],[frametime],mean_invested,max),-1)#把降好维的state和capital与frametime连在一起，此时是412长度的一维张量
     state = tf.reshape(state,(1,18))
     return state
