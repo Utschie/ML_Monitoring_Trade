@@ -4,6 +4,8 @@
 #还是要增加一个能在tensorboard查看损失函数的语句————20200810
 #损失函数出现nan，据说是梯度爆炸的原因————20200810
 #但是我怀疑也可能是隐藏层单元太少，现在调成每层300也才70多万个参数————20200810
+#又爆炸了，这次尝试降维后标准化————20200810
+#但我怀疑也有可能是新添加的变量出了问题
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
 import tensorflow as tf
@@ -15,6 +17,7 @@ import random
 import re
 from sklearn.decomposition import TruncatedSVD
 import time
+import sklearn
 class Env():#定义一个环境用来与网络交互
     def __init__(self,filepath,result):
         self.result = result#获得赛果
@@ -114,11 +117,11 @@ class Q_Network(tf.keras.Model):
         self.n_companies = n_companies
         self.n_actions = n_actions
         super().__init__()#调用tf.keras.Model的类初始化方法
-        self.dense1 = tf.keras.layers.Dense(units=300, activation=tf.nn.relu)#输入层
-        self.dense2 = tf.keras.layers.Dense(units=300, activation=tf.nn.relu)#一个隐藏层
-        self.dense3 = tf.keras.layers.Dense(units=300, activation=tf.nn.relu)
-        self.dense4 = tf.keras.layers.Dense(units=300, activation=tf.nn.relu)
-        self.dense5 = tf.keras.layers.Dense(units=300, activation=tf.nn.relu)
+        self.dense1 = tf.keras.layers.Dense(units=60, activation=tf.nn.relu)#输入层
+        self.dense2 = tf.keras.layers.Dense(units=60, activation=tf.nn.relu)#一个隐藏层
+        self.dense3 = tf.keras.layers.Dense(units=60, activation=tf.nn.relu)
+        self.dense4 = tf.keras.layers.Dense(units=60, activation=tf.nn.relu)
+        self.dense5 = tf.keras.layers.Dense(units=60, activation=tf.nn.relu)
         self.dense6 = tf.keras.layers.Dense(units=self.n_actions)#输出层代表着在当前最大赔率前，买和不买的六种行动的价值
 
     def call(self,state): #输入从env那里获得的statematrix
@@ -145,6 +148,7 @@ def jiangwei(state,capital,mean_invested):
     frametime = state[0][0]#取出frametime时间
     state=np.delete(state, 0, axis=-1)#把frametime去掉，则state变成了（410,7）的矩阵
     state = tsvd.fit_transform(np.transpose(state))#降维成（410,1）的矩阵
+    state = sklearn.preprocessing.scale(state)#数据标准化一下
     state = tf.concat((state.flatten(),[capital],[frametime],mean_invested,max),-1)#把降好维的state和capital与frametime连在一起，此时是412长度的一维张量
     state = tf.reshape(state,(1,18))
     return state
@@ -169,7 +173,7 @@ if __name__ == "__main__":
     replay_buffer = deque(maxlen=memory_size)#建立一个记忆回放区
     eval_Q = Q_Network()#初始化行动Q网络
     target_Q = Q_Network()#初始化目标Q网络
-    weights_path = 'D:\\data\\eval_Q_weights.ckpt'
+    weights_path = 'D:\\data\\eval_Q_weights_mini.ckpt'
     filefolderlist = os.listdir('F:\\cleaned_data_20141130-20160630')
     ################下面是单场比赛的流程
 
@@ -229,7 +233,6 @@ if __name__ == "__main__":
                         loss =  tf.keras.losses.mean_squared_error(y_true = batch_revenue+tf.reduce_max(tf.squeeze(target_Q(np.array(batch_next_state))),axis = -1)*(1-np.array(batch_done))
                         ,y_pred =tf.reduce_sum(tf.squeeze(eval_Q(np.array(batch_state)))*tf.one_hot(np.array(batch_action),depth=1331,on_value=1.0, off_value=0.0),axis=1))#y_true和y_pred都是第0维为batch_size的张量
                     grads = tape.gradient(loss, eval_Q.variables)
-                    grads = [tf.clip_by_norm(g, 2000)for g in grads]#通过tensorflow截断梯度
                     with summary_writer.as_default():
                         tf.summary.scalar('loss',loss,step = learn_step_counter)
                     opt.apply_gradients(grads_and_vars=zip(grads, eval_Q.variables))
