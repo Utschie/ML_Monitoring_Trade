@@ -103,7 +103,7 @@ class Env():#定义一个环境用来与网络交互
     
     def get_zinsen(self):
         self.gesamt_touzi =500.0-self.capital
-        zinsen  = float(self.gesamt_revenue)/float(self.gesamt_touzi+0.000001)
+        zinsen  = float(self.gesamt_revenue-self.gesamt_touzi)/float(self.gesamt_touzi+0.000001)
         return zinsen#这里必须是500.0，否则出来的是结果自动取整数部分，也就是0
 
 
@@ -207,7 +207,7 @@ if __name__ == "__main__":
                     replay_buffer.append((state, action, revenue,jiangwei(next_state,next_capital,bianpan_env.mean_invested),1))
                     with summary_writer.as_default():
                         tf.summary.scalar('Zinsen',bianpan_env.get_zinsen(),step = bisai_counter)
-                        tf.summary.scalar('rest_capital',bianpan_env.gesamt_revenue+500,step = bisai_counter)
+                        tf.summary.scalar('rest_capital',bianpan_env.gesamt_revenue-bianpan_env.gesamt_touzi+500,step = bisai_counter)
                         tf.summary.scalar('wrong_action_rate',bianpan_env.wrong_action_counter/bianpan_env.action_counter,step = bisai_counter)
                         tf.summary.scalar('investion_rate',bianpan_env.gesamt_touzi/500.0,step = bisai_counter)
                         break
