@@ -79,11 +79,11 @@ class Env():#定义一个环境用来与网络交互
             now_reward = min(now_host_reward_rate,now_fair_reward_rate,now_guest_reward_rate)#本次行动后的最小收益率
             revenue = now_reward-bevor_reward#本步的收益增量作为revenue返回
             if self.result.host > self.result.guest:
-                reward = max_host*action[0]-sum(action)
+                reward = max_host*action[0]
             elif self.result.host == self.result.guest:
-                reward = max_fair*action[1]-sum(action)
+                reward = max_fair*action[1]
             else:
-                reward = max_guest*action[2]-sum(action)
+                reward = max_guest*action[2]
             self.gesamt_revenue+=reward#计算实际货币收入并保存起来
         else:#如果不够执行行动
             self.action_counter+=1
