@@ -1,6 +1,7 @@
 #专门写的一个环境类
 #区别于第一代集成的环境，此环境在初始化时就把状态洗好了，或许可以节省读取状态的时间
 #现在的环境是即时计算收益的环境而不是延迟
+#当前错误行动的回报值为0，不过可以调节
 import tensorflow as tf
 from collections import deque
 import numpy as np
@@ -59,12 +60,12 @@ class Env():#定义一个环境用来与网络交互
                 revenue = max_fair*action[1]-sum(action)
             else:
                 revenue = max_guest*action[2]-sum(action)
+            self.gesamt_revenue+=revenue
         else:#如果不够执行行动
             self.action_counter+=1
             self.wrong_action_counter+=1
             revenue = 0
         #计算本次行动的收益
-        self.gesamt_revenue+=revenue
         return revenue
        
     def get_state(self):

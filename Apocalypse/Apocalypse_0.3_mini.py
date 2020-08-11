@@ -63,12 +63,12 @@ class Env():#定义一个环境用来与网络交互
                 revenue = max_fair*action[1]-sum(action)
             else:
                 revenue = max_guest*action[2]-sum(action)
+            self.gesamt_revenue+=revenue
         else:#如果不够执行行动
             self.action_counter+=1
             self.wrong_action_counter+=1
             revenue = 0
         #计算本次行动的收益
-        self.gesamt_revenue+=revenue
         return revenue
        
     def get_state(self):
