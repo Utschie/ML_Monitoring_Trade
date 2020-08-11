@@ -1,4 +1,6 @@
-#延迟收益+终赔不参与投资+错误行动收益-200
+'''
+延迟收益+终赔不参与投资+错误行动收益-500
+'''
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
 import tensorflow as tf
@@ -99,10 +101,9 @@ class Env():#定义一个环境用来与网络交互
         zinsen  = float(self.gesamt_revenue)/float(self.gesamt_touzi+0.000001)
         return zinsen#这里必须是500.0，否则出来的是结果自动取整数部分，也就是0
         
-
 class Q_Network(tf.keras.Model):
     def __init__(self,
-                      n_companies=421,
+                      n_companies=18,
                       n_actions=1331):#有默认值的属性必须放在没默认值属性的后面
         self.n_companies = n_companies
         self.n_actions = n_actions
@@ -137,12 +138,11 @@ def jiangwei(state,capital,mean_invested):
     max = [max_host,max_fair,max_guest]
     frametime = state[0][0]#取出frametime时间
     state=np.delete(state, 0, axis=-1)#把frametime去掉，则state变成了（410,7）的矩阵
-    state = tsvd.fit_transform(state)#降维成（410,1）的矩阵
+    state = tsvd.fit_transform(np.transpose(state))#降维成（410,1）的矩阵
     state = sklearn.preprocessing.scale(state)#数据标准化一下
     state = tf.concat((state.flatten(),[capital],[frametime],mean_invested,max),-1)#把降好维的state和capital与frametime连在一起，此时是412长度的一维张量
-    state = tf.reshape(state,(1,421))
+    state = tf.reshape(state,(1,18))
     return state
-
 
 if __name__ == "__main__":
     start0 = time.time()
