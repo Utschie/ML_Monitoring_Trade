@@ -1,5 +1,5 @@
 '''
-延迟收益+终赔不参与投资+错误行动收益-500
+延迟收益+终赔不参与投资+错误行动收益-200
 '''
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
@@ -63,11 +63,11 @@ class Env():#定义一个环境用来与网络交互
             self.invested.append(peilv_action)#把本次投资存入invested已投入资本
             self.action_counter+=1
             host_middle = self.mean_host[1]+peilv_action[0][1]#即新的主胜投入
-            self.mean_host = [(np.prod(self.mean_host)+np.prod(peilv_action[0]))/host_middle,host_middle]
+            self.mean_host = [(np.prod(self.mean_host)+np.prod(peilv_action[0]))/(host_middle+0.00000000001),host_middle]
             fair_middle = self.mean_fair[1]+peilv_action[1][1]
-            self.mean_fair = [(np.prod(self.mean_fair)+np.prod(peilv_action[1]))/fair_middle,fair_middle]
+            self.mean_fair = [(np.prod(self.mean_fair)+np.prod(peilv_action[1]))/(fair_middle+0.00000000001),fair_middle]
             guest_middle = self.mean_guest[1]+peilv_action[2][1]
-            self.mean_guest = [(np.prod(self.mean_guest)+np.prod(peilv_action[2]))/guest_middle,guest_middle]
+            self.mean_guest = [(np.prod(self.mean_guest)+np.prod(peilv_action[2]))/(guest_middle+0.00000000001),guest_middle]
             self.mean_invested = self.mean_host+self.mean_fair+self.mean_guest
         else:
             self.action_counter+=1
@@ -82,7 +82,7 @@ class Env():#定义一个环境用来与网络交互
                 revenue = sum(i[2][0]*i[2][1] for i in self.invested )
             self.gesamt_revenue =self.gesamt_revenue + revenue
         elif self.capital < sum(action):#如果没到终盘，且action的总投资比所剩资本还多，则给revenue一个很大的负值给神经网络，但是对capital不操作，实际资本也不更改
-            revenue = -500#则收益是个很大的负值（正常来讲revenue最大-50）
+            revenue = -200#则收益是个很大的负值（正常来讲revenue最大-50）
         else:
             revenue = -sum(action)
             self.capital += revenue#该局游戏的capital随着操作减少
@@ -192,7 +192,7 @@ if __name__ == "__main__":
                 revenue = bianpan_env.revenue(actions_table[action])#根据行动和是否终赔计算收益
                 next_state,frametime,done,next_capital = bianpan_env.get_state()#获得下一个状态,终止状态的next_state为0矩阵
                 if done:
-                    revenue = bianpan_env.revenue(actions_table[action])#如果next_state是终赔,则重新结算revenue
+                    revenue = bianpan_env.revenue(actions_table[action])+revenue#如果next_state是终赔,则重新结算revenue
                     replay_buffer.append((state, action, revenue,jiangwei(next_state,next_capital,bianpan_env.mean_invested),1))
                     with summary_writer.as_default():
                         tf.summary.scalar('Zinsen',bianpan_env.get_zinsen(),step = bisai_counter)

@@ -1,4 +1,7 @@
 #延迟收益环境+错误行动收益-500
+'''
+在延迟收益环境下，主程序计算done是收益要有变化
+'''
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
 import tensorflow as tf
@@ -61,11 +64,11 @@ class Env():#定义一个环境用来与网络交互
             self.invested.append(peilv_action)#把本次投资存入invested已投入资本
             self.action_counter+=1
             host_middle = self.mean_host[1]+peilv_action[0][1]#即新的主胜投入
-            self.mean_host = [(np.prod(self.mean_host)+np.prod(peilv_action[0]))/host_middle,host_middle]
+            self.mean_host = [(np.prod(self.mean_host)+np.prod(peilv_action[0]))/(host_middle+0.00000000001),host_middle]
             fair_middle = self.mean_fair[1]+peilv_action[1][1]
-            self.mean_fair = [(np.prod(self.mean_fair)+np.prod(peilv_action[1]))/fair_middle,fair_middle]
+            self.mean_fair = [(np.prod(self.mean_fair)+np.prod(peilv_action[1]))/(fair_middle+0.00000000001),fair_middle]
             guest_middle = self.mean_guest[1]+peilv_action[2][1]
-            self.mean_guest = [(np.prod(self.mean_guest)+np.prod(peilv_action[2]))/guest_middle,guest_middle]
+            self.mean_guest = [(np.prod(self.mean_guest)+np.prod(peilv_action[2]))/(guest_middle+0.00000000001),guest_middle]
             self.mean_invested = self.mean_host+self.mean_fair+self.mean_guest
         else:
             self.action_counter+=1
