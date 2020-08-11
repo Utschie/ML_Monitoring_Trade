@@ -6,6 +6,10 @@
 #但是我怀疑也可能是隐藏层单元太少，现在调成每层300也才70多万个参数————20200810
 #又爆炸了，这次尝试降维后标准化————20200810
 #但我怀疑也有可能是新添加的变量出了问题
+#可能是损失函数错了
+#先改成最原始DQN看看会不会有什么loss上的问题，也就是先不用target_Q网络，试一下————20200811（又炸了）
+#把max这三个变量去掉，试一下
+#更改revenue的算法
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
 import tensorflow as tf
@@ -195,7 +199,7 @@ if __name__ == "__main__":
                 tf.summary.scalar("Capital", capital,step = bisai_counter)
             while True:
                 if (step_counter % 1000 ==0) and (epsilon>0):
-                    epsilon = epsilon-0.02#也就是经过50万次转移epsilon降到0
+                    epsilon = epsilon-0.002#也就是经过50万次转移epsilon降到0
                 state = jiangwei(state,capital,bianpan_env.mean_invested)#先降维，并整理形状，把capital放进去
                 action_index = eval_Q.predict(state)[0]#获得行动q_value
                 if random.random() < epsilon:#如果落在随机区域
