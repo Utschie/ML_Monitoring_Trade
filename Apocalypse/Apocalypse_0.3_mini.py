@@ -108,11 +108,11 @@ class Q_Network(tf.keras.Model):
         self.n_companies = n_companies
         self.n_actions = n_actions
         super().__init__()#调用tf.keras.Model的类初始化方法
-        self.dense1 = tf.keras.layers.Dense(units=60, activation=tf.nn.relu)#输入层
-        self.dense2 = tf.keras.layers.Dense(units=60, activation=tf.nn.relu)#一个隐藏层
-        self.dense3 = tf.keras.layers.Dense(units=60, activation=tf.nn.relu)
-        self.dense4 = tf.keras.layers.Dense(units=60, activation=tf.nn.relu)
-        self.dense5 = tf.keras.layers.Dense(units=60, activation=tf.nn.relu)
+        self.dense1 = tf.keras.layers.Dense(units=32, activation=tf.nn.relu)#输入层
+        self.dense2 = tf.keras.layers.Dense(units=32, activation=tf.nn.relu)#一个隐藏层
+        self.dense3 = tf.keras.layers.Dense(units=32, activation=tf.nn.relu)
+        self.dense4 = tf.keras.layers.Dense(units=32, activation=tf.nn.relu)
+        self.dense5 = tf.keras.layers.Dense(units=32, activation=tf.nn.relu)
         self.dense6 = tf.keras.layers.Dense(units=self.n_actions)#输出层代表着在当前最大赔率前，买和不买的六种行动的价值
 
     def call(self,state): #输入从env那里获得的statematrix
