@@ -1,5 +1,6 @@
 #最重要的是改变了revenue的计算方式，改成根据比赛结果自动计算revenue，另外终盘不进行投资
 #首先要做的，是要清除nan这种bug————20200811
+#由于这里无效行动的收益为0，随着时间增加wrong_action_rate不会显著下降
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
 import tensorflow as tf
