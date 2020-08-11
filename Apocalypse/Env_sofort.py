@@ -1,4 +1,5 @@
 #即时收益环境+错误行动收益为0
+#即时收益环境计算收益时考虑了投入，所以主程序和zinsen不需扣除投资
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
 import tensorflow as tf
