@@ -1,4 +1,5 @@
 #这个还是大模型，421个参数
+#更改了revenue计算方式，然后把错误行动的revenue调小成-50
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
 import tensorflow as tf
@@ -72,12 +73,12 @@ class Env():#定义一个环境用来与网络交互
                 revenue = max_fair*action[1]-sum(action)
             else:
                 revenue = max_guest*action[2]-sum(action)
+            self.gesamt_revenue+=revenue
         else:#如果不够执行行动
             self.action_counter+=1
             self.wrong_action_counter+=1
-            revenue = 0
+            revenue = -50
         #计算本次行动的收益
-        self.gesamt_revenue+=revenue
         return revenue
        
     def get_state(self):
@@ -146,7 +147,7 @@ if __name__ == "__main__":
     opt = tf.keras.optimizers.RMSprop(learning_rate)#设定最优化方法
     epsilon = 1.            # 探索起始时的探索率
     #final_epsilon = 0.01            # 探索终止时的探索率
-    batch_size = 500
+    batch_size = 32
     resultlist = pd.read_csv('D:\\data\\results_20141130-20160630.csv',index_col = 0)#得到赛果和比赛ID的对应表
     actions_table = [[a,b,c] for a in range(0,55,5) for b in range(0,55,5) for c in range(0,55,5)]#给神经网络输出层对应一个行动表
     step_counter = 0
