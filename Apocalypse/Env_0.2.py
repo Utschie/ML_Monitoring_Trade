@@ -1,5 +1,6 @@
 #专门写的一个环境类
 #区别于第一代集成的环境，此环境在初始化时就把状态洗好了，或许可以节省读取状态的时间
+#现在的环境是即时计算收益的环境而不是延迟
 import tensorflow as tf
 from collections import deque
 import numpy as np
@@ -21,8 +22,9 @@ class Env():#定义一个环境用来与网络交互
         self.episode = self.episode_generator(self.filepath)#通过load_toNet函数得到当场比赛的episode生成器对象
         self.capital = 500#每场比赛有500欧可支配资金
         self.gesamt_revenue = 0#初始化实际收益
-        self.invested = [[(0.,0.),(0.,0.),(0.,0.)]]#已投入资本，每个元素记录着一次投资的赔率和投入，分别对应胜平负三种赛果的投入，这里不用np.array因为麻烦
         self.statematrix = np.zeros((410,9))#初始化状态矩阵
+        self.action_counter=0.0
+        self.wrong_action_counter = 0.0
         #传入原始数据，为一个不定长张量对象
         print('环境初始化完成')
      
@@ -48,38 +50,32 @@ class Env():#定义一个环境用来与网络交互
         max_host = self.statematrix[tf.argmax(self.statematrix)[2].numpy()][2]
         max_fair = self.statematrix[tf.argmax(self.statematrix)[3].numpy()][3]
         max_guest = self.statematrix[tf.argmax(self.statematrix)[4].numpy()][4]
-        peilv = [max_host,max_fair,max_guest]#得到最高赔率向量
-        peilv_action = list(zip(peilv,action))
-        if self.capital >= sum(action):#如果剩下的资本还够执行行动，则把此次交易计入
-            self.invested.append(peilv_action)#把本次投资存入invested已投入资本
+        if self.capital >= sum(action):#如果剩下的资本还够执行行动，则capital里扣除本次交易费用
+            self.capital = self.capital-sum(action)#资金变少
+            self.action_counter+=1
+            if self.result.host > self.result.guest:
+                revenue = max_host*action[0]-sum(action)
+            elif self.result.host == self.result.guest:
+                revenue = max_fair*action[1]-sum(action)
+            else:
+                revenue = max_guest*action[2]-sum(action)
+        else:#如果不够执行行动
+            self.action_counter+=1
+            self.wrong_action_counter+=1
+            revenue = 0
         #计算本次行动的收益
-        if self.statematrix.max(0)[0] ==0:#如果当前的状态是终盘状态,则清算所有赢的钱
-            if self.result.host > self.result.guest:#主胜
-                revenue = sum(i[0][0]*i[0][1] for i in self.invested )
-            elif self.result.host == self.result.guest:#平
-                revenue = sum(i[1][0]*i[1][1] for i in self.invested )
-            else:#主负
-                revenue = sum(i[2][0]*i[2][1] for i in self.invested )
-            self.gesamt_revenue =self.gesamt_revenue + revenue
-        elif self.capital < sum(action):#如果没到终盘，且action的总投资比所剩资本还多，则给revenue一个很大的负值给神经网络，但是对capital不操作，实际资本也不更改
-            revenue = -200#则收益是个很大的负值（正常来讲revenue最大-50）
-        else:
-            revenue = -sum(action)
-            self.capital += revenue#该局游戏的capital随着操作减少
-            self.gesamt_revenue = self.gesamt_revenue + revenue
+        self.gesamt_revenue+=revenue
         return revenue
        
     def get_state(self):
-        try:
-            next_state,frametime=self.episode.__next__()
-            done = False
-        except:
-            next_state = np.zeros((410,9))
-            frametime = 0
+        next_state,frametime=self.episode.__next__()
+        done = False
+        if int(frametime) ==0:
             done = True
         return next_state, frametime,done,self.capital#网络从此取出下一幕
     
     def get_zinsen(self):
-        zinsen  = self.gesamt_revenue/500.0
+        self.gesamt_touzi =500.0-self.capital
+        zinsen  = float(self.gesamt_revenue)/float(self.gesamt_touzi+0.000001)
         return zinsen#这里必须是500.0，否则出来的是结果自动取整数部分，也就是0
-    
+        

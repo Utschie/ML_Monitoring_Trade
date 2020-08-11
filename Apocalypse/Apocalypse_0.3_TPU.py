@@ -1,8 +1,4 @@
-#最重要的是改变了revenue的计算方式，改成根据比赛结果自动计算revenue，另外终盘不进行投资
-#首先要做的，是要清除nan这种bug————20200811
-#由于这里无效行动的收益为0，随着时间增加wrong_action_rate不会显著下降
-#一个重要的问题是，换了revenue计算方法后，loss在上升，而且是某种截断式的上升，就是突然接近0，后有突然升到很高，后又突然接近0。
-#但是再没出现过nan
+#这个还是大模型，421个参数
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
 import tensorflow as tf
@@ -29,6 +25,10 @@ class Env():#定义一个环境用来与网络交互
         self.statematrix = np.zeros((410,9))#初始化状态矩阵
         self.action_counter=0.0
         self.wrong_action_counter = 0.0
+        self.mean_host = [0.0,0.0]#保存已买主胜的平均赔率和投入
+        self.mean_fair = [0.0,0.0]#保存已买平局的平均赔率和投入
+        self.mean_guest = [0.0,0.0]#保存已买客胜的平均赔率和投入
+        self.mean_invested = self.mean_host+self.mean_fair+self.mean_guest
         #传入原始数据，为一个不定长张量对象
         print('环境初始化完成')
      
@@ -54,9 +54,18 @@ class Env():#定义一个环境用来与网络交互
         max_host = self.statematrix[tf.argmax(self.statematrix)[2].numpy()][2]
         max_fair = self.statematrix[tf.argmax(self.statematrix)[3].numpy()][3]
         max_guest = self.statematrix[tf.argmax(self.statematrix)[4].numpy()][4]
+        peilv = [max_host,max_fair,max_guest]#得到最高赔率向量
+        peilv_action = list(zip(peilv,action))
         if self.capital >= sum(action):#如果剩下的资本还够执行行动，则capital里扣除本次交易费用
             self.capital = self.capital-sum(action)#资金变少
             self.action_counter+=1
+            host_middle = self.mean_host[1]+peilv_action[0][1]#即新的主胜投入
+            self.mean_host = [(np.prod(self.mean_host)+np.prod(peilv_action[0]))/host_middle,host_middle]
+            fair_middle = self.mean_fair[1]+peilv_action[1][1]
+            self.mean_fair = [(np.prod(self.mean_fair)+np.prod(peilv_action[1]))/fair_middle,fair_middle]
+            guest_middle = self.mean_guest[1]+peilv_action[2][1]
+            self.mean_guest = [(np.prod(self.mean_guest)+np.prod(peilv_action[2]))/guest_middle,guest_middle]
+            self.mean_invested = self.mean_host+self.mean_fair+self.mean_guest
             if self.result.host > self.result.guest:
                 revenue = max_host*action[0]-sum(action)
             elif self.result.host == self.result.guest:
@@ -86,7 +95,7 @@ class Env():#定义一个环境用来与网络交互
 
 class Q_Network(tf.keras.Model):
     def __init__(self,
-                      n_companies=9,
+                      n_companies=421,
                       n_actions=1331):#有默认值的属性必须放在没默认值属性的后面
         self.n_companies = n_companies
         self.n_actions = n_actions
@@ -113,14 +122,19 @@ class Q_Network(tf.keras.Model):
     
 
 
-def jiangwei(state,capital):
+
+def jiangwei(state,capital,mean_invested):
     tsvd = TruncatedSVD(1)
+    max_host = state[tf.argmax(state)[2].numpy()][2]
+    max_fair = state[tf.argmax(state)[3].numpy()][3]
+    max_guest = state[tf.argmax(state)[4].numpy()][4]
+    max = [max_host,max_fair,max_guest]
     frametime = state[0][0]#取出frametime时间
     state=np.delete(state, 0, axis=-1)#把frametime去掉，则state变成了（410,7）的矩阵
-    state = tsvd.fit_transform(np.transpose(state))#降维成（410,1）的矩阵
+    state = tsvd.fit_transform(state)#降维成（410,1）的矩阵
     state = sklearn.preprocessing.scale(state)#数据标准化一下
-    state = tf.concat((state.flatten(),[capital],[frametime]),-1)#把降好维的state和capital与frametime连在一起，此时是412长度的一维张量
-    state = tf.reshape(state,(1,9))
+    state = tf.concat((state.flatten(),[capital],[frametime],mean_invested,max),-1)#把降好维的state和capital与frametime连在一起，此时是412长度的一维张量
+    state = tf.reshape(state,(1,421))
     return state
 
  
@@ -166,7 +180,7 @@ if __name__ == "__main__":
             while True:
                 if (step_counter % 1000 ==0) and (epsilon>0):
                     epsilon = epsilon-0.002#也就是经过50万次转移epsilon降到0
-                state = jiangwei(state,capital)#先降维，并整理形状，把capital放进去
+                state = jiangwei(state,capital,bianpan_env.mean_invested)#先降维，并整理形状，把capital放进去
                 action_index = eval_Q.predict(state)[0]#获得行动q_value
                 if random.random() < epsilon:#如果落在随机区域
                     action = random.choice(range(0,1331))#action是一个坐标
@@ -175,7 +189,7 @@ if __name__ == "__main__":
                 revenue = bianpan_env.revenue(actions_table[action])#根据行动和是否终赔计算收益
                 next_state,frametime,done,next_capital = bianpan_env.get_state()#获得下一个状态,终止状态的next_state为0矩阵
                 if done:
-                    replay_buffer.append((state, action, revenue,jiangwei(next_state,next_capital),1))
+                    replay_buffer.append((state, action, revenue,jiangwei(next_state,next_capital,bianpan_env.mean_invested),1))
                     with summary_writer.as_default():
                         tf.summary.scalar('Zinsen',bianpan_env.get_zinsen(),step = bisai_counter)
                         tf.summary.scalar('rest_capital',bianpan_env.gesamt_revenue+500,step = bisai_counter)
@@ -183,7 +197,7 @@ if __name__ == "__main__":
                         tf.summary.scalar('investion_rate',bianpan_env.gesamt_touzi/500.0,step = bisai_counter)
                         break
                 else:#如果没终盘
-                    replay_buffer.append((state, action, revenue,jiangwei(next_state,next_capital),0))
+                    replay_buffer.append((state, action, revenue,jiangwei(next_state,next_capital,bianpan_env.mean_invested),0))
                 #这里需要标识一下终止状态，钱花光了就终止了
                 state = next_state
                 capital = next_capital
