@@ -1,5 +1,5 @@
 #用的0.3的环境和0.3_mini的模型
-#又出现了nan的情况
+#收益率增量收益+终盘不参与投资+错误行动收益为0
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
 import tensorflow as tf

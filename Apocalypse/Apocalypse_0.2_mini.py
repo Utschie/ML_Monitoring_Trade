@@ -10,6 +10,9 @@
 #先改成最原始DQN看看会不会有什么loss上的问题，也就是先不用target_Q网络，试一下————20200811（又炸了）
 #把max这三个变量去掉，试一下
 #更改revenue的算法
+'''
+延迟收益+终赔参与投资+错误行动收益-200
+'''
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
 import tensorflow as tf

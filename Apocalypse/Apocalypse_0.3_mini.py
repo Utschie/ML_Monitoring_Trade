@@ -3,6 +3,9 @@
 #由于这里无效行动的收益为0，随着时间增加wrong_action_rate不会显著下降
 #一个重要的问题是，换了revenue计算方法后，loss在上升，而且是某种截断式的上升，就是突然接近0，后有突然升到很高，后又突然接近0。
 #但是再没出现过nan
+'''
+即时收益+终赔不参与投资+错误行动收益为0
+'''
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
 import tensorflow as tf
