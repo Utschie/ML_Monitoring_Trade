@@ -72,11 +72,11 @@ class Env():#定义一个环境用来与网络交互
             self.invested.append(peilv_action)#把本次投资存入invested已投入资本
             self.action_counter+=1
             host_middle = self.mean_host[1]+peilv_action[0][1]#即新的主胜投入
-            self.mean_host = [(np.prod(self.mean_host)+np.prod(peilv_action[0]))/host_middle,host_middle]
+            self.mean_host = [(np.prod(self.mean_host)+np.prod(peilv_action[0]))/(host_middle+0.00000000001),host_middle]
             fair_middle = self.mean_fair[1]+peilv_action[1][1]
-            self.mean_fair = [(np.prod(self.mean_fair)+np.prod(peilv_action[1]))/fair_middle,fair_middle]
+            self.mean_fair = [(np.prod(self.mean_fair)+np.prod(peilv_action[1]))/(fair_middle+0.00000000001),fair_middle]
             guest_middle = self.mean_guest[1]+peilv_action[2][1]
-            self.mean_guest = [(np.prod(self.mean_guest)+np.prod(peilv_action[2]))/guest_middle,guest_middle]
+            self.mean_guest = [(np.prod(self.mean_guest)+np.prod(peilv_action[2]))/(guest_middle+0.00000000001),guest_middle]
             self.mean_invested = self.mean_host+self.mean_fair+self.mean_guest
         else:
             self.action_counter+=1
@@ -121,11 +121,11 @@ class Q_Network(tf.keras.Model):
         self.n_companies = n_companies
         self.n_actions = n_actions
         super().__init__()#调用tf.keras.Model的类初始化方法
-        self.dense1 = tf.keras.layers.Dense(units=60, activation=tf.nn.relu)#输入层
-        self.dense2 = tf.keras.layers.Dense(units=60, activation=tf.nn.relu)#一个隐藏层
-        self.dense3 = tf.keras.layers.Dense(units=60, activation=tf.nn.relu)
-        self.dense4 = tf.keras.layers.Dense(units=60, activation=tf.nn.relu)
-        self.dense5 = tf.keras.layers.Dense(units=60, activation=tf.nn.relu)
+        self.dense1 = tf.keras.layers.Dense(units=32, activation=tf.nn.relu)#输入层
+        self.dense2 = tf.keras.layers.Dense(units=32, activation=tf.nn.relu)#一个隐藏层
+        self.dense3 = tf.keras.layers.Dense(units=32, activation=tf.nn.relu)
+        self.dense4 = tf.keras.layers.Dense(units=32, activation=tf.nn.relu)
+        self.dense5 = tf.keras.layers.Dense(units=32, activation=tf.nn.relu)
         self.dense6 = tf.keras.layers.Dense(units=self.n_actions)#输出层代表着在当前最大赔率前，买和不买的六种行动的价值
 
     def call(self,state): #输入从env那里获得的statematrix
@@ -160,7 +160,7 @@ def jiangwei(state,capital,mean_invested):
  
 if __name__ == "__main__":
     start0 = time.time()
-    summary_writer = tf.summary.create_file_writer('./tensorboard2') #在代码所在文件夹同目录下创建tensorboard文件夹（本代码在jupyternotbook里跑，所以在jupyternotebook里可以看到）
+    summary_writer = tf.summary.create_file_writer('./tensorboard_0.2_mini') #在代码所在文件夹同目录下创建tensorboard文件夹（本代码在jupyternotbook里跑，所以在jupyternotebook里可以看到）
     #########设置超参数
     learning_rate = 0.00001#学习率
     opt = tf.keras.optimizers.RMSprop(learning_rate)#设定最优化方法
@@ -177,7 +177,7 @@ if __name__ == "__main__":
     replay_buffer = deque(maxlen=memory_size)#建立一个记忆回放区
     eval_Q = Q_Network()#初始化行动Q网络
     target_Q = Q_Network()#初始化目标Q网络
-    weights_path = 'D:\\data\\eval_Q_weights_mini.ckpt'
+    weights_path = 'D:\\data\\eval_Q_weights_mini_0.2.ckpt'
     filefolderlist = os.listdir('F:\\cleaned_data_20141130-20160630')
     ################下面是单场比赛的流程
 

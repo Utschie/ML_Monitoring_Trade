@@ -1,8 +1,5 @@
-#最重要的是改变了revenue的计算方式，改成根据比赛结果自动计算revenue，另外终盘不进行投资
-#首先要做的，是要清除nan这种bug————20200811
-#由于这里无效行动的收益为0，随着时间增加wrong_action_rate不会显著下降
-#一个重要的问题是，换了revenue计算方法后，loss在上升，而且是某种截断式的上升，就是突然接近0，后有突然升到很高，后又突然接近0。
-#但是再没出现过nan
+#用的0.3的环境和0.3_mini的模型
+#又出现了nan的情况
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
 import tensorflow as tf
@@ -63,6 +60,11 @@ class Env():#定义一个环境用来与网络交互
         if self.capital >= sum(action):#如果剩下的资本还够执行行动，则capital里扣除本次交易费用
             self.capital = self.capital-sum(action)#资金变少
             self.action_counter+=1
+            bevor_cost = self.mean_host[1]+self.mean_fair[1]+self.mean_guest[1]#之前的投入
+            bevor_host_reward_rate = (np.prod(self.mean_host)-bevor_cost)/(bevor_cost+0.00000000001)#如果主胜之前的投入的收益率
+            bevor_fair_reward_rate = (np.prod(self.mean_fair)-bevor_cost)/(bevor_cost+0.00000000001)#如果平
+            bevor_guest_reward_rate = (np.prod(self.mean_guest)-bevor_cost)/(bevor_cost+0.00000000001)#如果客胜
+            bevor_reward = min(bevor_host_reward_rate,bevor_fair_reward_rate,bevor_guest_reward_rate)#取其中最小值最为之前的收益率
             host_middle = self.mean_host[1]+peilv_action[0][1]#即新的主胜投入
             self.mean_host = [(np.prod(self.mean_host)+np.prod(peilv_action[0]))/(host_middle+0.00000000001),host_middle]
             fair_middle = self.mean_fair[1]+peilv_action[1][1]
@@ -70,17 +72,23 @@ class Env():#定义一个环境用来与网络交互
             guest_middle = self.mean_guest[1]+peilv_action[2][1]
             self.mean_guest = [(np.prod(self.mean_guest)+np.prod(peilv_action[2]))/(guest_middle+0.00000000001),guest_middle]
             self.mean_invested = self.mean_host+self.mean_fair+self.mean_guest
+            now_cost = host_middle+fair_middle+guest_middle#新的总投入
+            now_host_reward_rate = (np.prod(self.mean_host)-now_cost)/(now_cost+0.00000000001)
+            now_fair_reward_rate = (np.prod(self.mean_fair)-now_cost)/(now_cost+0.00000000001)#如果平
+            now_guest_reward_rate = (np.prod(self.mean_guest)-now_cost)/(now_cost+0.00000000001)#如果客胜
+            now_reward = min(now_host_reward_rate,now_fair_reward_rate,now_guest_reward_rate)#本次行动后的最小收益率
+            revenue = now_reward-bevor_reward#本步的收益增量作为revenue返回
             if self.result.host > self.result.guest:
-                revenue = max_host*action[0]-sum(action)
+                reward = max_host*action[0]-sum(action)
             elif self.result.host == self.result.guest:
-                revenue = max_fair*action[1]-sum(action)
+                reward = max_fair*action[1]-sum(action)
             else:
-                revenue = max_guest*action[2]-sum(action)
-            self.gesamt_revenue+=revenue
+                reward = max_guest*action[2]-sum(action)
+            self.gesamt_revenue+=reward#计算实际货币收入并保存起来
         else:#如果不够执行行动
             self.action_counter+=1
             self.wrong_action_counter+=1
-            revenue = 0
+            revenue = 0.0#由于没有行动，原收益并未改变
         #计算本次行动的收益
         return revenue
        
@@ -95,7 +103,9 @@ class Env():#定义一个环境用来与网络交互
         self.gesamt_touzi =500.0-self.capital
         zinsen  = float(self.gesamt_revenue)/float(self.gesamt_touzi+0.000001)
         return zinsen#这里必须是500.0，否则出来的是结果自动取整数部分，也就是0
-        
+
+
+
 
 class Q_Network(tf.keras.Model):
     def __init__(self,
@@ -104,11 +114,11 @@ class Q_Network(tf.keras.Model):
         self.n_companies = n_companies
         self.n_actions = n_actions
         super().__init__()#调用tf.keras.Model的类初始化方法
-        self.dense1 = tf.keras.layers.Dense(units=60, activation=tf.nn.relu)#输入层
-        self.dense2 = tf.keras.layers.Dense(units=60, activation=tf.nn.relu)#一个隐藏层
-        self.dense3 = tf.keras.layers.Dense(units=60, activation=tf.nn.relu)
-        self.dense4 = tf.keras.layers.Dense(units=60, activation=tf.nn.relu)
-        self.dense5 = tf.keras.layers.Dense(units=60, activation=tf.nn.relu)
+        self.dense1 = tf.keras.layers.Dense(units=32, activation=tf.nn.relu)#输入层
+        self.dense2 = tf.keras.layers.Dense(units=32, activation=tf.nn.relu)#一个隐藏层
+        self.dense3 = tf.keras.layers.Dense(units=32, activation=tf.nn.relu)
+        self.dense4 = tf.keras.layers.Dense(units=32, activation=tf.nn.relu)
+        self.dense5 = tf.keras.layers.Dense(units=32, activation=tf.nn.relu)
         self.dense6 = tf.keras.layers.Dense(units=self.n_actions)#输出层代表着在当前最大赔率前，买和不买的六种行动的价值
 
     def call(self,state): #输入从env那里获得的statematrix
@@ -143,7 +153,7 @@ def jiangwei(state,capital,mean_invested):
  
 if __name__ == "__main__":
     start0 = time.time()
-    summary_writer = tf.summary.create_file_writer('./tensorboard2') #在代码所在文件夹同目录下创建tensorboard文件夹（本代码在jupyternotbook里跑，所以在jupyternotebook里可以看到）
+    summary_writer = tf.summary.create_file_writer('./tensorboard_0.3.1_mini') #在代码所在文件夹同目录下创建tensorboard文件夹（本代码在jupyternotbook里跑，所以在jupyternotebook里可以看到）
     #########设置超参数
     learning_rate = 0.00001#学习率
     opt = tf.keras.optimizers.RMSprop(learning_rate)#设定最优化方法
@@ -160,7 +170,7 @@ if __name__ == "__main__":
     replay_buffer = deque(maxlen=memory_size)#建立一个记忆回放区
     eval_Q = Q_Network()#初始化行动Q网络
     target_Q = Q_Network()#初始化目标Q网络
-    weights_path = 'D:\\data\\eval_Q_weights_mini.ckpt'
+    weights_path = 'D:\\data\\eval_Q_weights_mini_0.3.1.ckpt'
     filefolderlist = os.listdir('F:\\cleaned_data_20141130-20160630')
     ################下面是单场比赛的流程
 
