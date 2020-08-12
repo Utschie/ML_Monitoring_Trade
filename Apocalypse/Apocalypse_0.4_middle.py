@@ -1,9 +1,6 @@
 '''
-最小返还率增量+终赔不参与投资+错误行动-1.0+标准化+Nadam(0.0001)+gamma(0.8)
-每场比赛最开始时按着返还率计算而不是收益率，因为初赔时投入为0，最低收益率也为0，而其一旦买入则最低收益率为负数，那么很可能就啥也不买了
+分位数输入+即时最小返还率增量+终赔不参与投资+错误行动-1.0+非标准化+Nadam(0.0001)+gamma(0.5)
 '''
-import os
-os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
 import tensorflow as tf
 from collections import deque
 import numpy as np
@@ -11,9 +8,9 @@ import pandas as pd
 import csv
 import random
 import re
-from sklearn.decomposition import TruncatedSVD
+from sklearn.decomposition import PCA
+import os
 import time
-import sklearn
 class Env():#定义一个环境用来与网络交互
     def __init__(self,filepath,result):
         self.result = result#获得赛果
@@ -25,7 +22,6 @@ class Env():#定义一个环境用来与网络交互
         self.episode = self.episode_generator(self.filepath)#通过load_toNet函数得到当场比赛的episode生成器对象
         self.capital = 500#每场比赛有500欧可支配资金
         self.gesamt_revenue = 0#初始化实际收益
-        self.statematrix = np.zeros((410,9))#初始化状态矩阵
         self.action_counter=0.0
         self.wrong_action_counter = 0.0
         self.mean_host = [0.0,0.0]#保存已买主胜的平均赔率和投入
@@ -40,15 +36,9 @@ class Env():#定义一个环境用来与网络交互
         frametimelist=data.frametime.value_counts().sort_index(ascending=False).index#将frametime的值读取成列表
         for i in frametimelist:#其中frametimelist里的数据是整型
             state = data.groupby('frametime').get_group(i)#从第一次变盘开始得到当次转移
-            state = np.array(state)#转成numpy多维数组
+            statematrix = np.array(state)#转成numpy多维数组
             #在填充成矩阵之前需要知道所有数据中到底有多少个cid
-            statematrix=np.zeros((410,9))##statematrix应该是一个（1,410,8）的张量,元素为一个生成410*9的0矩阵（后来由于降维则不用这么用了）
-            for j in state:
-                cid = j[1]#得到浮点数类型的cid
-                index = self.cidlist.index(cid)
-                statematrix[index] = j#把对应矩阵那一行给它
-            statematrix=np.delete(statematrix, 1, axis=-1)#去掉cid后，最后得到一个1*410*8的张量，这里axis是2或者-1（代表最后一个）都行
-            self.statematrix = statematrix#把状态矩阵保存在环境对象里，用来算收益
+            self.statematrix=np.delete(statematrix, 1, axis=-1)#去掉cid后，最后得到一个1*410*8的张量，这里axis是2或者-1（代表最后一个）都行
             self.frametime = i
             yield self.statematrix,self.frametime
 
@@ -81,16 +71,16 @@ class Env():#定义一个环境用来与网络交互
             now_reward = min(now_host_reward_rate,now_fair_reward_rate,now_guest_reward_rate)#本次行动后的最小返还率
             revenue = now_reward-bevor_reward#本步的返还率增量作为revenue返回
             if self.result.host > self.result.guest:
-                reward = max_host*action[0]
+                reward = max_host*action[0]-sum(action)
             elif self.result.host == self.result.guest:
-                reward = max_fair*action[1]
+                reward = max_fair*action[1]-sum(action)
             else:
-                reward = max_guest*action[2]
+                reward = max_guest*action[2]-sum(action)
             self.gesamt_revenue+=reward#计算实际货币收入并保存起来
         else:#如果不够执行行动
             self.action_counter+=1
             self.wrong_action_counter+=1
-            revenue = -1.0#设为-1.0的返还率增量看看效果
+            revenue = -1.0#由于没有行动，原收益并未改变
         #计算本次行动的收益
         return revenue
        
@@ -103,24 +93,34 @@ class Env():#定义一个环境用来与网络交互
     
     def get_zinsen(self):
         self.gesamt_touzi =500.0-self.capital
-        zinsen  = float(self.gesamt_revenue-self.gesamt_touzi)/float(self.gesamt_touzi+0.000001)
+        zinsen  = float(self.gesamt_revenue)/float(self.gesamt_touzi+0.000001)
         return zinsen#这里必须是500.0，否则出来的是结果自动取整数部分，也就是0
 
 
 
 
+def jiangwei(state,capital,mean_invested):
+    frametime = state[0][0]
+    state=np.delete(state, 0, axis=-1)
+    percentile = np.vstack(np.percentile(state,i,axis = 0)[1:4] for i in range(0,105,5))#把当前状态的0%-100%分位数放到一个矩阵里
+    state = tf.concat((percentile.flatten(),[capital],[frametime],mean_invested),-1)
+    state = tf.reshape(state,(1,71))#63个分位数数据+8个capital,frametime和mean_invested,共71个输入
+    return state
+    
+
+
 class Q_Network(tf.keras.Model):
     def __init__(self,
-                      n_companies=18,
+                      n_companies=71,
                       n_actions=1331):#有默认值的属性必须放在没默认值属性的后面
         self.n_companies = n_companies
         self.n_actions = n_actions
         super().__init__()#调用tf.keras.Model的类初始化方法
-        self.dense1 = tf.keras.layers.Dense(units=32, activation=tf.nn.relu)#输入层
-        self.dense2 = tf.keras.layers.Dense(units=32, activation=tf.nn.relu)#一个隐藏层
-        self.dense3 = tf.keras.layers.Dense(units=32, activation=tf.nn.relu)
-        self.dense4 = tf.keras.layers.Dense(units=32, activation=tf.nn.relu)
-        self.dense5 = tf.keras.layers.Dense(units=32, activation=tf.nn.relu)
+        self.dense1 = tf.keras.layers.Dense(units=142, activation=tf.nn.relu)#输入层
+        self.dense2 = tf.keras.layers.Dense(units=142, activation=tf.nn.relu)#一个隐藏层
+        self.dense3 = tf.keras.layers.Dense(units=142, activation=tf.nn.relu)
+        self.dense4 = tf.keras.layers.Dense(units=142, activation=tf.nn.relu)
+        self.dense5 = tf.keras.layers.Dense(units=142, activation=tf.nn.relu)
         self.dense6 = tf.keras.layers.Dense(units=self.n_actions)#输出层代表着在当前最大赔率前，买和不买的六种行动的价值
 
     def call(self,state): #输入从env那里获得的statematrix
@@ -137,21 +137,6 @@ class Q_Network(tf.keras.Model):
         return tf.argmax(q_values,axis=-1)#tf.argmax函数是返回最大数值的下标，用来对应动作
     
 
-
-def jiangwei(state,capital,mean_invested):
-    tsvd = TruncatedSVD(1)
-    max_host = state[tf.argmax(state)[2].numpy()][2]
-    max_fair = state[tf.argmax(state)[3].numpy()][3]
-    max_guest = state[tf.argmax(state)[4].numpy()][4]
-    max = [max_host,max_fair,max_guest]
-    frametime = state[0][0]#取出frametime时间
-    state=np.delete(state, 0, axis=-1)#把frametime去掉，则state变成了（410,7）的矩阵
-    state = tsvd.fit_transform(np.transpose(state))#降维成（410,1）的矩阵
-    state = sklearn.preprocessing.scale(state)#数据标准化一下
-    state = tf.concat((state.flatten(),[capital],[frametime],mean_invested,max),-1)#把降好维的state和capital与frametime连在一起，此时是412长度的一维张量
-    state = tf.reshape(state,(1,18))
-    return state
-
  
 if __name__ == "__main__":
     start0 = time.time()
@@ -159,7 +144,7 @@ if __name__ == "__main__":
     #########设置超参数
     learning_rate = 0.0001#学习率
     opt = tf.keras.optimizers.Nadam(learning_rate)#设定最优化方法
-    gamma = 0.8
+    gamma = 0.5
     epsilon = 1.            # 探索起始时的探索率
     #final_epsilon = 0.01            # 探索终止时的探索率
     batch_size = 500
@@ -247,4 +232,3 @@ if __name__ == "__main__":
             print('比赛'+filepath+'已完成'+'\n'+'用时'+str(end-start)+'秒\n')
     end0 = time.time()
     print('20141130-20160630总共用了'+str(end0-start0)+'秒')
-
