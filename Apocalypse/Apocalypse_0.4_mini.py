@@ -1,5 +1,5 @@
 '''
-延迟收益+终赔不参与投资+错误行动收益-150+标准化+转移20万次后贪心
+延迟收益+终赔不参与投资+错误行动收益-100+标准化+转移20万次后贪心
 '''
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
@@ -82,7 +82,7 @@ class Env():#定义一个环境用来与网络交互
                 revenue = sum(i[2][0]*i[2][1] for i in self.invested )
             self.gesamt_revenue =self.gesamt_revenue + revenue
         elif self.capital < sum(action):#如果没到终盘，且action的总投资比所剩资本还多，则给revenue一个很大的负值给神经网络，但是对capital不操作，实际资本也不更改
-            revenue = -150#则收益是个很大的负值（正常来讲revenue最大-50）
+            revenue = -100#则收益是个很大的负值（正常来讲revenue最大-50）
         else:
             revenue = -sum(action)
             self.capital += revenue#该局游戏的capital随着操作减少

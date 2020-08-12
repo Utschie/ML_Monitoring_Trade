@@ -6,7 +6,7 @@
 #这里的gesamt_revenue没有算入成本，所以最后算restcapital是要-500
 #即时收益gamma值为1效果不太好，所以在此设为0.5
 #优化器选择Adam，初始学习率改为0.0001
-#另外可以考虑一下错误行动的负收益，此处为-500
+#另外可以考虑一下错误行动的负收益，此处为-100，因为-500时loss降得太快了
 '''
 即时收益+终赔不参与投资+错误行动收益为0+标准化
 '''
@@ -87,7 +87,7 @@ class Env():#定义一个环境用来与网络交互
         else:#如果不够执行行动
             self.action_counter+=1
             self.wrong_action_counter+=1
-            revenue = -500
+            revenue = -100
         #计算本次行动的收益
         return revenue
        
