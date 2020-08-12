@@ -58,8 +58,9 @@ def jiangwei_TPU(state,capital,mean_invested):
 def jiangwei_middle(state,capital,mean_invested):
     frametime = state[0][0]
     state=np.delete(state, 0, axis=-1)
+    length = len(state)
     percentile = np.vstack(np.percentile(state,i,axis = 0)[1:4] for i in range(0,105,5))#把当前状态的0%-100%分位数放到一个矩阵里
-    state = tf.concat((percentile.flatten(),[capital],[frametime],mean_invested),-1)
-    state = tf.reshape(state,(1,71))#63个分位数数据+8个capital,frametime和mean_invested,共71个输入
+    state = tf.concat((percentile.flatten(),[capital],[frametime],mean_invested,[length]),-1)
+    state = tf.reshape(state,(1,72))#63个分位数数据+8个capital,frametime和mean_invested,共72个输入
     return state
     
