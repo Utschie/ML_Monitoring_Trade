@@ -3,6 +3,7 @@
 #由于revenue是收益率增量，所以batch_revenue是很小的值，所以很难看到loss从很大连续下降的场面
 #或者是使用最小收益增量，或者是在batch_revenue的每个元素普遍乘一个值比如500————20200811
 #gamma值为1时效果好像不太好
+#另外考虑一下错误行动的负收益，此处设为-1
 '''
 最小收益增量+终赔不参与投资+0+标准化
 '''
@@ -94,7 +95,7 @@ class Env():#定义一个环境用来与网络交互
         else:#如果不够执行行动
             self.action_counter+=1
             self.wrong_action_counter+=1
-            revenue = 0.0#由于没有行动，原收益并未改变
+            revenue = -1.0#设为负收益看看效果
         #计算本次行动的收益
         return revenue
        
