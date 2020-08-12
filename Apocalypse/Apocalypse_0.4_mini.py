@@ -1,5 +1,5 @@
 '''
-延迟收益+终赔不参与投资+错误行动收益-200
+延迟收益+终赔不参与投资+错误行动收益-200+标准化
 '''
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu

@@ -5,7 +5,7 @@
 #但是再没出现过nan
 #这里的gesamt_revenue没有算入成本，所以最后算restcapital是要-500
 '''
-即时收益+终赔不参与投资+错误行动收益为0
+即时收益+终赔不参与投资+错误行动收益为0+标准化
 '''
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu

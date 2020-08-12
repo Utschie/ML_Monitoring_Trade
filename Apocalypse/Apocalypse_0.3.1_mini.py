@@ -3,7 +3,7 @@
 #由于revenue是收益率增量，所以batch_revenue是很小的值，所以很难看到loss从很大连续下降的场面
 #或者是使用最小收益增量，或者是在batch_revenue的每个元素普遍乘一个值比如500————20200811
 '''
-最小收益增量+终赔不参与投资+0
+最小收益增量+终赔不参与投资+0+标准化
 '''
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
