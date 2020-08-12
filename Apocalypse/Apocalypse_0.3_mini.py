@@ -4,8 +4,9 @@
 #一个重要的问题是，换了revenue计算方法后，loss在上升，而且是某种截断式的上升，就是突然接近0，后有突然升到很高，后又突然接近0。
 #但是再没出现过nan
 #这里的gesamt_revenue没有算入成本，所以最后算restcapital是要-500
-#即时收益gamma值为1效果不太好，所以在此设为0.8
-#另外考虑一下错误行动的负收益
+#即时收益gamma值为1效果不太好，所以在此设为0.5
+#优化器选择Adam，初始学习率改为0.0001
+#另外可以考虑一下错误行动的负收益，此处为-500
 '''
 即时收益+终赔不参与投资+错误行动收益为0+标准化
 '''
@@ -86,7 +87,7 @@ class Env():#定义一个环境用来与网络交互
         else:#如果不够执行行动
             self.action_counter+=1
             self.wrong_action_counter+=1
-            revenue = 0
+            revenue = -500
         #计算本次行动的收益
         return revenue
        
@@ -151,8 +152,8 @@ if __name__ == "__main__":
     start0 = time.time()
     summary_writer = tf.summary.create_file_writer('./tensorboard_0.3_mini') #在代码所在文件夹同目录下创建tensorboard文件夹（本代码在jupyternotbook里跑，所以在jupyternotebook里可以看到）
     #########设置超参数
-    learning_rate = 0.00001#学习率
-    opt = tf.keras.optimizers.RMSprop(learning_rate)#设定最优化方法
+    learning_rate = 0.0001#学习率
+    opt = tf.keras.optimizers.Adam(learning_rate)#设定最优化方法
     gamma = 0.8
     epsilon = 1.            # 探索起始时的探索率
     #final_epsilon = 0.01            # 探索终止时的探索率

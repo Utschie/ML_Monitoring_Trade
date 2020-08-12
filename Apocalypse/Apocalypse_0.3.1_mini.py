@@ -2,8 +2,9 @@
 #收益率增量收益+终盘不参与投资+错误行动收益为0
 #由于revenue是收益率增量，所以batch_revenue是很小的值，所以很难看到loss从很大连续下降的场面
 #或者是使用最小收益增量，或者是在batch_revenue的每个元素普遍乘一个值比如500————20200811
-#gamma值为1时效果好像不太好
+#gamma值为1时效果好像不太好，次数设为0.8
 #另外考虑一下错误行动的负收益，此处设为-1
+#算法采用Nadam，初始学习率改为0.0001
 '''
 最小收益增量+终赔不参与投资+0+标准化
 '''
@@ -162,8 +163,8 @@ if __name__ == "__main__":
     start0 = time.time()
     summary_writer = tf.summary.create_file_writer('./tensorboard_0.3.1_mini') #在代码所在文件夹同目录下创建tensorboard文件夹（本代码在jupyternotbook里跑，所以在jupyternotebook里可以看到）
     #########设置超参数
-    learning_rate = 0.00001#学习率
-    opt = tf.keras.optimizers.RMSprop(learning_rate)#设定最优化方法
+    learning_rate = 0.0001#学习率
+    opt = tf.keras.optimizers.Nadam(learning_rate)#设定最优化方法
     gamma = 0.8
     epsilon = 1.            # 探索起始时的探索率
     #final_epsilon = 0.01            # 探索终止时的探索率
