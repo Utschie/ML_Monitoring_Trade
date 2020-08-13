@@ -1,5 +1,5 @@
 '''
-分位数输入+即时最小返还率增量+终赔不参与投资+错误行动-1.0+非标准化+Nadam(0.001)+gamma(0.9)+20万次转移转贪心
+分位数输入+即时最小返还率增量+终赔不参与投资+错误行动-0.5+非标准化+Nadam(0.001)+gamma(0.9)+20万次转移转贪心
 两个隐藏层，24万5千个参数
 '''
 import tensorflow as tf
@@ -81,7 +81,7 @@ class Env():#定义一个环境用来与网络交互
         else:#如果不够执行行动
             self.action_counter+=1
             self.wrong_action_counter+=1
-            revenue = -1.0#由于没有行动，原收益并未改变
+            revenue = -0.5#由于没有行动，原收益并未改变
         #计算本次行动的收益
         return revenue
        
