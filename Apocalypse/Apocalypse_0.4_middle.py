@@ -1,7 +1,9 @@
 '''
 分位数输入+即时最小返还率增量+终赔不参与投资+错误行动-0.5+非标准化+Nadam(0.01)+gamma(0.99999)+20万次转移转贪心
-两个隐藏层，24万5千个参数
+近30万个参数
 '''
+import os
+os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
 import tensorflow as tf
 from collections import deque
 import numpy as np
@@ -118,15 +120,19 @@ class Q_Network(tf.keras.Model):
         self.n_companies = n_companies
         self.n_actions = n_actions
         super().__init__()#调用tf.keras.Model的类初始化方法
-        self.dense1 = tf.keras.layers.Dense(units=144, activation=tf.nn.relu)#输入层
-        self.dense2 = tf.keras.layers.Dense(units=144, activation=tf.nn.relu)#一个隐藏层
-        self.dense3 = tf.keras.layers.Dense(units=144, activation=tf.nn.relu)
+        self.dense1 = tf.keras.layers.Dense(units=int(1.8*self.n_companies), activation=tf.nn.relu)#输入层
+        self.dense2 = tf.keras.layers.Dense(units=int(1.8*self.n_companies), activation=tf.nn.relu)#一个隐藏层
+        self.dense3 = tf.keras.layers.Dense(units=int(1.8*self.n_companies), activation=tf.nn.relu)
+        self.dense4 = tf.keras.layers.Dense(units=int(1.8*self.n_companies), activation=tf.nn.relu)
+        self.dense5 = tf.keras.layers.Dense(units=int(1.8*self.n_companies), activation=tf.nn.relu)
         self.dense6 = tf.keras.layers.Dense(units=self.n_actions)#输出层代表着在当前最大赔率前，买和不买的六种行动的价值
 
     def call(self,state): #输入从env那里获得的statematrix
         x = self.dense1(state)#输出神经网络
         x = self.dense2(x)#
         x = self.dense3(x)
+        x = self.dense4(x)
+        x = self.dense5(x)
         q_value = self.dense6(x)#
         return q_value#q_value是一个（1,1331）的张量
 
@@ -147,7 +153,7 @@ if __name__ == "__main__":
     #final_epsilon = 0.01            # 探索终止时的探索率
     batch_size = 500
     resultlist = pd.read_csv('D:\\data\\results_20141130-20160630.csv',index_col = 0)#得到赛果和比赛ID的对应表
-    actions_table = [[a,b,c] for a in range(0.0,55.0,5.0) for b in range(0.0,55.0,5.0) for c in range(0.0,55.0,5.0)]#给神经网络输出层对应一个行动表
+    actions_table = [[a,b,c] for a in range(0,55,5) for b in range(0,55,5) for c in range(0,55,5)]#给神经网络输出层对应一个行动表
     step_counter = 0
     learn_step_counter = 0
     target_repalce_counter = 0 

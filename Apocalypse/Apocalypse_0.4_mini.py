@@ -154,7 +154,7 @@ if __name__ == "__main__":
     #final_epsilon = 0.01            # 探索终止时的探索率
     batch_size = 500
     resultlist = pd.read_csv('D:\\data\\results_20141130-20160630.csv',index_col = 0)#得到赛果和比赛ID的对应表
-    actions_table = [[a,b,c] for a in range(0.0,55.0,5.0) for b in range(0.0,55.0,5.0) for c in range(0.0,55.0,5.0)]#给神经网络输出层对应一个行动表
+    actions_table = [[a,b,c] for a in range(0,55,5) for b in range(0,55,5) for c in range(0,55,5)]#给神经网络输出层对应一个行动表
     step_counter = 0
     learn_step_counter = 0
     target_repalce_counter = 0 
