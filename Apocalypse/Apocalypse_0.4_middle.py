@@ -1,5 +1,5 @@
 '''
-分位数输入+即时最小返还率增量+终赔不参与投资+错误行动-0.5+非标准化+Nadam(0.01)+gamma(0.9)+20万次转移转贪心
+分位数输入+即时最小返还率增量+终赔不参与投资+错误行动-0.5+非标准化+Nadam(0.01)+gamma(0.99999)+20万次转移转贪心
 两个隐藏层，24万5千个参数
 '''
 import tensorflow as tf
@@ -142,7 +142,7 @@ if __name__ == "__main__":
     #########设置超参数
     learning_rate = 0.01#学习率
     opt = tf.keras.optimizers.Nadam(learning_rate)#设定最优化方法
-    gamma = 0.9
+    gamma = 0.99999#0后面至少5个9才能让1万次转移后衰减率在90%
     epsilon = 1.            # 探索起始时的探索率
     #final_epsilon = 0.01            # 探索终止时的探索率
     batch_size = 500
