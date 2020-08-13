@@ -1,5 +1,5 @@
 '''
-分位数输入+即时最小返还率增量+终赔不参与投资+错误行动-1.0+非标准化+Nadam(0.001)+gamma(0.9)
+分位数输入+即时最小返还率增量+终赔不参与投资+错误行动-1.0+非标准化+Nadam(0.001)+gamma(0.9)+20万次转移转贪心
 28万7千个参数
 '''
 import tensorflow as tf
@@ -182,7 +182,7 @@ if __name__ == "__main__":
                 tf.summary.scalar("Capital", capital,step = bisai_counter)
             while True:
                 if (step_counter % 1000 ==0) and (epsilon>0):
-                    epsilon = epsilon-0.002#也就是经过50万次转移epsilon降到0
+                    epsilon = epsilon-0.005#也就是经过20万次转移epsilon降到0
                 state = jiangwei(state,capital,bianpan_env.mean_invested)#先降维，并整理形状，把capital放进去
                 action_index = eval_Q.predict(state)[0]#获得行动q_value
                 if random.random() < epsilon:#如果落在随机区域
