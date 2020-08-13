@@ -25,7 +25,6 @@ class Env():#定义一个环境用来与网络交互
         self.capital = 500#每场比赛有500欧可支配资金
         self.gesamt_revenue = 0#初始化实际收益
         self.invested = [[(0.,0.),(0.,0.),(0.,0.)]]#已投入资本，每个元素记录着一次投资的赔率和投入，分别对应胜平负三种赛果的投入，这里不用np.array因为麻烦
-        self.statematrix = np.zeros((410,9))#初始化状态矩阵
         self.action_counter=0.0
         self.wrong_action_counter = 0.0
         self.mean_host = [0.0,0.0]#保存已买主胜的平均赔率和投入
