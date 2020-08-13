@@ -1,5 +1,5 @@
 '''
-分位数输入+即时最小返还率增量+终赔不参与投资+错误行动-0.5+非标准化+Nadam(0.001)+gamma(0.9)+20万次转移转贪心
+分位数输入+即时最小返还率增量+终赔不参与投资+错误行动-0.5+非标准化+Nadam(0.01)+gamma(0.9)+20万次转移转贪心
 两个隐藏层，24万5千个参数
 '''
 import tensorflow as tf
@@ -140,7 +140,7 @@ if __name__ == "__main__":
     start0 = time.time()
     summary_writer = tf.summary.create_file_writer('./tensorboard_0.3.2_mini') #在代码所在文件夹同目录下创建tensorboard文件夹（本代码在jupyternotbook里跑，所以在jupyternotebook里可以看到）
     #########设置超参数
-    learning_rate = 0.001#学习率
+    learning_rate = 0.01#学习率
     opt = tf.keras.optimizers.Nadam(learning_rate)#设定最优化方法
     gamma = 0.9
     epsilon = 1.            # 探索起始时的探索率

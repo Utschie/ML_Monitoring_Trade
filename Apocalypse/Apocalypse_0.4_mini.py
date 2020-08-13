@@ -1,5 +1,5 @@
 '''
-延迟收益+终赔不参与投资+错误行动收益-100+标准化+转移20万次后贪心+保留一定0.001的随机率
+延迟收益+终赔不参与投资+错误行动收益-100+转移20万次后贪心+非标准化+保留一定0.001的随机率+Adam(0.01)
 '''
 #延迟收益可能需要最后保持一定的贪心率，不然训练出来它永远不交易
 import os
@@ -140,7 +140,6 @@ def jiangwei(state,capital,mean_invested):
     frametime = state[0][0]#取出frametime时间
     state=np.delete(state, 0, axis=-1)#把frametime去掉，则state变成了（410,7）的矩阵
     state = tsvd.fit_transform(np.transpose(state))#降维成（410,1）的矩阵
-    state = sklearn.preprocessing.scale(state)#数据标准化一下
     state = tf.concat((state.flatten(),[capital],[frametime],mean_invested,max),-1)#把降好维的state和capital与frametime连在一起，此时是412长度的一维张量
     state = tf.reshape(state,(1,18))
     return state
@@ -149,11 +148,11 @@ if __name__ == "__main__":
     start0 = time.time()
     summary_writer = tf.summary.create_file_writer('./tensorboard_0.4_mini') #在代码所在文件夹同目录下创建tensorboard文件夹（本代码在jupyternotbook里跑，所以在jupyternotebook里可以看到）
     #########设置超参数
-    learning_rate = 0.00001#学习率
-    opt = tf.keras.optimizers.RMSprop(learning_rate)#设定最优化方法
+    learning_rate = 0.01#学习率
+    opt = tf.keras.optimizers.Adam(learning_rate)#设定最优化方法
     epsilon = 1.            # 探索起始时的探索率
     #final_epsilon = 0.01            # 探索终止时的探索率
-    batch_size = 32
+    batch_size = 500
     resultlist = pd.read_csv('D:\\data\\results_20141130-20160630.csv',index_col = 0)#得到赛果和比赛ID的对应表
     actions_table = [[a,b,c] for a in range(0,55,5) for b in range(0,55,5) for c in range(0,55,5)]#给神经网络输出层对应一个行动表
     step_counter = 0
