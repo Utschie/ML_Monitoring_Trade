@@ -1,5 +1,6 @@
 '''
 分位数输入+即时最小返还率增量+终赔不参与投资+错误行动-1.0+非标准化+Nadam(0.001)+gamma(0.9)
+28万7千个参数
 '''
 import tensorflow as tf
 from collections import deque

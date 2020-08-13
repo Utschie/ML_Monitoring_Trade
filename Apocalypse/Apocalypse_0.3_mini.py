@@ -7,6 +7,7 @@
 #即时收益gamma值为1效果不太好，所以在此设为0.5
 #优化器选择Adam，初始学习率改为0.0001
 #另外可以考虑一下错误行动的负收益，此处为-100，因为-500时loss降得太快了
+#当-500时差不多到十万次转移就可以了，所以这次尝试快速结束随机策略，或者降到很低
 '''
 即时收益+终赔不参与投资+错误行动收益为0+标准化
 '''
@@ -190,7 +191,7 @@ if __name__ == "__main__":
                 tf.summary.scalar("Capital", capital,step = bisai_counter)
             while True:
                 if (step_counter % 1000 ==0) and (epsilon>0):
-                    epsilon = epsilon-0.002#也就是经过50万次转移epsilon降到0
+                    epsilon = epsilon-0.01#也就是经过10万次转移epsilon降到0
                 state = jiangwei(state,capital,bianpan_env.mean_invested)#先降维，并整理形状，把capital放进去
                 action_index = eval_Q.predict(state)[0]#获得行动q_value
                 if random.random() < epsilon:#如果落在随机区域
