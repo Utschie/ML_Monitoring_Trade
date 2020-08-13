@@ -2,6 +2,10 @@
 分位数输入+即时最小返还率增量+终赔不参与投资+错误行动-0.5+非标准化+Nadam(0.01)+gamma(0.99999)+20万次转移转贪心
 近30万个参数
 '''
+#batch_size=500时，用cpu跑大概5-6秒学习一次
+#batch_size=500时，用Gpu跑大概17-18秒学习一次
+#batch_size=200时，用Gpu跑大概3秒学习一次
+#batch_size=100时，用cpu跑小于2秒一次
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
 import tensorflow as tf
@@ -106,7 +110,8 @@ def jiangwei(state,capital,mean_invested):
     frametime = state[0][0]
     state=np.delete(state, 0, axis=-1)
     length = len(state)#出赔率的公司数
-    percentile = np.vstack(np.percentile(state,i,axis = 0)[1:4] for i in range(0,105,5))#把当前状态的0%-100%分位数放到一个矩阵里
+    percenttilelist = [np.percentile(state,i,axis = 0)[1:4] for i in range(0,105,5)]
+    percentile = np.vstack(percenttilelist)#把当前状态的0%-100%分位数放到一个矩阵里
     state = tf.concat((percentile.flatten(),[capital],[frametime],mean_invested,[length]),-1)
     state = tf.reshape(state,(1,72))#63个分位数数据+8个capital,frametime和mean_invested,length共72个输入
     return state
