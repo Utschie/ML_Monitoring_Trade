@@ -183,6 +183,8 @@ if __name__ == "__main__":
             while True:
                 if (step_counter % 1000 ==0) and (epsilon>0.001):
                     epsilon = epsilon-0.005#也就是经过20万次转移epsilon降到0
+                if epsilon<0.001:#降到0以后保持0.001的随机率
+                    epsilon = 0.001
                 state = jiangwei(state,capital,bianpan_env.mean_invested)#先降维，并整理形状，把capital放进去
                 action_index = eval_Q.predict(state)[0]#获得行动q_value
                 if random.random() < epsilon:#如果落在随机区域
