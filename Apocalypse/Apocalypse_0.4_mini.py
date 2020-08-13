@@ -1,6 +1,7 @@
 '''
 延迟收益+终赔不参与投资+错误行动收益-100+标准化+转移20万次后贪心+保留一定0.001的随机率
 '''
+#延迟收益可能需要最后保持一定的贪心率，不然训练出来它永远不交易
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
 import tensorflow as tf
