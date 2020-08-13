@@ -1,5 +1,5 @@
 '''
-延迟收益+终赔不参与投资+错误行动收益-100+标准化+转移20万次后贪心
+延迟收益+终赔不参与投资+错误行动收益-100+标准化+转移20万次后贪心+保留一定0.001的随机率
 '''
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
@@ -181,7 +181,7 @@ if __name__ == "__main__":
             with summary_writer.as_default():
                 tf.summary.scalar("Capital", capital,step = bisai_counter)
             while True:
-                if (step_counter % 1000 ==0) and (epsilon>0):
+                if (step_counter % 1000 ==0) and (epsilon>0.001):
                     epsilon = epsilon-0.005#也就是经过20万次转移epsilon降到0
                 state = jiangwei(state,capital,bianpan_env.mean_invested)#先降维，并整理形状，把capital放进去
                 action_index = eval_Q.predict(state)[0]#获得行动q_value
