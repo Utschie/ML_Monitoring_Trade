@@ -1,5 +1,5 @@
 '''
-分位数输入+即时最小返还率增量+终赔不参与投资+错误行动-0.5+归一化+Nadam(0.01)+gamma(0.99999)+20万次转移转贪心
+分位数输入+即时最小返还率增量+终赔不参与投资+错误行动-0.5+frametime对数缩小+Nadam(0.001)+gamma(0.99999)+50万次转移转贪心
 近30万个参数
 '''
 #batch_size=500时，用cpu跑大概5-6秒学习一次
@@ -16,9 +16,9 @@ import pandas as pd
 import csv
 import random
 import re
-from sklearn.decomposition import PCA
 import os
 import time
+import math
 class Env():#定义一个环境用来与网络交互
     def __init__(self,filepath,result):
         self.result = result#获得赛果
@@ -109,6 +109,7 @@ class Env():#定义一个环境用来与网络交互
 
 def jiangwei(state,capital,mean_invested):
     frametime = state[0][0]
+    frametime = math.log(frametime,10)#用10为底的对数对frametime缩放
     state=np.delete(state, 0, axis=-1)
     length = len(state)#出赔率的公司数
     percenttilelist = [np.percentile(state,i,axis = 0)[1:4] for i in range(0,105,5)]
@@ -152,7 +153,7 @@ if __name__ == "__main__":
     start0 = time.time()
     summary_writer = tf.summary.create_file_writer('./tensorboard_0.4_middle') #在代码所在文件夹同目录下创建tensorboard文件夹（本代码在jupyternotbook里跑，所以在jupyternotebook里可以看到）
     #########设置超参数
-    learning_rate = 0.01#学习率
+    learning_rate = 0.001#学习率
     opt = tf.keras.optimizers.Nadam(learning_rate)#设定最优化方法
     gamma = 0.99999#0后面至少5个9才能让1万次转移后衰减率在90%
     epsilon = 1.            # 探索起始时的探索率
@@ -190,7 +191,7 @@ if __name__ == "__main__":
                 tf.summary.scalar("Capital", capital,step = bisai_counter)
             while True:
                 if (step_counter % 1000 ==0) and (epsilon>0):
-                    epsilon = epsilon-0.005#也就是经过20万次转移epsilon降到0
+                    epsilon = epsilon-0.002#也就是经过50万次转移epsilon降到0
                 state = jiangwei(state,capital,bianpan_env.mean_invested)#先降维，并整理形状，把capital放进去
                 action_index = eval_Q.predict(state)[0]#获得行动q_value
                 if random.random() < epsilon:#如果落在随机区域

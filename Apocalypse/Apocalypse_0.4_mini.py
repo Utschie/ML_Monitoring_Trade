@@ -14,6 +14,7 @@ import re
 from sklearn.decomposition import TruncatedSVD
 import time
 import sklearn
+import math
 class Env():#定义一个环境用来与网络交互
     def __init__(self,filepath,result):
         self.result = result#获得赛果
@@ -138,6 +139,7 @@ def jiangwei(state,capital,mean_invested):
     max_guest = state[tf.argmax(state)[4].numpy()][4]
     max = [max_host,max_fair,max_guest]
     frametime = state[0][0]#取出frametime时间
+    frametime = math.log(frametime,10)
     state=np.delete(state, 0, axis=-1)#把frametime去掉，则state变成了（410,7）的矩阵
     state = tsvd.fit_transform(np.transpose(state))#降维成（410,1）的矩阵
     state = tf.concat((state.flatten(),[capital],[frametime],mean_invested,max),-1)#把降好维的state和capital与frametime连在一起，此时是412长度的一维张量
