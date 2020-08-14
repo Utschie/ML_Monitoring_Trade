@@ -111,7 +111,7 @@ def jiangwei(state,capital):
 
 class Q_Network(tf.keras.Model):
     def __init__(self,
-                      n_companies=72,
+                      n_companies=66,
                       n_actions=1331):#有默认值的属性必须放在没默认值属性的后面
         self.n_companies = n_companies
         self.n_actions = n_actions
