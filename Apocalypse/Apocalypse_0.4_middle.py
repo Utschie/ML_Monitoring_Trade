@@ -1,11 +1,12 @@
 '''
-分位数输入+即时最小返还率增量+终赔不参与投资+错误行动-0.5+非标准化+Nadam(0.01)+gamma(0.99999)+20万次转移转贪心
+分位数输入+即时最小返还率增量+终赔不参与投资+错误行动-0.5+归一化+Nadam(0.01)+gamma(0.99999)+20万次转移转贪心
 近30万个参数
 '''
 #batch_size=500时，用cpu跑大概5-6秒学习一次
 #batch_size=500时，用Gpu跑大概17-18秒学习一次
 #batch_size=200时，用Gpu跑大概3秒学习一次
 #batch_size=100时，用cpu跑小于2秒一次
+#由于frametime和输入的其他值比起来有点太大，所以它自己应该单独缩放一下
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
 import tensorflow as tf
