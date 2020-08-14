@@ -2,7 +2,7 @@
 延迟收益+终赔不参与投资+可变长度输入+Adam(0.001)+错误行动-100+gamma(1.0,即无衰减)+20万次转移转贪心+保留0.001随机率
 +归一化
 '''
-#可以领当action = [0,0,0]时也自动扣钱
+#防止不行动的方法有两种，或者保留一定的随机策略率，或者就是给不行动也扣一些钱
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
 import tensorflow as tf
