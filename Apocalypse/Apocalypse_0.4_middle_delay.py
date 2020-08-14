@@ -10,9 +10,9 @@ import pandas as pd
 import csv
 import random
 import re
-from sklearn.decomposition import TruncatedSVD
 import time
 import sklearn
+import math
 class Env():#定义一个环境用来与网络交互
     def __init__(self,filepath,result):
         self.result = result#获得赛果
@@ -97,6 +97,8 @@ class Env():#定义一个环境用来与网络交互
 
 def jiangwei(state,capital,mean_invested):
     frametime = state[0][0]
+    if frametime != 0.0:
+        frametime = math.log(frametime,10)#用10为底的对数对frametime缩放
     state=np.delete(state, 0, axis=-1)
     length = len(state)
     percentile = np.vstack(np.percentile(state,i,axis = 0)[1:4] for i in range(0,105,5))#把当前状态的0%-100%分位数放到一个矩阵里
@@ -138,14 +140,14 @@ if __name__ == "__main__":
     opt = tf.keras.optimizers.Adam(learning_rate)#设定最优化方法
     epsilon = 1.            # 探索起始时的探索率
     #final_epsilon = 0.01            # 探索终止时的探索率
-    batch_size = 500
+    batch_size = 100
     resultlist = pd.read_csv('D:\\data\\results_20141130-20160630.csv',index_col = 0)#得到赛果和比赛ID的对应表
     actions_table = [[a,b,c] for a in range(0,55,5) for b in range(0,55,5) for c in range(0,55,5)]#给神经网络输出层对应一个行动表
     step_counter = 0
     learn_step_counter = 0
     target_repalce_counter = 0 
     bisai_counter = 1
-    memory_size = 10000
+    memory_size = 500000
     replay_buffer = deque(maxlen=memory_size)#建立一个记忆回放区
     eval_Q = Q_Network()#初始化行动Q网络
     target_Q = Q_Network()#初始化目标Q网络
@@ -168,7 +170,7 @@ if __name__ == "__main__":
                 tf.summary.scalar("Capital", capital,step = bisai_counter)
             while True:
                 if (step_counter % 1000 ==0) and (epsilon>0.001):
-                    epsilon = epsilon-0.005#也就是经过20万次转移epsilon降到0
+                    epsilon = epsilon-0.001#也就是经过100万次转移epsilon降到0
                 if epsilon<0.001:#降到0以后保持0.001的随机率
                     epsilon = 0.001
                 state = jiangwei(state,capital,bianpan_env.mean_invested)#先降维，并整理形状，把capital放进去

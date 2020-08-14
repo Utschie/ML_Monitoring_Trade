@@ -1,5 +1,5 @@
 '''
-即时收益+可变长度输入+终赔不参与投资+错误行动收益为0+非标准化+10万次转移转贪心+-100负收益+gamma(0.9)+Adam(0.01)
+即时收益+可变长度输入+终赔不参与投资+非标准化+10万次转移转贪心+-100负收益+gamma(0.9)+Adam(0.01)
 '''
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
@@ -10,9 +10,9 @@ import pandas as pd
 import csv
 import random
 import re
-from sklearn.decomposition import TruncatedSVD
 import time
 import sklearn
+import math
 class Env():#定义一个环境用来与网络交互
     def __init__(self,filepath,result):
         self.result = result#获得赛果
@@ -114,6 +114,8 @@ class Q_Network(tf.keras.Model):
 
 def jiangwei(state,capital,mean_invested):
     frametime = state[0][0]
+    if frametime != 0.0:
+        frametime = math.log(frametime,10)#用10为底的对数对frametime缩放
     state=np.delete(state, 0, axis=-1)
     length = len(state)#出赔率的公司数
     percentile = np.vstack(np.percentile(state,i,axis = 0)[1:4] for i in range(0,105,5))#把当前状态的0%-100%分位数放到一个矩阵里
@@ -132,7 +134,7 @@ if __name__ == "__main__":
     gamma = 0.9
     epsilon = 1.            # 探索起始时的探索率
     #final_epsilon = 0.01            # 探索终止时的探索率
-    batch_size = 500
+    batch_size = 100
     resultlist = pd.read_csv('D:\\data\\results_20141130-20160630.csv',index_col = 0)#得到赛果和比赛ID的对应表
     actions_table = [[a,b,c] for a in range(0,55,5) for b in range(0,55,5) for c in range(0,55,5)]#给神经网络输出层对应一个行动表
     step_counter = 0
@@ -165,7 +167,7 @@ if __name__ == "__main__":
                 tf.summary.scalar("Capital", capital,step = bisai_counter)
             while True:
                 if (step_counter % 1000 ==0) and (epsilon>0):
-                    epsilon = epsilon-0.01#也就是经过10万次转移epsilon降到0
+                    epsilon = epsilon-0.001#也就是经过100万次转移epsilon降到0
                 state = jiangwei(state,capital,bianpan_env.mean_invested)#先降维，并整理形状，把capital放进去
                 action_index = eval_Q.predict(state)[0]#获得行动q_value
                 if random.random() < epsilon:#如果落在随机区域
