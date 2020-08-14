@@ -163,7 +163,7 @@ if __name__ == "__main__":
     learn_step_counter = 0
     target_repalce_counter = 0 
     bisai_counter = 1
-    memory_size = 10000
+    memory_size = 500000
     replay_buffer = deque(maxlen=memory_size)#建立一个记忆回放区
     eval_Q = Q_Network()#初始化行动Q网络
     target_Q = Q_Network()#初始化目标Q网络

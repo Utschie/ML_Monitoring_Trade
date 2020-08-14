@@ -1,5 +1,5 @@
 '''
-分位数输入+即时最小返还率增量+终赔不参与投资+错误行动-0.5+frametime对数缩小+Nadam(0.001)+gamma(0.99999)+50万次转移转贪心
+分位数输入+即时最小返还率增量+终赔不参与投资+错误行动-0.5+frametime对数缩小+adam(0.001,amsgrad=True)+gamma(0.99999)+50万次转移转贪心
 近30万个参数
 '''
 #batch_size=500时，用cpu跑大概5-6秒学习一次
@@ -9,6 +9,8 @@
 #由于frametime和输入的其他值比起来有点太大，所以它自己应该单独缩放一下
 #在gamma=0.99999的情况下，即便负回报为-1.0也不足以让wrong_action_rate下降
 #尝试用Adam优化器中的amsgrad=True作为优化器
+#把memory_size调到50万看一下效果
+#然后尝试改用doubleDQN
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
 import tensorflow as tf
@@ -157,7 +159,7 @@ if __name__ == "__main__":
     summary_writer = tf.summary.create_file_writer('./tensorboard_0.4_middle') #在代码所在文件夹同目录下创建tensorboard文件夹（本代码在jupyternotbook里跑，所以在jupyternotebook里可以看到）
     #########设置超参数
     learning_rate = 0.001#学习率
-    opt = tf.keras.optimizers.Nadam(learning_rate)#设定最优化方法
+    opt = tf.keras.optimizers.Adam(learning_rate,amsgrad = True)#设定最优化方法
     gamma = 0.99999#0后面至少5个9才能让1万次转移后衰减率在90%
     epsilon = 1.            # 探索起始时的探索率
     #final_epsilon = 0.01            # 探索终止时的探索率
@@ -168,7 +170,7 @@ if __name__ == "__main__":
     learn_step_counter = 0
     target_repalce_counter = 0 
     bisai_counter = 1
-    memory_size = 10000
+    memory_size = 500000
     replay_buffer = deque(maxlen=memory_size)#建立一个记忆回放区
     eval_Q = Q_Network()#初始化行动Q网络
     target_Q = Q_Network()#初始化目标Q网络
@@ -194,7 +196,7 @@ if __name__ == "__main__":
                 tf.summary.scalar("Capital", capital,step = bisai_counter)
             while True:
                 if (step_counter % 1000 ==0) and (epsilon>0):
-                    epsilon = epsilon-0.002#也就是经过50万次转移epsilon降到0
+                    epsilon = epsilon-0.001#也就是经过100万次转移epsilon降到0
                 state = jiangwei(state,capital,bianpan_env.mean_invested)#先降维，并整理形状，把capital放进去
                 action_index = eval_Q.predict(state)[0]#获得行动q_value
                 if random.random() < epsilon:#如果落在随机区域
