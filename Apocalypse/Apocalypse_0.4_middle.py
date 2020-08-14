@@ -8,6 +8,7 @@
 #batch_size=100时，用cpu跑小于2秒一次
 #由于frametime和输入的其他值比起来有点太大，所以它自己应该单独缩放一下
 #在gamma=0.99999的情况下，即便负回报为-1.0也不足以让wrong_action_rate下降
+#尝试用Adam优化器中的amsgrad=True作为优化器
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
 import tensorflow as tf
