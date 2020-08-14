@@ -77,8 +77,8 @@ class Env():#定义一个环境用来与网络交互
             now_host_reward = np.prod(self.mean_host)-now_cost
             now_fair_reward = np.prod(self.mean_fair)-now_cost#如果平
             now_guest_reward = np.prod(self.mean_guest)-now_cost#如果客胜
-            now_reward = min(now_host_reward,now_fair_reward,now_guest_reward)#本次行动后的最小返还率
-            revenue = now_reward#本步的返还率增量作为revenue返回
+            now_reward = min(now_host_reward,now_fair_reward,now_guest_reward)#本次行动后的最小绝对收益
+            revenue = now_reward#本步的绝对收益作为revenue返回
             if self.result.host > self.result.guest:
                 reward = max_host*action[0]-sum(action)
             elif self.result.host == self.result.guest:

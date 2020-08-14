@@ -1,5 +1,5 @@
 '''
-即时收益+可变长度输入+终赔不参与投资+非标准化+100万次转移转贪心+-100负收益+gamma(1.0)不折现+Adam(0.001)
+即时收益+可变长度输入+终赔不参与投资+归一化+100万次转移转贪心+-100负收益+gamma(1.0)不折现+Adam(0.001)
 '''
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
@@ -113,17 +113,15 @@ class Q_Network(tf.keras.Model):
     
 
 def jiangwei(state,capital,mean_invested):
-    frametime = state[0][0]
-    if frametime != 0.0:
-        frametime = math.log(frametime,10)#用10为底的对数对frametime缩放
+    frametime = state[0][0]/80000.0#frametime最多80000秒之前开赔
     state=np.delete(state, 0, axis=-1)
     length = len(state)#出赔率的公司数
     percenttilelist = [np.percentile(state,i,axis = 0)[1:4] for i in range(0,105,5)]
     percentile = np.vstack(percenttilelist)#把当前状态的0%-100%分位数放到一个矩阵里
-    state = tf.concat((percentile.flatten(),[capital],[frametime],mean_invested,[length]),-1)
+    state = tf.concat((percentile.flatten()/25.0,[capital],[frametime],mean_invested,[length]),-1)#除以25是因为一般来讲赔率最高开到25
     state = tf.reshape(state,(1,72))#63个分位数数据+8个capital,frametime和mean_invested,length共72个输入
     return state
-    
+
 
  
 if __name__ == "__main__":
@@ -142,7 +140,7 @@ if __name__ == "__main__":
     learn_step_counter = 0
     target_repalce_counter = 0 
     bisai_counter = 1
-    memory_size = 10000
+    memory_size = 500000
     replay_buffer = deque(maxlen=memory_size)#建立一个记忆回放区
     eval_Q = Q_Network()#初始化行动Q网络
     target_Q = Q_Network()#初始化目标Q网络
