@@ -7,6 +7,7 @@
 #batch_size=200时，用Gpu跑大概3秒学习一次
 #batch_size=100时，用cpu跑小于2秒一次
 #由于frametime和输入的其他值比起来有点太大，所以它自己应该单独缩放一下
+#在gamma=0.99999的情况下，即便负回报为-1.0也不足以让wrong_action_rate下降
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
 import tensorflow as tf
@@ -88,7 +89,7 @@ class Env():#定义一个环境用来与网络交互
         else:#如果不够执行行动
             self.action_counter+=1
             self.wrong_action_counter+=1
-            revenue = -0.5#由于没有行动，原收益并未改变
+            revenue = -1.0#由于没有行动，原收益并未改变
         #计算本次行动的收益
         return revenue
        
