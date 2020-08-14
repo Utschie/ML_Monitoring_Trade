@@ -110,6 +110,8 @@ class Env():#定义一个环境用来与网络交互
 def jiangwei(state,capital,mean_invested):
     frametime = state[0][0]
     frametime = math.log(frametime,10)#用10为底的对数对frametime缩放
+    if frametime != 0.0:
+        frametime = math.log(frametime,10)#用10为底的对数对frametime缩放
     state=np.delete(state, 0, axis=-1)
     length = len(state)#出赔率的公司数
     percenttilelist = [np.percentile(state,i,axis = 0)[1:4] for i in range(0,105,5)]
