@@ -13,6 +13,7 @@
 #然后尝试改用doubleDQN
 #即时最小返还率增量作为revenue的话，那么loss不应该是这样的，因为返还率增量和没意义啊！或者改revenue或者改loss
 #归一化要用整个数据集里的最大值和最小值而不是单次转移里的最大值和最小值
+#用每一步行动的最小可能收益，所以计算起来不用平均
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
 import tensorflow as tf
@@ -38,10 +39,6 @@ class Env():#定义一个环境用来与网络交互
         self.gesamt_revenue = 0#初始化实际收益
         self.action_counter=0.0
         self.wrong_action_counter = 0.0
-        self.mean_host = [0.0,0.0]#保存已买主胜的平均赔率和投入
-        self.mean_fair = [0.0,0.0]#保存已买平局的平均赔率和投入
-        self.mean_guest = [0.0,0.0]#保存已买客胜的平均赔率和投入
-        self.mean_invested = self.mean_host+self.mean_fair+self.mean_guest
         #传入原始数据，为一个不定长张量对象
         print('环境初始化完成')
      
@@ -61,24 +58,14 @@ class Env():#定义一个环境用来与网络交互
         max_host = self.statematrix[tf.argmax(self.statematrix)[2].numpy()][2]
         max_fair = self.statematrix[tf.argmax(self.statematrix)[3].numpy()][3]
         max_guest = self.statematrix[tf.argmax(self.statematrix)[4].numpy()][4]
-        peilv = [max_host,max_fair,max_guest]#得到最高赔率向量
-        peilv_action = list(zip(peilv,action))
         if self.capital >= sum(action):#如果剩下的资本还够执行行动，则capital里扣除本次交易费用
             self.capital = self.capital-sum(action)#资金变少
             self.action_counter+=1
-            host_middle = self.mean_host[1]+peilv_action[0][1]#即新的主胜投入
-            self.mean_host = [(np.prod(self.mean_host)+np.prod(peilv_action[0]))/(host_middle+0.00000000001),host_middle]
-            fair_middle = self.mean_fair[1]+peilv_action[1][1]
-            self.mean_fair = [(np.prod(self.mean_fair)+np.prod(peilv_action[1]))/(fair_middle+0.00000000001),fair_middle]
-            guest_middle = self.mean_guest[1]+peilv_action[2][1]
-            self.mean_guest = [(np.prod(self.mean_guest)+np.prod(peilv_action[2]))/(guest_middle+0.00000000001),guest_middle]
-            self.mean_invested = self.mean_host+self.mean_fair+self.mean_guest
-            now_cost = host_middle+fair_middle+guest_middle#新的总投入
-            now_host_reward = np.prod(self.mean_host)-now_cost
-            now_fair_reward = np.prod(self.mean_fair)-now_cost#如果平
-            now_guest_reward = np.prod(self.mean_guest)-now_cost#如果客胜
-            now_reward = min(now_host_reward,now_fair_reward,now_guest_reward)#本次行动后的最小绝对收益
-            revenue = now_reward#本步的绝对收益作为revenue返回
+            host_reward = max_host*action[0]-sum(action)
+            fair_reward = max_fair*action[1]-sum(action)
+            guest_reward = max_guest*action[2]-sum(action)
+            min_reward = min(host_reward,fair_reward,guest_reward )
+            revenue = min_reward#本步的绝对收益作为revenue返回
             if self.result.host > self.result.guest:
                 reward = max_host*action[0]-sum(action)
             elif self.result.host == self.result.guest:
@@ -89,7 +76,9 @@ class Env():#定义一个环境用来与网络交互
         else:#如果不够执行行动
             self.action_counter+=1
             self.wrong_action_counter+=1
-            revenue = -1.0#由于没有行动，原收益并未改变
+            revenue = -100#由于没有行动，原收益并未改变
+        if action ==[0,0,0]:
+            revenue = -0.2#如果不行动也扣钱
         #计算本次行动的收益
         return revenue
        
@@ -108,14 +97,14 @@ class Env():#定义一个环境用来与网络交互
 
 
 
-def jiangwei(state,capital,mean_invested):
+def jiangwei(state,capital):
     frametime = state[0][0]/80000.0#frametime最多80000秒之前开赔
     state=np.delete(state, 0, axis=-1)
     length = len(state)#出赔率的公司数
     percenttilelist = [np.percentile(state,i,axis = 0)[1:4] for i in range(0,105,5)]
     percentile = np.vstack(percenttilelist)#把当前状态的0%-100%分位数放到一个矩阵里
-    state = tf.concat((percentile.flatten()/25.0,[capital],[frametime],mean_invested,[length]),-1)#除以25是因为一般来讲赔率最高开到25
-    state = tf.reshape(state,(1,72))#63个分位数数据+8个capital,frametime和mean_invested,length共72个输入
+    state = tf.concat((percentile.flatten()/25.0,[capital],[frametime],[length]),-1)#除以25是因为一般来讲赔率最高开到25
+    state = tf.reshape(state,(1,66))#63个分位数数据+3个capital,frametime和,length共66个输入
     return state
     
 
@@ -192,7 +181,7 @@ if __name__ == "__main__":
             while True:
                 if (step_counter % 1000 ==0) and (epsilon>0):
                     epsilon = epsilon-0.01#也就是经过10万次转移epsilon降到0
-                state = jiangwei(state,capital,bianpan_env.mean_invested)#先降维，并整理形状，把capital放进去
+                state = jiangwei(state,capital)#先降维，并整理形状，把capital放进去
                 action_index = eval_Q.predict(state)[0]#获得行动q_value
                 if random.random() < epsilon:#如果落在随机区域
                     action = random.choice(range(0,1331))#action是一个坐标
@@ -201,7 +190,7 @@ if __name__ == "__main__":
                 revenue = bianpan_env.revenue(actions_table[action])#根据行动和是否终赔计算收益
                 next_state,frametime,done,next_capital = bianpan_env.get_state()#获得下一个状态,终止状态的next_state为0矩阵
                 if done:
-                    replay_buffer.append((state, action, revenue,jiangwei(next_state,next_capital,bianpan_env.mean_invested),1))
+                    replay_buffer.append((state, action, revenue,jiangwei(next_state,next_capital),1))
                     with summary_writer.as_default():
                         tf.summary.scalar('Zinsen',bianpan_env.get_zinsen(),step = bisai_counter)
                         tf.summary.scalar('rest_capital',bianpan_env.gesamt_revenue-bianpan_env.gesamt_touzi+500,step = bisai_counter)
@@ -209,7 +198,7 @@ if __name__ == "__main__":
                         tf.summary.scalar('investion_rate',bianpan_env.gesamt_touzi/500.0,step = bisai_counter)
                         break
                 else:#如果没终盘
-                    replay_buffer.append((state, action, revenue,jiangwei(next_state,next_capital,bianpan_env.mean_invested),0))
+                    replay_buffer.append((state, action, revenue,jiangwei(next_state,next_capital),0))
                 #这里需要标识一下终止状态，钱花光了就终止了
                 state = next_state
                 capital = next_capital
