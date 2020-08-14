@@ -1,5 +1,5 @@
 '''
-分位数输入+即时最小返还率增量+终赔不参与投资+错误行动-0.5+frametime对数缩小+adam(0.001,amsgrad=True)+gamma(0.99999)+50万次转移转贪心
+分位数输入+即时最小返还率增量+终赔不参与投资+错误行动-0.5+frametime对数缩小+adam(0.001,amsgrad=True)+gamma(0.01)+50万次转移转贪心
 近30万个参数
 '''
 #batch_size=500时，用cpu跑大概5-6秒学习一次
@@ -162,7 +162,7 @@ if __name__ == "__main__":
     #########设置超参数
     learning_rate = 0.001#学习率
     opt = tf.keras.optimizers.Adam(learning_rate,amsgrad = True)#设定最优化方法
-    gamma = 0.99999#0后面至少5个9才能让1万次转移后衰减率在90%
+    gamma = 0.01#0后面至少5个9才能让1万次转移后衰减率在90%
     epsilon = 1.            # 探索起始时的探索率
     #final_epsilon = 0.01            # 探索终止时的探索率
     batch_size = 100
@@ -198,7 +198,7 @@ if __name__ == "__main__":
                 tf.summary.scalar("Capital", capital,step = bisai_counter)
             while True:
                 if (step_counter % 1000 ==0) and (epsilon>0):
-                    epsilon = epsilon-0.001#也就是经过100万次转移epsilon降到0
+                    epsilon = epsilon-0.01#也就是经过10万次转移epsilon降到0
                 state = jiangwei(state,capital,bianpan_env.mean_invested)#先降维，并整理形状，把capital放进去
                 action_index = eval_Q.predict(state)[0]#获得行动q_value
                 if random.random() < epsilon:#如果落在随机区域
