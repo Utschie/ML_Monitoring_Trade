@@ -153,7 +153,7 @@ if __name__ == "__main__":
     summary_writer = tf.summary.create_file_writer('./tensorboard_0.4_mini') #在代码所在文件夹同目录下创建tensorboard文件夹（本代码在jupyternotbook里跑，所以在jupyternotebook里可以看到）
     #########设置超参数
     learning_rate = 0.01#学习率
-    opt = tf.keras.optimizers.Adam(learning_rate)#设定最优化方法
+    opt = tf.keras.optimizers.Adam(learning_rate,amsgrad=True)#设定最优化方法
     epsilon = 1.            # 探索起始时的探索率
     #final_epsilon = 0.01            # 探索终止时的探索率
     batch_size = 500
@@ -186,7 +186,7 @@ if __name__ == "__main__":
                 tf.summary.scalar("Capital", capital,step = bisai_counter)
             while True:
                 if (step_counter % 1000 ==0) and (epsilon>0.001):
-                    epsilon = epsilon-0.005#也就是经过20万次转移epsilon降到0
+                    epsilon = epsilon-0.001#也就是经过100万次转移epsilon降到0
                 if epsilon<0.001:#降到0以后保持0.001的随机率
                     epsilon = 0.001
                 state = jiangwei(state,capital,bianpan_env.mean_invested)#先降维，并整理形状，把capital放进去
