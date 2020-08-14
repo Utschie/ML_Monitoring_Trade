@@ -12,6 +12,7 @@
 #把memory_size调到50万看一下效果
 #然后尝试改用doubleDQN
 #即时最小返还率增量作为revenue的话，那么loss不应该是这样的，因为返还率增量和没意义啊！或者改revenue或者改loss
+#归一化要用整个数据集里的最大值和最小值而不是单次转移里的最大值和最小值
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
 import tensorflow as tf
