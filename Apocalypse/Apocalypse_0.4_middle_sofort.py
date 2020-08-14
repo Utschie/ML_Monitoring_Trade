@@ -118,7 +118,8 @@ def jiangwei(state,capital,mean_invested):
         frametime = math.log(frametime,10)#用10为底的对数对frametime缩放
     state=np.delete(state, 0, axis=-1)
     length = len(state)#出赔率的公司数
-    percentile = np.vstack(np.percentile(state,i,axis = 0)[1:4] for i in range(0,105,5))#把当前状态的0%-100%分位数放到一个矩阵里
+    percenttilelist = [np.percentile(state,i,axis = 0)[1:4] for i in range(0,105,5)]
+    percentile = np.vstack(percenttilelist)#把当前状态的0%-100%分位数放到一个矩阵里
     state = tf.concat((percentile.flatten(),[capital],[frametime],mean_invested,[length]),-1)
     state = tf.reshape(state,(1,72))#63个分位数数据+8个capital,frametime和mean_invested,length共72个输入
     return state
@@ -127,7 +128,7 @@ def jiangwei(state,capital,mean_invested):
  
 if __name__ == "__main__":
     start0 = time.time()
-    summary_writer = tf.summary.create_file_writer('./tensorboard_0.3_mini') #在代码所在文件夹同目录下创建tensorboard文件夹（本代码在jupyternotbook里跑，所以在jupyternotebook里可以看到）
+    summary_writer = tf.summary.create_file_writer('./tensorboard_0.4_middle_sofort') #在代码所在文件夹同目录下创建tensorboard文件夹（本代码在jupyternotbook里跑，所以在jupyternotebook里可以看到）
     #########设置超参数
     learning_rate = 0.01#学习率
     opt = tf.keras.optimizers.Adam(learning_rate)#设定最优化方法
@@ -145,7 +146,7 @@ if __name__ == "__main__":
     replay_buffer = deque(maxlen=memory_size)#建立一个记忆回放区
     eval_Q = Q_Network()#初始化行动Q网络
     target_Q = Q_Network()#初始化目标Q网络
-    weights_path = 'D:\\data\\eval_Q_weights_mini_0.3.ckpt'
+    weights_path = 'D:\\data\\eval_Q_weights_0.4_middle_sofort.ckpt'
     filefolderlist = os.listdir('F:\\cleaned_data_20141130-20160630')
     ################下面是单场比赛的流程
 
