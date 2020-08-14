@@ -1,5 +1,5 @@
 '''
-即时收益+可变长度输入+终赔不参与投资+非标准化+100万次转移转贪心+-100负收益+gamma(1.0)不折现+Adam(0.01)
+即时收益+可变长度输入+终赔不参与投资+非标准化+100万次转移转贪心+-100负收益+gamma(1.0)不折现+Adam(0.001)
 '''
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
@@ -130,7 +130,7 @@ if __name__ == "__main__":
     start0 = time.time()
     summary_writer = tf.summary.create_file_writer('./tensorboard_0.4_middle_sofort') #在代码所在文件夹同目录下创建tensorboard文件夹（本代码在jupyternotbook里跑，所以在jupyternotebook里可以看到）
     #########设置超参数
-    learning_rate = 0.01#学习率
+    learning_rate = 0.001#学习率
     opt = tf.keras.optimizers.Adam(learning_rate)#设定最优化方法
     gamma = 1.0
     epsilon = 1.            # 探索起始时的探索率

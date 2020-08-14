@@ -1,5 +1,5 @@
 '''
-延迟收益+终赔不参与投资+可变长度输入+Adam(0.01)+错误行动-100+gamma(1.0,即无衰减)+20万次转移转贪心+保留0.001随机率
+延迟收益+终赔不参与投资+可变长度输入+Adam(0.001)+错误行动-100+gamma(1.0,即无衰减)+20万次转移转贪心+保留0.001随机率
 +归一化
 '''
 import os
@@ -135,7 +135,7 @@ if __name__ == "__main__":
     start0 = time.time()
     summary_writer = tf.summary.create_file_writer('./tensorboard_0.4_mini') #在代码所在文件夹同目录下创建tensorboard文件夹（本代码在jupyternotbook里跑，所以在jupyternotebook里可以看到）
     #########设置超参数
-    learning_rate = 0.01#学习率
+    learning_rate = 0.001#学习率
     opt = tf.keras.optimizers.Adam(learning_rate)#设定最优化方法
     epsilon = 1.            # 探索起始时的探索率
     #final_epsilon = 0.01            # 探索终止时的探索率
