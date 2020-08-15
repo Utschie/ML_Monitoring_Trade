@@ -1,8 +1,6 @@
 '''
-最小返还率增量+终赔不参与投资+错误行动-1.0+标准化+Nadam(0.0001)+gamma(0.8)
-每场比赛最开始时按着返还率计算而不是收益率，因为初赔时投入为0，最低收益率也为0，而其一旦买入则最低收益率为负数，那么很可能就啥也不买了
+即时收益+可变长度输入+终赔不参与投资+归一化+100万次转移转贪心+-100负收益+gamma(1.0)不折现+Adam(0.001)
 '''
-#现在看起来是最有希望的一个
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
 import tensorflow as tf
@@ -12,9 +10,9 @@ import pandas as pd
 import csv
 import random
 import re
-from sklearn.decomposition import TruncatedSVD
 import time
 import sklearn
+import math
 class Env():#定义一个环境用来与网络交互
     def __init__(self,filepath,result):
         self.result = result#获得赛果
@@ -26,7 +24,6 @@ class Env():#定义一个环境用来与网络交互
         self.episode = self.episode_generator(self.filepath)#通过load_toNet函数得到当场比赛的episode生成器对象
         self.capital = 500#每场比赛有500欧可支配资金
         self.gesamt_revenue = 0#初始化实际收益
-        self.statematrix = np.zeros((410,9))#初始化状态矩阵
         self.action_counter=0.0
         self.wrong_action_counter = 0.0
         self.mean_host = [0.0,0.0]#保存已买主胜的平均赔率和投入
@@ -41,15 +38,9 @@ class Env():#定义一个环境用来与网络交互
         frametimelist=data.frametime.value_counts().sort_index(ascending=False).index#将frametime的值读取成列表
         for i in frametimelist:#其中frametimelist里的数据是整型
             state = data.groupby('frametime').get_group(i)#从第一次变盘开始得到当次转移
-            state = np.array(state)#转成numpy多维数组
+            statematrix = np.array(state)#转成numpy多维数组
             #在填充成矩阵之前需要知道所有数据中到底有多少个cid
-            statematrix=np.zeros((410,9))##statematrix应该是一个（1,410,8）的张量,元素为一个生成410*9的0矩阵（后来由于降维则不用这么用了）
-            for j in state:
-                cid = j[1]#得到浮点数类型的cid
-                index = self.cidlist.index(cid)
-                statematrix[index] = j#把对应矩阵那一行给它
-            statematrix=np.delete(statematrix, 1, axis=-1)#去掉cid后，最后得到一个1*410*8的张量，这里axis是2或者-1（代表最后一个）都行
-            self.statematrix = statematrix#把状态矩阵保存在环境对象里，用来算收益
+            self.statematrix=np.delete(statematrix, 1, axis=-1)#去掉cid后，最后得到一个1*410*8的张量，这里axis是2或者-1（代表最后一个）都行
             self.frametime = i
             yield self.statematrix,self.frametime
 
@@ -63,11 +54,6 @@ class Env():#定义一个环境用来与网络交互
         if self.capital >= sum(action):#如果剩下的资本还够执行行动，则capital里扣除本次交易费用
             self.capital = self.capital-sum(action)#资金变少
             self.action_counter+=1
-            bevor_cost = self.mean_host[1]+self.mean_fair[1]+self.mean_guest[1]#之前的投入
-            bevor_host_reward_rate = (np.prod(self.mean_host))/(bevor_cost+0.00000000001)#如果主胜之前的投入的返还率
-            bevor_fair_reward_rate = (np.prod(self.mean_fair))/(bevor_cost+0.00000000001)#如果平
-            bevor_guest_reward_rate = (np.prod(self.mean_guest))/(bevor_cost+0.00000000001)#如果客胜
-            bevor_reward = min(bevor_host_reward_rate,bevor_fair_reward_rate,bevor_guest_reward_rate)#取其中最小值最为之前的返还率
             host_middle = self.mean_host[1]+peilv_action[0][1]#即新的主胜投入
             self.mean_host = [(np.prod(self.mean_host)+np.prod(peilv_action[0]))/(host_middle+0.00000000001),host_middle]
             fair_middle = self.mean_fair[1]+peilv_action[1][1]
@@ -75,23 +61,17 @@ class Env():#定义一个环境用来与网络交互
             guest_middle = self.mean_guest[1]+peilv_action[2][1]
             self.mean_guest = [(np.prod(self.mean_guest)+np.prod(peilv_action[2]))/(guest_middle+0.00000000001),guest_middle]
             self.mean_invested = self.mean_host+self.mean_fair+self.mean_guest
-            now_cost = host_middle+fair_middle+guest_middle#新的总投入
-            now_host_reward_rate = (np.prod(self.mean_host))/(now_cost+0.00000000001)
-            now_fair_reward_rate = (np.prod(self.mean_fair))/(now_cost+0.00000000001)#如果平
-            now_guest_reward_rate = (np.prod(self.mean_guest))/(now_cost+0.00000000001)#如果客胜
-            now_reward = min(now_host_reward_rate,now_fair_reward_rate,now_guest_reward_rate)#本次行动后的最小返还率
-            revenue = now_reward-bevor_reward#本步的返还率增量作为revenue返回
             if self.result.host > self.result.guest:
-                reward = max_host*action[0]
+                revenue = max_host*action[0]-sum(action)
             elif self.result.host == self.result.guest:
-                reward = max_fair*action[1]
+                revenue = max_fair*action[1]-sum(action)
             else:
-                reward = max_guest*action[2]
-            self.gesamt_revenue+=reward#计算实际货币收入并保存起来
+                revenue = max_guest*action[2]-sum(action)
+            self.gesamt_revenue+=revenue#最终计算收益时在加上，以表示所有赢得钱，因为后面要除以总投资
         else:#如果不够执行行动
             self.action_counter+=1
             self.wrong_action_counter+=1
-            revenue = -1.0#设为-1.0的返还率增量看看效果
+            revenue = -100
         #计算本次行动的收益
         return revenue
        
@@ -104,32 +84,26 @@ class Env():#定义一个环境用来与网络交互
     
     def get_zinsen(self):
         self.gesamt_touzi =500.0-self.capital
-        zinsen  = float(self.gesamt_revenue-self.gesamt_touzi)/float(self.gesamt_touzi+0.000001)
+        zinsen  = float(self.gesamt_revenue)/float(self.gesamt_touzi+0.000001)
         return zinsen#这里必须是500.0，否则出来的是结果自动取整数部分，也就是0
-
-
-
+        
 
 class Q_Network(tf.keras.Model):
     def __init__(self,
-                      n_companies=18,
+                      n_companies=72,
                       n_actions=1331):#有默认值的属性必须放在没默认值属性的后面
         self.n_companies = n_companies
         self.n_actions = n_actions
         super().__init__()#调用tf.keras.Model的类初始化方法
-        self.dense1 = tf.keras.layers.Dense(units=32, activation=tf.nn.relu)#输入层
-        self.dense2 = tf.keras.layers.Dense(units=32, activation=tf.nn.relu)#一个隐藏层
-        self.dense3 = tf.keras.layers.Dense(units=32, activation=tf.nn.relu)
-        self.dense4 = tf.keras.layers.Dense(units=32, activation=tf.nn.relu)
-        self.dense5 = tf.keras.layers.Dense(units=32, activation=tf.nn.relu)
+        self.dense1 = tf.keras.layers.Dense(units=144, activation=tf.nn.relu)#输入层
+        self.dense2 = tf.keras.layers.Dense(units=144, activation=tf.nn.relu)#一个隐藏层
+        self.dense3 = tf.keras.layers.Dense(units=144, activation=tf.nn.relu)
         self.dense6 = tf.keras.layers.Dense(units=self.n_actions)#输出层代表着在当前最大赔率前，买和不买的六种行动的价值
 
     def call(self,state): #输入从env那里获得的statematrix
         x = self.dense1(state)#输出神经网络
         x = self.dense2(x)#
         x = self.dense3(x)
-        x = self.dense4(x)
-        x = self.dense5(x)
         q_value = self.dense6(x)#
         return q_value#q_value是一个（1,1331）的张量
 
@@ -138,43 +112,39 @@ class Q_Network(tf.keras.Model):
         return tf.argmax(q_values,axis=-1)#tf.argmax函数是返回最大数值的下标，用来对应动作
     
 
-
 def jiangwei(state,capital,mean_invested):
-    tsvd = TruncatedSVD(1)
-    max_host = state[tf.argmax(state)[2].numpy()][2]
-    max_fair = state[tf.argmax(state)[3].numpy()][3]
-    max_guest = state[tf.argmax(state)[4].numpy()][4]
-    max = [max_host,max_fair,max_guest]
-    frametime = state[0][0]#取出frametime时间
-    state=np.delete(state, 0, axis=-1)#把frametime去掉，则state变成了（410,7）的矩阵
-    state = tsvd.fit_transform(np.transpose(state))#降维成（410,1）的矩阵
-    state = sklearn.preprocessing.scale(state)#数据标准化一下
-    state = tf.concat((state.flatten(),[capital],[frametime],mean_invested,max),-1)#把降好维的state和capital与frametime连在一起，此时是412长度的一维张量
-    state = tf.reshape(state,(1,18))
+    frametime = state[0][0]/80000.0#frametime最多80000秒之前开赔
+    state=np.delete(state, 0, axis=-1)
+    length = len(state)#出赔率的公司数
+    percenttilelist = [np.percentile(state,i,axis = 0)[1:4] for i in range(0,105,5)]
+    percentile = np.vstack(percenttilelist)#把当前状态的0%-100%分位数放到一个矩阵里
+    state = tf.concat((percentile.flatten()/25.0,[capital],[frametime],mean_invested,[length]),-1)#除以25是因为一般来讲赔率最高开到25
+    state = tf.reshape(state,(1,72))#63个分位数数据+8个capital,frametime和mean_invested,length共72个输入
     return state
+
 
  
 if __name__ == "__main__":
     start0 = time.time()
-    summary_writer = tf.summary.create_file_writer('./tensorboard_0.3.2_mini') #在代码所在文件夹同目录下创建tensorboard文件夹（本代码在jupyternotbook里跑，所以在jupyternotebook里可以看到）
+    summary_writer = tf.summary.create_file_writer('./tensorboard_0.4_middle_sofort') #在代码所在文件夹同目录下创建tensorboard文件夹（本代码在jupyternotbook里跑，所以在jupyternotebook里可以看到）
     #########设置超参数
-    learning_rate = 0.0001#学习率
-    opt = tf.keras.optimizers.Nadam(learning_rate)#设定最优化方法
-    gamma = 0.8
+    learning_rate = 0.001#学习率
+    opt = tf.keras.optimizers.Adam(learning_rate)#设定最优化方法
+    gamma = 1.0
     epsilon = 1.            # 探索起始时的探索率
     #final_epsilon = 0.01            # 探索终止时的探索率
-    batch_size = 500
+    batch_size = 100
     resultlist = pd.read_csv('D:\\data\\results_20141130-20160630.csv',index_col = 0)#得到赛果和比赛ID的对应表
-    actions_table = [[a,b,c] for a in range(0.0,55.0,5.0) for b in range(0.0,55.0,5.0) for c in range(0.0,55.0,5.0)]#给神经网络输出层对应一个行动表
+    actions_table = [[a,b,c] for a in range(0,55,5) for b in range(0,55,5) for c in range(0,55,5)]#给神经网络输出层对应一个行动表
     step_counter = 0
     learn_step_counter = 0
     target_repalce_counter = 0 
     bisai_counter = 1
-    memory_size = 10000
+    memory_size = 500000
     replay_buffer = deque(maxlen=memory_size)#建立一个记忆回放区
     eval_Q = Q_Network()#初始化行动Q网络
     target_Q = Q_Network()#初始化目标Q网络
-    weights_path = 'D:\\data\\eval_Q_weights_mini_0.3.2.ckpt'
+    weights_path = 'D:\\data\\eval_Q_weights_0.4_middle_sofort.ckpt'
     filefolderlist = os.listdir('F:\\cleaned_data_20141130-20160630')
     ################下面是单场比赛的流程
 
@@ -196,7 +166,7 @@ if __name__ == "__main__":
                 tf.summary.scalar("Capital", capital,step = bisai_counter)
             while True:
                 if (step_counter % 1000 ==0) and (epsilon>0):
-                    epsilon = epsilon-0.002#也就是经过50万次转移epsilon降到0
+                    epsilon = epsilon-0.001#也就是经过100万次转移epsilon降到0
                 state = jiangwei(state,capital,bianpan_env.mean_invested)#先降维，并整理形状，把capital放进去
                 action_index = eval_Q.predict(state)[0]#获得行动q_value
                 if random.random() < epsilon:#如果落在随机区域
@@ -209,7 +179,7 @@ if __name__ == "__main__":
                     replay_buffer.append((state, action, revenue,jiangwei(next_state,next_capital,bianpan_env.mean_invested),1))
                     with summary_writer.as_default():
                         tf.summary.scalar('Zinsen',bianpan_env.get_zinsen(),step = bisai_counter)
-                        tf.summary.scalar('rest_capital',bianpan_env.gesamt_revenue-bianpan_env.gesamt_touzi+500,step = bisai_counter)
+                        tf.summary.scalar('rest_capital',bianpan_env.gesamt_revenue+500,step = bisai_counter)
                         tf.summary.scalar('wrong_action_rate',bianpan_env.wrong_action_counter/bianpan_env.action_counter,step = bisai_counter)
                         tf.summary.scalar('investion_rate',bianpan_env.gesamt_touzi/500.0,step = bisai_counter)
                         break

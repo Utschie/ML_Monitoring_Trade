@@ -135,7 +135,7 @@ if __name__ == "__main__":
     summary_writer = tf.summary.create_file_writer('./tensorboard_0.4_middle_delay_test') #在代码所在文件夹同目录下创建tensorboard文件夹（本代码在jupyternotbook里跑，所以在jupyternotebook里可以看到）
     #########设置超参数
     #final_epsilon = 0.01            # 探索终止时的探索率
-    epsilon = 0.0 
+    epsilon = 0.0003
     resultlist = pd.read_csv('D:\\data\\results_20141130-20160630.csv',index_col = 0)#得到赛果和比赛ID的对应表
     actions_table = [[a,b,c] for a in range(0,55,5) for b in range(0,55,5) for c in range(0,55,5)]#给神经网络输出层对应一个行动表
     bisai_counter = 1
