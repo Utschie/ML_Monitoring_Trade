@@ -16,6 +16,7 @@
 #归一化要用整个数据集里的最大值和最小值而不是单次转移里的最大值和最小值
 #用每一步行动的最小可能收益，所以计算起来不用平均
 #奇怪的是它只用10万次转移就收敛了
+#加入了无行动率的指标，用来测算每场比赛，不行动的比例
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
 import tensorflow as tf
@@ -40,6 +41,7 @@ class Env():#定义一个环境用来与网络交互
         self.capital = 500#每场比赛有500欧可支配资金
         self.gesamt_revenue = 0#初始化实际收益
         self.action_counter=0.0
+        self.no_action_counter = 0.0
         self.wrong_action_counter = 0.0
         #传入原始数据，为一个不定长张量对象
         print('环境初始化完成')
@@ -80,6 +82,7 @@ class Env():#定义一个环境用来与网络交互
             self.wrong_action_counter+=1
             revenue = -50#由于错误行动，扣50块钱
         if action ==[0,0,0]:
+            self.no_action_counter+=1#计算无行动率
             revenue = -5#为了防止不行动，如果不行动也扣钱
         #计算本次行动的收益
         return revenue
@@ -198,6 +201,7 @@ if __name__ == "__main__":
                         tf.summary.scalar('rest_capital',bianpan_env.gesamt_revenue+500,step = bisai_counter)
                         tf.summary.scalar('wrong_action_rate',bianpan_env.wrong_action_counter/bianpan_env.action_counter,step = bisai_counter)
                         tf.summary.scalar('investion_rate',bianpan_env.gesamt_touzi/500.0,step = bisai_counter)
+                        tf.summary.scalar('no_action_rate',bianpan_env.no_action_counter/bianpan_env.action_counter,step = bisai_counter)
                         break
                 else:#如果没终盘
                     replay_buffer.append((state, action, revenue,jiangwei(next_state,next_capital),0))

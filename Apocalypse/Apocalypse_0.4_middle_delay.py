@@ -3,6 +3,7 @@
 +归一化+3层
 '''
 #防止不行动的方法有两种，或者保留一定的随机策略率，或者就是给不行动也扣一些钱
+#加入了无行动率的指标，用来测算每场比赛，不行动的比例
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
 import tensorflow as tf
@@ -28,6 +29,7 @@ class Env():#定义一个环境用来与网络交互
         self.gesamt_revenue = 0#初始化实际收益
         self.invested = [[(0.,0.),(0.,0.),(0.,0.)]]#已投入资本，每个元素记录着一次投资的赔率和投入，分别对应胜平负三种赛果的投入，这里不用np.array因为麻烦
         self.action_counter=0.0
+        self.no_action_counter = 0.0
         self.wrong_action_counter = 0.0
         self.mean_host = [0.0,0.0]#保存已买主胜的平均赔率和投入
         self.mean_fair = [0.0,0.0]#保存已买平局的平均赔率和投入
@@ -82,6 +84,7 @@ class Env():#定义一个环境用来与网络交互
             self.capital += revenue#该局游戏的capital随着操作减少
             self.gesamt_revenue = self.gesamt_revenue + revenue
         if action ==[0,0,0]:
+            self.no_action_counter+=1#计算无行动率
             revenue = -5#不行动扣5块钱
         return revenue
         
@@ -190,6 +193,7 @@ if __name__ == "__main__":
                         tf.summary.scalar('rest_capital',bianpan_env.gesamt_revenue+500,step = bisai_counter)
                         tf.summary.scalar('wrong_action_rate',bianpan_env.wrong_action_counter/bianpan_env.action_counter,step = bisai_counter)
                         tf.summary.scalar('investion_rate',bianpan_env.gesamt_touzi/500.0,step = bisai_counter)
+                        tf.summary.scalar('no_action_rate',bianpan_env.no_action_counter/bianpan_env.action_counter,step = bisai_counter)
                         break
                 else:#如果没终盘
                     replay_buffer.append((state, action, revenue,jiangwei(next_state,next_capital,bianpan_env.mean_invested),0))
