@@ -1,6 +1,7 @@
 '''
-分位数输入+即时最小绝对收益策略+终赔不参与投资+错误行动-50+frametime对数缩小+adam(0.00001,amsgrad=True)+gamma(1.0)+50万次转移转贪心
-近30万个参数
+分位数输入+即时最小绝对收益策略+终赔不参与投资+错误行动-50+frametime对数缩小+adam(0.00001,amsgrad=True)+gamma(0.999999)+50万次转移转贪心
+近30万个参数+不行动扣5块钱
+
 '''
 #batch_size=500时，用cpu跑大概5-6秒学习一次
 #batch_size=500时，用Gpu跑大概17-18秒学习一次
@@ -77,10 +78,8 @@ class Env():#定义一个环境用来与网络交互
             self.action_counter+=1
             self.wrong_action_counter+=1
             revenue = -50#由于错误行动，扣50块钱
-        '''
         if action ==[0,0,0]:
             revenue = -5#为了防止不行动，如果不行动也扣钱
-        '''
         #计算本次行动的收益
         return revenue
        
@@ -146,7 +145,7 @@ if __name__ == "__main__":
     #########设置超参数
     learning_rate = 0.00001#学习率
     opt = tf.keras.optimizers.Adam(learning_rate,amsgrad = True)#设定最优化方法
-    gamma = 1.0#0后面至少5个9才能让1万次转移后衰减率在90%
+    gamma = 0.999999#0后面至少5个9才能让1万次转移后衰减率在90%
     epsilon = 1.            # 探索起始时的探索率
     #final_epsilon = 0.01            # 探索终止时的探索率
     batch_size = 150

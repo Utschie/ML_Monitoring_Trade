@@ -1,5 +1,5 @@
 '''
-延迟收益+终赔不参与投资+可变长度输入+Adam(0.00001)+错误行动-100+gamma(1.0,即无衰减)+100万次转移转贪心+不行动扣5块钱
+延迟收益+终赔不参与投资+可变长度输入+Adam(0.00001)+错误行动-100+gamma(0.999999)+100万次转移转贪心+不行动扣5块钱
 +归一化+3层
 '''
 #防止不行动的方法有两种，或者保留一定的随机策略率，或者就是给不行动也扣一些钱
@@ -139,6 +139,7 @@ if __name__ == "__main__":
     summary_writer = tf.summary.create_file_writer('./tensorboard_0.4_middle_delay') #在代码所在文件夹同目录下创建tensorboard文件夹（本代码在jupyternotbook里跑，所以在jupyternotebook里可以看到）
     #########设置超参数
     learning_rate = 0.00001#学习率
+    gamma = 0.999999
     opt = tf.keras.optimizers.Adam(learning_rate,amsgrad = True)#设定最优化方法
     epsilon = 1.            # 探索起始时的探索率
     #final_epsilon = 0.01            # 探索终止时的探索率
@@ -206,7 +207,7 @@ if __name__ == "__main__":
                     #y_pred = tf.reduce_sum(tf.squeeze(eval_Q(np.array(batch_state)))*tf.one_hot(np.array(batch_action),depth=1331,on_value=1.0, off_value=0.0),axis=1)#one_hot来生成对应位置为1的矩阵，depth是列数，reduce_sum(axis=1)来求各行和转成一维张量
                     #tf.squeeze是用来去掉张量里所有为1的维度
                     with tf.GradientTape() as tape:
-                        loss =  tf.keras.losses.mean_squared_error(y_true = batch_revenue+tf.reduce_max(tf.squeeze(target_Q(np.array(batch_next_state))),axis = -1)*(1-np.array(batch_done))
+                        loss =  tf.keras.losses.mean_squared_error(y_true = batch_revenue+gamma*tf.reduce_max(tf.squeeze(target_Q(np.array(batch_next_state))),axis = -1)*(1-np.array(batch_done))
                         ,y_pred =tf.reduce_sum(tf.squeeze(eval_Q(np.array(batch_state)))*tf.one_hot(np.array(batch_action),depth=1331,on_value=1.0, off_value=0.0),axis=1))#y_true和y_pred都是第0维为batch_size的张量
                     grads = tape.gradient(loss, eval_Q.variables)
                     with summary_writer.as_default():

@@ -1,5 +1,5 @@
 '''
-即时收益+可变长度输入+终赔不参与投资+归一化+100万次转移转贪心+-100负收益+gamma(1.0)不折现+Adam(0.00001)
+即时收益+可变长度输入+终赔不参与投资+归一化+100万次转移转贪心+-100负收益+gamma(0.999999)不折现+Adam(0.00001)
 '''
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
@@ -130,7 +130,7 @@ if __name__ == "__main__":
     #########设置超参数
     learning_rate = 0.00001#学习率
     opt = tf.keras.optimizers.Adam(learning_rate,amsgrad = True)#设定最优化方法
-    gamma = 1.0
+    gamma = 0.999999
     epsilon = 1.            # 探索起始时的探索率
     #final_epsilon = 0.01            # 探索终止时的探索率
     batch_size = 100
