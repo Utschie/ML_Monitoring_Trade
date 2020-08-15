@@ -15,6 +15,7 @@
 #即时最小返还率增量作为revenue的话，那么loss不应该是这样的，因为返还率增量和没意义啊！或者改revenue或者改loss
 #归一化要用整个数据集里的最大值和最小值而不是单次转移里的最大值和最小值
 #用每一步行动的最小可能收益，所以计算起来不用平均
+#奇怪的是它只用10万次转移就收敛了
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
 import tensorflow as tf
@@ -68,18 +69,20 @@ class Env():#定义一个环境用来与网络交互
             min_reward = min(host_reward,fair_reward,guest_reward )
             revenue = min_reward#本步的绝对收益作为revenue返回
             if self.result.host > self.result.guest:
-                reward = max_host*action[0]-sum(action)
+                reward = max_host*action[0]-sum(action)#单步利润
             elif self.result.host == self.result.guest:
                 reward = max_fair*action[1]-sum(action)
             else:
                 reward = max_guest*action[2]-sum(action)
-            self.gesamt_revenue+=reward#计算实际货币收入并保存起来
+            self.gesamt_revenue+=reward
         else:#如果不够执行行动
             self.action_counter+=1
             self.wrong_action_counter+=1
             revenue = -50#由于错误行动，扣50块钱
+        '''
         if action ==[0,0,0]:
             revenue = -5#为了防止不行动，如果不行动也扣钱
+        '''
         #计算本次行动的收益
         return revenue
        
@@ -181,7 +184,7 @@ if __name__ == "__main__":
                 tf.summary.scalar("Capital", capital,step = bisai_counter)
             while True:
                 if (step_counter % 1000 ==0) and (epsilon>0):
-                    epsilon = epsilon-0.001#也就是经过10万次转移epsilon降到0
+                    epsilon = epsilon-0.01#也就是经过10万次转移epsilon降到0
                 state = jiangwei(state,capital)#先降维，并整理形状，把capital放进去
                 action_index = eval_Q.predict(state)[0]#获得行动q_value
                 if random.random() < epsilon:#如果落在随机区域
@@ -194,7 +197,7 @@ if __name__ == "__main__":
                     replay_buffer.append((state, action, revenue,jiangwei(next_state,next_capital),1))
                     with summary_writer.as_default():
                         tf.summary.scalar('Zinsen',bianpan_env.get_zinsen(),step = bisai_counter)
-                        tf.summary.scalar('rest_capital',bianpan_env.gesamt_revenue-bianpan_env.gesamt_touzi+500,step = bisai_counter)
+                        tf.summary.scalar('rest_capital',bianpan_env.gesamt_revenue+500,step = bisai_counter)
                         tf.summary.scalar('wrong_action_rate',bianpan_env.wrong_action_counter/bianpan_env.action_counter,step = bisai_counter)
                         tf.summary.scalar('investion_rate',bianpan_env.gesamt_touzi/500.0,step = bisai_counter)
                         break
