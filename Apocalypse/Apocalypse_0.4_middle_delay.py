@@ -4,6 +4,7 @@
 '''
 #防止不行动的方法有两种，或者保留一定的随机策略率，或者就是给不行动也扣一些钱
 #加入了无行动率的指标，用来测算每场比赛，不行动的比例
+#训练出来需要随机策略才可以自主行动，或者也可能是时间不够长
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
 import tensorflow as tf
@@ -141,7 +142,7 @@ if __name__ == "__main__":
     start0 = time.time()
     summary_writer = tf.summary.create_file_writer('./tensorboard_0.4_middle_delay') #在代码所在文件夹同目录下创建tensorboard文件夹（本代码在jupyternotbook里跑，所以在jupyternotebook里可以看到）
     #########设置超参数
-    learning_rate = 0.00001#学习率
+    learning_rate = 0.001#学习率
     gamma = 0.999999
     opt = tf.keras.optimizers.Adam(learning_rate,amsgrad = True)#设定最优化方法
     epsilon = 1.            # 探索起始时的探索率

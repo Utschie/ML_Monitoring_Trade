@@ -1,8 +1,9 @@
 '''
-即时收益+结果相关+可变长度输入+终赔不参与投资+归一化+100万次转移转贪心+-100负收益+gamma(0.999999)不折现+Adam(0.00001)
+延迟收益+终赔不参与投资+可变长度输入+Adam(0.00001)+错误行动-100+gamma(0.999999)+100万次转移转贪心+不行动扣5块钱
++归一化+3层
 '''
+#防止不行动的方法有两种，或者保留一定的随机策略率，或者就是给不行动也扣一些钱
 #加入了无行动率的指标，用来测算每场比赛，不行动的比例
-#sofort无需随机就可以自己开始行动
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
 import tensorflow as tf
@@ -26,6 +27,7 @@ class Env():#定义一个环境用来与网络交互
         self.episode = self.episode_generator(self.filepath)#通过load_toNet函数得到当场比赛的episode生成器对象
         self.capital = 500#每场比赛有500欧可支配资金
         self.gesamt_revenue = 0#初始化实际收益
+        self.invested = [[(0.,0.),(0.,0.),(0.,0.)]]#已投入资本，每个元素记录着一次投资的赔率和投入，分别对应胜平负三种赛果的投入，这里不用np.array因为麻烦
         self.action_counter=0.0
         self.no_action_counter = 0.0
         self.wrong_action_counter = 0.0
@@ -46,7 +48,6 @@ class Env():#定义一个环境用来与网络交互
             self.statematrix=np.delete(statematrix, 1, axis=-1)#去掉cid后，最后得到一个1*410*8的张量，这里axis是2或者-1（代表最后一个）都行
             self.frametime = i
             yield self.statematrix,self.frametime
-
     def revenue(self,action):#收益计算器，根据行动和终止与否，计算收益给出，每次算一次revenue，capital都会变化，除了终盘
         #先把行动存起来
         max_host = self.statematrix[tf.argmax(self.statematrix)[2].numpy()][2]
@@ -54,8 +55,8 @@ class Env():#定义一个环境用来与网络交互
         max_guest = self.statematrix[tf.argmax(self.statematrix)[4].numpy()][4]
         peilv = [max_host,max_fair,max_guest]#得到最高赔率向量
         peilv_action = list(zip(peilv,action))
-        if self.capital >= sum(action):#如果剩下的资本还够执行行动，则capital里扣除本次交易费用
-            self.capital = self.capital-sum(action)#资金变少
+        if self.capital >= sum(action):#如果剩下的资本还够执行行动，则把此次交易计入累计投资，并更新平均赔率
+            self.invested.append(peilv_action)#把本次投资存入invested已投入资本
             self.action_counter+=1
             host_middle = self.mean_host[1]+peilv_action[0][1]#即新的主胜投入
             self.mean_host = [(np.prod(self.mean_host)+np.prod(peilv_action[0]))/(host_middle+0.00000000001),host_middle]
@@ -64,34 +65,53 @@ class Env():#定义一个环境用来与网络交互
             guest_middle = self.mean_guest[1]+peilv_action[2][1]
             self.mean_guest = [(np.prod(self.mean_guest)+np.prod(peilv_action[2]))/(guest_middle+0.00000000001),guest_middle]
             self.mean_invested = self.mean_host+self.mean_fair+self.mean_guest
-            if self.result.host > self.result.guest:
-                revenue = max_host*action[0]-sum(action)
-            elif self.result.host == self.result.guest:
-                revenue = max_fair*action[1]-sum(action)
-            else:
-                revenue = max_guest*action[2]-sum(action)
-            self.gesamt_revenue+=revenue#最终计算收益时在加上，以表示所有赢得钱，因为后面要除以总投资
-        else:#如果不够执行行动
+        else:
             self.action_counter+=1
             self.wrong_action_counter+=1
-            revenue = -100
+        #计算本次行动的收益
+        if self.statematrix.max(0)[0] ==0:#如果当前的状态是终盘状态,则清算所有赢的钱
+            if self.result.host > self.result.guest:#主胜
+                revenue = sum(i[0][0]*i[0][1] for i in self.invested )
+            elif self.result.host == self.result.guest:#平
+                revenue = sum(i[1][0]*i[1][1] for i in self.invested )
+            else:#主负
+                revenue = sum(i[2][0]*i[2][1] for i in self.invested )
+            self.gesamt_revenue =self.gesamt_revenue + revenue
+        elif self.capital < sum(action):#如果没到终盘，且action的总投资比所剩资本还多，则给revenue一个很大的负值给神经网络，但是对capital不操作，实际资本也不更改
+            revenue = -100#则收益是个很大的负值（正常来讲revenue最大-50）
+        else:
+            revenue = -sum(action)
+            self.capital += revenue#该局游戏的capital随着操作减少
+            self.gesamt_revenue = self.gesamt_revenue + revenue
         if action ==[0,0,0]:
             self.no_action_counter+=1#计算无行动率
-        #计算本次行动的收益
+            revenue = -5#不行动扣5块钱
         return revenue
-       
+        
     def get_state(self):
         next_state,frametime=self.episode.__next__()
         done = False
         if int(frametime) ==0:
             done = True
         return next_state, frametime,done,self.capital#网络从此取出下一幕
-    
+
     def get_zinsen(self):
-        self.gesamt_touzi =500.0-self.capital
+        self.gesamt_touzi = 500.0-self.capital
         zinsen  = float(self.gesamt_revenue)/float(self.gesamt_touzi+0.000001)
         return zinsen#这里必须是500.0，否则出来的是结果自动取整数部分，也就是0
         
+
+
+def jiangwei(state,capital,mean_invested):
+    frametime = state[0][0]/80000.0#frametime最多80000秒之前开赔
+    state=np.delete(state, 0, axis=-1)
+    length = len(state)#出赔率的公司数
+    percenttilelist = [np.percentile(state,i,axis = 0)[1:4] for i in range(0,105,5)]
+    percentile = np.vstack(percenttilelist)#把当前状态的0%-100%分位数放到一个矩阵里
+    state = tf.concat((percentile.flatten()/25.0,[capital],[frametime],mean_invested,[length]),-1)#除以25是因为一般来讲赔率最高开到25
+    state = tf.reshape(state,(1,72))#63个分位数数据+8个capital,frametime和mean_invested,length共72个输入
+    return state
+
 
 class Q_Network(tf.keras.Model):
     def __init__(self,
@@ -117,28 +137,16 @@ class Q_Network(tf.keras.Model):
         return tf.argmax(q_values,axis=-1)#tf.argmax函数是返回最大数值的下标，用来对应动作
     
 
-def jiangwei(state,capital,mean_invested):
-    frametime = state[0][0]/80000.0#frametime最多80000秒之前开赔
-    state=np.delete(state, 0, axis=-1)
-    length = len(state)#出赔率的公司数
-    percenttilelist = [np.percentile(state,i,axis = 0)[1:4] for i in range(0,105,5)]
-    percentile = np.vstack(percenttilelist)#把当前状态的0%-100%分位数放到一个矩阵里
-    state = tf.concat((percentile.flatten()/25.0,[capital],[frametime],mean_invested,[length]),-1)#除以25是因为一般来讲赔率最高开到25
-    state = tf.reshape(state,(1,72))#63个分位数数据+8个capital,frametime和mean_invested,length共72个输入
-    return state
-
-
- 
 if __name__ == "__main__":
     start0 = time.time()
-    summary_writer = tf.summary.create_file_writer('./tensorboard_0.4_middle_sofort') #在代码所在文件夹同目录下创建tensorboard文件夹（本代码在jupyternotbook里跑，所以在jupyternotebook里可以看到）
+    summary_writer = tf.summary.create_file_writer('./tensorboard_0.4_middle_delay') #在代码所在文件夹同目录下创建tensorboard文件夹（本代码在jupyternotbook里跑，所以在jupyternotebook里可以看到）
     #########设置超参数
     learning_rate = 0.001#学习率
-    opt = tf.keras.optimizers.Adam(learning_rate,amsgrad = True)#设定最优化方法
     gamma = 0.999999
+    opt = tf.keras.optimizers.Adam(learning_rate,amsgrad = True)#设定最优化方法
     epsilon = 1.            # 探索起始时的探索率
     #final_epsilon = 0.01            # 探索终止时的探索率
-    batch_size = 100
+    batch_size = 150
     resultlist = pd.read_csv('D:\\data\\results_20141130-20160630.csv',index_col = 0)#得到赛果和比赛ID的对应表
     actions_table = [[a,b,c] for a in range(0,55,5) for b in range(0,55,5) for c in range(0,55,5)]#给神经网络输出层对应一个行动表
     step_counter = 0
@@ -149,12 +157,9 @@ if __name__ == "__main__":
     replay_buffer = deque(maxlen=memory_size)#建立一个记忆回放区
     eval_Q = Q_Network()#初始化行动Q网络
     target_Q = Q_Network()#初始化目标Q网络
-    weights_path = 'D:\\data\\eval_Q_weights_0.4_middle_sofort.ckpt'
+    weights_path = 'D:\\data\\eval_Q_weights_0.4_middle_delay.ckpt'
     filefolderlist = os.listdir('F:\\cleaned_data_20141130-20160630')
     ################下面是单场比赛的流程
-
-
-
     for i in filefolderlist:#挨个文件夹训练
         filelist = os.listdir('F:\\cleaned_data_20141130-20160630\\'+i)
         for j in filelist:#挨场比赛训练
@@ -181,6 +186,7 @@ if __name__ == "__main__":
                 revenue = bianpan_env.revenue(actions_table[action])#根据行动和是否终赔计算收益
                 next_state,frametime,done,next_capital = bianpan_env.get_state()#获得下一个状态,终止状态的next_state为0矩阵
                 if done:
+                    revenue = bianpan_env.revenue(actions_table[action])+revenue#如果next_state是终赔,则重新结算revenue
                     replay_buffer.append((state, action, revenue,jiangwei(next_state,next_capital,bianpan_env.mean_invested),1))
                     with summary_writer.as_default():
                         tf.summary.scalar('Zinsen',bianpan_env.get_zinsen(),step = bisai_counter)
@@ -224,4 +230,3 @@ if __name__ == "__main__":
             print('比赛'+filepath+'已完成'+'\n'+'用时'+str(end-start)+'秒\n')
     end0 = time.time()
     print('20141130-20160630总共用了'+str(end0-start0)+'秒')
-

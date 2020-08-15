@@ -2,7 +2,6 @@
 即时收益+结果相关+可变长度输入+终赔不参与投资+归一化+100万次转移转贪心+-100负收益+gamma(0.999999)不折现+Adam(0.00001)
 '''
 #加入了无行动率的指标，用来测算每场比赛，不行动的比例
-#sofort无需随机就可以自己开始行动
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
 import tensorflow as tf
