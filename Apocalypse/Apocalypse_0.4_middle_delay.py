@@ -1,6 +1,6 @@
 '''
-延迟收益+终赔不参与投资+可变长度输入+Adam(0.001)+错误行动-100+gamma(1.0,即无衰减)+20万次转移转贪心+保留0.001随机率
-+归一化
+延迟收益+终赔不参与投资+可变长度输入+Adam(0.00001)+错误行动-100+gamma(1.0,即无衰减)+100万次转移转贪心+不行动扣5块钱
++归一化+3层
 '''
 #防止不行动的方法有两种，或者保留一定的随机策略率，或者就是给不行动也扣一些钱
 import os
@@ -81,6 +81,8 @@ class Env():#定义一个环境用来与网络交互
             revenue = -sum(action)
             self.capital += revenue#该局游戏的capital随着操作减少
             self.gesamt_revenue = self.gesamt_revenue + revenue
+        if action ==[0,0,0]:
+            revenue = -5#不行动扣5块钱
         return revenue
         
     def get_state(self):
@@ -134,13 +136,13 @@ class Q_Network(tf.keras.Model):
 
 if __name__ == "__main__":
     start0 = time.time()
-    summary_writer = tf.summary.create_file_writer('./tensorboard_0.4_mini') #在代码所在文件夹同目录下创建tensorboard文件夹（本代码在jupyternotbook里跑，所以在jupyternotebook里可以看到）
+    summary_writer = tf.summary.create_file_writer('./tensorboard_0.4_middle_delay') #在代码所在文件夹同目录下创建tensorboard文件夹（本代码在jupyternotbook里跑，所以在jupyternotebook里可以看到）
     #########设置超参数
-    learning_rate = 0.001#学习率
-    opt = tf.keras.optimizers.Adam(learning_rate)#设定最优化方法
+    learning_rate = 0.00001#学习率
+    opt = tf.keras.optimizers.Adam(learning_rate,amsgrad = True)#设定最优化方法
     epsilon = 1.            # 探索起始时的探索率
     #final_epsilon = 0.01            # 探索终止时的探索率
-    batch_size = 100
+    batch_size = 150
     resultlist = pd.read_csv('D:\\data\\results_20141130-20160630.csv',index_col = 0)#得到赛果和比赛ID的对应表
     actions_table = [[a,b,c] for a in range(0,55,5) for b in range(0,55,5) for c in range(0,55,5)]#给神经网络输出层对应一个行动表
     step_counter = 0
@@ -151,7 +153,7 @@ if __name__ == "__main__":
     replay_buffer = deque(maxlen=memory_size)#建立一个记忆回放区
     eval_Q = Q_Network()#初始化行动Q网络
     target_Q = Q_Network()#初始化目标Q网络
-    weights_path = 'D:\\data\\eval_Q_weights_mini_0.4.ckpt'
+    weights_path = 'D:\\data\\eval_Q_weights_0.4_middle_delay.ckpt'
     filefolderlist = os.listdir('F:\\cleaned_data_20141130-20160630')
     ################下面是单场比赛的流程
     for i in filefolderlist:#挨个文件夹训练
@@ -169,10 +171,8 @@ if __name__ == "__main__":
             with summary_writer.as_default():
                 tf.summary.scalar("Capital", capital,step = bisai_counter)
             while True:
-                if (step_counter % 1000 ==0) and (epsilon>0.001):
+                if (step_counter % 1000 ==0) and (epsilon>0):
                     epsilon = epsilon-0.001#也就是经过100万次转移epsilon降到0
-                if epsilon<0.001:#降到0以后保持0.001的随机率
-                    epsilon = 0.001
                 state = jiangwei(state,capital,bianpan_env.mean_invested)#先降维，并整理形状，把capital放进去
                 action_index = eval_Q.predict(state)[0]#获得行动q_value
                 if random.random() < epsilon:#如果落在随机区域

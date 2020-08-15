@@ -1,5 +1,5 @@
 '''
-分位数输入+即时最小绝对收益策略+终赔不参与投资+错误行动-0.5+frametime对数缩小+adam(0.001,amsgrad=True)+gamma(1.0)+50万次转移转贪心
+分位数输入+即时最小绝对收益策略+终赔不参与投资+错误行动-0.5+frametime对数缩小+adam(0.00001,amsgrad=True)+gamma(1.0)+50万次转移转贪心
 近30万个参数
 '''
 #batch_size=500时，用cpu跑大概5-6秒学习一次
@@ -142,14 +142,14 @@ class Q_Network(tf.keras.Model):
  
 if __name__ == "__main__":
     start0 = time.time()
-    summary_writer = tf.summary.create_file_writer('./tensorboard_0.4_middle') #在代码所在文件夹同目录下创建tensorboard文件夹（本代码在jupyternotbook里跑，所以在jupyternotebook里可以看到）
+    summary_writer = tf.summary.create_file_writer('./tensorboard_0.4_middle_minreward') #在代码所在文件夹同目录下创建tensorboard文件夹（本代码在jupyternotbook里跑，所以在jupyternotebook里可以看到）
     #########设置超参数
-    learning_rate = 0.001#学习率
+    learning_rate = 0.00001#学习率
     opt = tf.keras.optimizers.Adam(learning_rate,amsgrad = True)#设定最优化方法
     gamma = 1.0#0后面至少5个9才能让1万次转移后衰减率在90%
     epsilon = 1.            # 探索起始时的探索率
     #final_epsilon = 0.01            # 探索终止时的探索率
-    batch_size = 100
+    batch_size = 150
     resultlist = pd.read_csv('D:\\data\\results_20141130-20160630.csv',index_col = 0)#得到赛果和比赛ID的对应表
     actions_table = [[a,b,c] for a in range(0,55,5) for b in range(0,55,5) for c in range(0,55,5)]#给神经网络输出层对应一个行动表
     step_counter = 0
@@ -160,7 +160,7 @@ if __name__ == "__main__":
     replay_buffer = deque(maxlen=memory_size)#建立一个记忆回放区
     eval_Q = Q_Network()#初始化行动Q网络
     target_Q = Q_Network()#初始化目标Q网络
-    weights_path = 'D:\\data\\eval_Q_weights_middle_0.4.ckpt'
+    weights_path = 'D:\\data\\eval_Q_weights_middle_0.4_minreward.ckpt'
     filefolderlist = os.listdir('F:\\cleaned_data_20141130-20160630')
     ################下面是单场比赛的流程
 
@@ -182,7 +182,7 @@ if __name__ == "__main__":
                 tf.summary.scalar("Capital", capital,step = bisai_counter)
             while True:
                 if (step_counter % 1000 ==0) and (epsilon>0):
-                    epsilon = epsilon-0.01#也就是经过10万次转移epsilon降到0
+                    epsilon = epsilon-0.001#也就是经过10万次转移epsilon降到0
                 state = jiangwei(state,capital)#先降维，并整理形状，把capital放进去
                 action_index = eval_Q.predict(state)[0]#获得行动q_value
                 if random.random() < epsilon:#如果落在随机区域
