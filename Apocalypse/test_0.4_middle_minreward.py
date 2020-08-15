@@ -1,5 +1,5 @@
 #用来测试模型
-#这个模型需要初始步激活
+#这个模型即便首步激活也没有用，它也不动
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
 import tensorflow as tf
