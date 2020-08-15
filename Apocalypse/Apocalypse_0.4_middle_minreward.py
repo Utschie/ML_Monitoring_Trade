@@ -77,8 +77,10 @@ class Env():#定义一个环境用来与网络交互
             self.action_counter+=1
             self.wrong_action_counter+=1
             revenue = -50#由于错误行动，扣50块钱
+        '''
         if action ==[0,0,0]:
             revenue = -5#为了防止不行动，如果不行动也扣钱
+        '''
         #计算本次行动的收益
         return revenue
        
