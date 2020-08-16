@@ -106,12 +106,16 @@ class Q_Network(tf.keras.Model):
         self.dense1 = tf.keras.layers.Dense(units=144, activation=tf.nn.relu)#输入层
         self.dense2 = tf.keras.layers.Dense(units=144, activation=tf.nn.relu)#一个隐藏层
         self.dense3 = tf.keras.layers.Dense(units=144, activation=tf.nn.relu)
+        self.dense4 = tf.keras.layers.Dense(units=int(1.8*self.n_companies), activation=tf.nn.relu)
+        self.dense5 = tf.keras.layers.Dense(units=int(1.8*self.n_companies), activation=tf.nn.relu)
         self.dense6 = tf.keras.layers.Dense(units=self.n_actions)#输出层代表着在当前最大赔率前，买和不买的六种行动的价值
 
     def call(self,state): #输入从env那里获得的statematrix
         x = self.dense1(state)#输出神经网络
         x = self.dense2(x)#
         x = self.dense3(x)
+        x = self.dense4(x)
+        x = self.dense5(x)
         q_value = self.dense6(x)#
         return q_value#q_value是一个（1,1331）的张量
 
@@ -140,7 +144,7 @@ def jiangwei(state,capital,frametime,mean_invested):#所有变量都归一化
  
 if __name__ == "__main__":
     start0 = time.time()
-    summary_writer = tf.summary.create_file_writer('./tensorboard_0.4_middle_sofort') #在代码所在文件夹同目录下创建tensorboard文件夹（本代码在jupyternotbook里跑，所以在jupyternotebook里可以看到）
+    summary_writer = tf.summary.create_file_writer('./tensorboard_0.4_middle_sofort3') #在代码所在文件夹同目录下创建tensorboard文件夹（本代码在jupyternotbook里跑，所以在jupyternotebook里可以看到）
     #########设置超参数
     learning_rate = 0.001#学习率
     opt = tf.keras.optimizers.Adam(learning_rate,amsgrad = True)#设定最优化方法
@@ -158,7 +162,7 @@ if __name__ == "__main__":
     replay_buffer = deque(maxlen=memory_size)#建立一个记忆回放区
     eval_Q = Q_Network()#初始化行动Q网络
     target_Q = Q_Network()#初始化目标Q网络
-    weights_path = 'D:\\data\\eval_Q_weights_0.4_middle_sofort.ckpt'
+    weights_path = 'D:\\data\\eval_Q_weights_0.4_middle_sofort3.ckpt'
     filefolderlist = os.listdir('F:\\cleaned_data_20141130-20160630')
     ################下面是单场比赛的流程
 
