@@ -82,7 +82,7 @@ class Env():#定义一个环境用来与网络交互
             done = True
         return next_state, frametime,done,self.capital#网络从此取出下一幕
     
-    def get_zinsen(self):
+    def get_zinsen(self):#本局利润
         self.gesamt_touzi =500.0-self.capital
         zinsen  = float(self.gesamt_revenue)/float(self.gesamt_touzi+0.000001)
         return zinsen#这里必须是500.0，否则出来的是结果自动取整数部分，也就是0
@@ -132,6 +132,8 @@ if __name__ == "__main__":
     resultlist = pd.read_csv('D:\\data\\results_20141130-20160630.csv',index_col = 0)#得到赛果和比赛ID的对应表
     actions_table = [[a,b,c] for a in range(0,55,5) for b in range(0,55,5) for c in range(0,55,5)]#给神经网络输出层对应一个行动表
     bisai_counter = 1
+    revenue_list = []#记录近20场比赛的收益率
+    zonglirun = 0.0#总利润
     target_Q = Q_Network()#初始化目标Q网络
     weights_path = 'D:\\data\\eval_Q_weights_0.4_middle_sofort.ckpt'
     target_Q.load_weights(weights_path)
@@ -165,11 +167,17 @@ if __name__ == "__main__":
                 next_state,frametime,done,next_capital = bianpan_env.get_state()#获得下一个状态,终止状态的next_state为0矩阵
                 if done:
                     with summary_writer.as_default():
+                        revenue_list.append(bianpan_env.get_zinsen())
+                        if len(revenue_list)==20:
+                            tf.summary.scalar('20_mean_Zinsen',np.mean(revenue_list),step = bisai_counter)#每20场算一下平均利率
+                            revenue_list=[]#清空revenue_list
                         tf.summary.scalar('Zinsen',bianpan_env.get_zinsen(),step = bisai_counter)
                         tf.summary.scalar('rest_capital',bianpan_env.gesamt_revenue+500,step = bisai_counter)
                         tf.summary.scalar('wrong_action_rate',bianpan_env.wrong_action_counter/bianpan_env.action_counter,step = bisai_counter)
                         tf.summary.scalar('investion_rate',bianpan_env.gesamt_touzi/500.0,step = bisai_counter)
                         tf.summary.scalar('no_action_rate',bianpan_env.no_action_counter/bianpan_env.action_counter,step = bisai_counter)
+                        zonglirun+=bianpan_env.gesamt_revenue
+                        tf.summary.scalar('总利润',zonglirun,step=bisai_counter)#看总曲线是否增长
                         break
                 state = next_state
                 capital = next_capital
