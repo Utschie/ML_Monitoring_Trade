@@ -6,6 +6,7 @@
 #我猜大概是由于负回报设计得过大，所以测试中几乎稳定在85%的投资率，可以试试较小一点的
 #把出赔率的公司数也改成了0-1之间，然后frametime也变成了0-1之间,capital改成0-500也变成0-1之间
 #-50的负收益也可保证下降
+#试试-25
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
 import tensorflow as tf
@@ -78,7 +79,7 @@ class Env():#定义一个环境用来与网络交互
         else:#如果不够执行行动
             self.action_counter+=1
             self.wrong_action_counter+=1
-            revenue = -50
+            revenue = -25
         if action ==[0,0,0]:
             self.no_action_counter+=1#计算无行动率
         #计算本次行动的收益
