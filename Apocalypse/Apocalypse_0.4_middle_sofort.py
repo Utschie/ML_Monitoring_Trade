@@ -3,6 +3,7 @@
 '''
 #加入了无行动率的指标，用来测算每场比赛，不行动的比例
 #sofort无需随机就可以自己开始行动
+#我猜大概是由于负回报设计得过大，所以测试中几乎稳定在85%的投资率，可以试试较小一点的
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
 import tensorflow as tf
