@@ -1,9 +1,10 @@
 '''
-即时收益+结果相关+可变长度输入+终赔不参与投资+归一化+100万次转移转贪心+-100负收益+gamma(0.999999)不折现+Adam(0.00001)
+即时收益+结果相关+可变长度输入+终赔不参与投资+归一化+400万次转移转贪心+-50负收益+gamma(0.999999)折现一点+Adam(0.001)+还是6层
 '''
 #加入了无行动率的指标，用来测算每场比赛，不行动的比例
 #sofort无需随机就可以自己开始行动
 #我猜大概是由于负回报设计得过大，所以测试中几乎稳定在85%的投资率，可以试试较小一点的
+#把出赔率的公司数也改成了0-1之间，然后frametime也变成了0-1之间,capital改成0-500也变成0-1之间
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
 import tensorflow as tf
@@ -40,13 +41,14 @@ class Env():#定义一个环境用来与网络交互
     def episode_generator(self,filepath):#传入单场比赛文件路径，得到一个每一幕的generator
         data = pd.read_csv(filepath)#读取文件
         frametimelist=data.frametime.value_counts().sort_index(ascending=False).index#将frametime的值读取成列表
+        self.max_frametime = frametimelist[0]
         for i in frametimelist:#其中frametimelist里的数据是整型
             state = data.groupby('frametime').get_group(i)#从第一次变盘开始得到当次转移
             statematrix = np.array(state)#转成numpy多维数组
             #在填充成矩阵之前需要知道所有数据中到底有多少个cid
             self.statematrix=np.delete(statematrix, 1, axis=-1)#去掉cid后，最后得到一个1*410*8的张量，这里axis是2或者-1（代表最后一个）都行
             self.frametime = i
-            yield self.statematrix,self.frametime
+            yield self.statematrix,float(self.frametime)/float(self.max_frametime)
 
     def revenue(self,action):#收益计算器，根据行动和终止与否，计算收益给出，每次算一次revenue，capital都会变化，除了终盘
         #先把行动存起来
@@ -75,7 +77,7 @@ class Env():#定义一个环境用来与网络交互
         else:#如果不够执行行动
             self.action_counter+=1
             self.wrong_action_counter+=1
-            revenue = -100
+            revenue = -50
         if action ==[0,0,0]:
             self.no_action_counter+=1#计算无行动率
         #计算本次行动的收益
@@ -118,13 +120,19 @@ class Q_Network(tf.keras.Model):
         return tf.argmax(q_values,axis=-1)#tf.argmax函数是返回最大数值的下标，用来对应动作
     
 
-def jiangwei(state,capital,mean_invested):
-    frametime = state[0][0]/80000.0#frametime最多80000秒之前开赔
+def jiangwei(state,capital,frametime,mean_invested):#所有变量都归一化
+    invested = [0.,0.,0.,0.,0.,0.]
     state=np.delete(state, 0, axis=-1)
-    length = len(state)#出赔率的公司数
+    length = len(state)/410.0#出赔率的公司数归一化
+    invested[0] = mean_invested[0]/25.0
+    invested[1] = mean_invested[1]/500.0
+    invested[2] = mean_invested[2]/25.0
+    invested[3] = mean_invested[3]/500.0
+    invested[4] = mean_invested[4]/25.0
+    invested[5] = mean_invested[5]/500.0
     percenttilelist = [np.percentile(state,i,axis = 0)[1:4] for i in range(0,105,5)]
     percentile = np.vstack(percenttilelist)#把当前状态的0%-100%分位数放到一个矩阵里
-    state = tf.concat((percentile.flatten()/25.0,[capital],[frametime],mean_invested,[length]),-1)#除以25是因为一般来讲赔率最高开到25
+    state = tf.concat((percentile.flatten()/25.0,[capital/500.0],[frametime],invested,[length]),-1)#除以25是因为一般来讲赔率最高开到25
     state = tf.reshape(state,(1,72))#63个分位数数据+8个capital,frametime和mean_invested,length共72个输入
     return state
 
@@ -172,8 +180,8 @@ if __name__ == "__main__":
                 tf.summary.scalar("Capital", capital,step = bisai_counter)
             while True:
                 if (step_counter % 1000 ==0) and (epsilon>0):
-                    epsilon = epsilon-0.001#也就是经过100万次转移epsilon降到0
-                state = jiangwei(state,capital,bianpan_env.mean_invested)#先降维，并整理形状，把capital放进去
+                    epsilon = epsilon-0.00025#也就是经过400万次转移epsilon降到0
+                state = jiangwei(state,capital,frametime,bianpan_env.mean_invested)#先降维，并整理形状，把capital放进去
                 action_index = eval_Q.predict(state)[0]#获得行动q_value
                 if random.random() < epsilon:#如果落在随机区域
                     action = random.choice(range(0,1331))#action是一个坐标
@@ -182,7 +190,7 @@ if __name__ == "__main__":
                 revenue = bianpan_env.revenue(actions_table[action])#根据行动和是否终赔计算收益
                 next_state,frametime,done,next_capital = bianpan_env.get_state()#获得下一个状态,终止状态的next_state为0矩阵
                 if done:
-                    replay_buffer.append((state, action, revenue,jiangwei(next_state,next_capital,bianpan_env.mean_invested),1))
+                    replay_buffer.append((state, action, revenue,jiangwei(next_state,next_capital,frametime,bianpan_env.mean_invested),1))
                     with summary_writer.as_default():
                         tf.summary.scalar('Zinsen',bianpan_env.get_zinsen(),step = bisai_counter)
                         tf.summary.scalar('rest_capital',bianpan_env.gesamt_revenue+500,step = bisai_counter)
@@ -191,7 +199,7 @@ if __name__ == "__main__":
                         tf.summary.scalar('no_action_rate',bianpan_env.no_action_counter/bianpan_env.action_counter,step = bisai_counter)
                         break
                 else:#如果没终盘
-                    replay_buffer.append((state, action, revenue,jiangwei(next_state,next_capital,bianpan_env.mean_invested),0))
+                    replay_buffer.append((state, action, revenue,jiangwei(next_state,next_capital,frametime,bianpan_env.mean_invested),0))
                 #这里需要标识一下终止状态，钱花光了就终止了
                 state = next_state
                 capital = next_capital

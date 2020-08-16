@@ -119,7 +119,7 @@ class Q_Network(tf.keras.Model):
 def jiangwei(state,capital,mean_invested):
     frametime = state[0][0]/80000.0#frametime最多80000秒之前开赔
     state=np.delete(state, 0, axis=-1)
-    length = len(state)#出赔率的公司数
+    length = len(state)/410.0#出赔率的公司数
     percenttilelist = [np.percentile(state,i,axis = 0)[1:4] for i in range(0,105,5)]
     percentile = np.vstack(percenttilelist)#把当前状态的0%-100%分位数放到一个矩阵里
     state = tf.concat((percentile.flatten()/25.0,[capital],[frametime],mean_invested,[length]),-1)#除以25是因为一般来讲赔率最高开到25
