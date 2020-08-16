@@ -161,8 +161,6 @@ if __name__ == "__main__":
                     action = random.choice(range(0,1331))#action是一个坐标
                 else:
                     action = action_index#否则按着贪心选，这里[0]是因为predict返回的是一个单元素列表
-                if actions_table[action]==[0,0,0]:
-                    bianpan_env.wrong_action_counter+=1
                 bianpan_env.revenue(actions_table[action])
                 next_state,frametime,done,next_capital = bianpan_env.get_state()#获得下一个状态,终止状态的next_state为0矩阵
                 if done:
