@@ -6,7 +6,7 @@
 #我猜大概是由于负回报设计得过大，所以测试中几乎稳定在85%的投资率，可以试试较小一点的
 #把出赔率的公司数也改成了0-1之间，然后frametime也变成了0-1之间,capital改成0-500也变成0-1之间
 #-50的负收益也可保证下降
-#试试-25
+#(-25,0.999999,amsgrad=True)的情况下梯度爆掉了，也不知道是因为-25还是因为gamma值还是amsgrad
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
 import tensorflow as tf
@@ -149,8 +149,8 @@ if __name__ == "__main__":
     summary_writer = tf.summary.create_file_writer('./tensorboard_0.4_middle_sofort3') #在代码所在文件夹同目录下创建tensorboard文件夹（本代码在jupyternotbook里跑，所以在jupyternotebook里可以看到）
     #########设置超参数
     learning_rate = 0.001#学习率
-    opt = tf.keras.optimizers.Adam(learning_rate,amsgrad = True)#设定最优化方法
-    gamma = 0.999999
+    opt = tf.keras.optimizers.Adam(learning_rate)#设定最优化方法
+    gamma = 1.0
     epsilon = 1.            # 探索起始时的探索率
     #final_epsilon = 0.01            # 探索终止时的探索率
     batch_size = 100
