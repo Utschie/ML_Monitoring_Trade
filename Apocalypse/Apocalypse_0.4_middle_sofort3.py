@@ -7,6 +7,7 @@
 #把出赔率的公司数也改成了0-1之间，然后frametime也变成了0-1之间,capital改成0-500也变成0-1之间
 #-50的负收益也可保证下降
 #(-25,0.999999,amsgrad=True)的情况下梯度爆掉了，也不知道是因为-25还是因为gamma值还是amsgrad
+#其实并不是很确定frametime是按照当场比赛的比例归一化好还是按绝对最大值归一化好，因为反应的一个是绝对时间一个是相对时间————20200818
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
 import tensorflow as tf
