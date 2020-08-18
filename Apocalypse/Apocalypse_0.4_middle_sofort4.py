@@ -1,14 +1,4 @@
-'''
-即时收益+结果相关+可变长度输入+终赔不参与投资+归一化+400万次转移转贪心+-50负收益+gamma(0.999999)折现一点+Adam(0.001,amsgrad=True)+还是6层
-'''
-#加入了无行动率的指标，用来测算每场比赛，不行动的比例
-#sofort无需随机就可以自己开始行动
-#我猜大概是由于负回报设计得过大，所以测试中几乎稳定在85%的投资率，可以试试较小一点的
-#把出赔率的公司数也改成了0-1之间，然后frametime也变成了0-1之间,capital改成0-500也变成0-1之间
-#-50的负收益也可保证下降
-#(-25,0.999999,amsgrad=True)的情况下梯度爆掉了，也不知道是因为-25还是因为gamma值还是amsgrad
-#其实并不是很确定frametime是按照当场比赛的比例归一化好还是按绝对最大值归一化好，因为反应的一个是绝对时间一个是相对时间————20200818
-#好像没必要随机那么久，因为好像有个100万次就可以转贪心了，400万次有点夸张了
+#和sofort3的区别就在于frametime的归一化方式(改用50000归一)，以及随机次数减少到100万次
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
 import tensorflow as tf
@@ -45,14 +35,13 @@ class Env():#定义一个环境用来与网络交互
     def episode_generator(self,filepath):#传入单场比赛文件路径，得到一个每一幕的generator
         data = pd.read_csv(filepath)#读取文件
         frametimelist=data.frametime.value_counts().sort_index(ascending=False).index#将frametime的值读取成列表
-        self.max_frametime = frametimelist[0]
         for i in frametimelist:#其中frametimelist里的数据是整型
             state = data.groupby('frametime').get_group(i)#从第一次变盘开始得到当次转移
             statematrix = np.array(state)#转成numpy多维数组
             #在填充成矩阵之前需要知道所有数据中到底有多少个cid
             self.statematrix=np.delete(statematrix, 1, axis=-1)#去掉cid后，最后得到一个1*410*8的张量，这里axis是2或者-1（代表最后一个）都行
             self.frametime = i
-            yield self.statematrix,float(self.frametime)/float(self.max_frametime)
+            yield self.statematrix,self.frametime
 
     def revenue(self,action):#收益计算器，根据行动和终止与否，计算收益给出，每次算一次revenue，capital都会变化，除了终盘
         #先把行动存起来
@@ -81,7 +70,7 @@ class Env():#定义一个环境用来与网络交互
         else:#如果不够执行行动
             self.action_counter+=1
             self.wrong_action_counter+=1
-            revenue = -25
+            revenue = -50
         if action ==[0,0,0]:
             self.no_action_counter+=1#计算无行动率
         #计算本次行动的收益
@@ -130,6 +119,7 @@ class Q_Network(tf.keras.Model):
 
 def jiangwei(state,capital,frametime,mean_invested):#所有变量都归一化
     invested = [0.,0.,0.,0.,0.,0.]
+    frametime = frametime/50000.0
     state=np.delete(state, 0, axis=-1)
     length = len(state)/410.0#出赔率的公司数归一化
     invested[0] = mean_invested[0]/25.0
@@ -148,7 +138,7 @@ def jiangwei(state,capital,frametime,mean_invested):#所有变量都归一化
  
 if __name__ == "__main__":
     start0 = time.time()
-    summary_writer = tf.summary.create_file_writer('./tensorboard_0.4_middle_sofort3') #在代码所在文件夹同目录下创建tensorboard文件夹（本代码在jupyternotbook里跑，所以在jupyternotebook里可以看到）
+    summary_writer = tf.summary.create_file_writer('./tensorboard_0.4_middle_sofort4') #在代码所在文件夹同目录下创建tensorboard文件夹（本代码在jupyternotbook里跑，所以在jupyternotebook里可以看到）
     #########设置超参数
     learning_rate = 0.001#学习率
     opt = tf.keras.optimizers.Adam(learning_rate)#设定最优化方法
@@ -166,7 +156,7 @@ if __name__ == "__main__":
     replay_buffer = deque(maxlen=memory_size)#建立一个记忆回放区
     eval_Q = Q_Network()#初始化行动Q网络
     target_Q = Q_Network()#初始化目标Q网络
-    weights_path = 'D:\\data\\eval_Q_weights_0.4_middle_sofort3.ckpt'
+    weights_path = 'D:\\data\\eval_Q_weights_0.4_middle_sofort4.ckpt'
     filefolderlist = os.listdir('F:\\cleaned_data_20141130-20160630')
     ################下面是单场比赛的流程
 
@@ -188,7 +178,7 @@ if __name__ == "__main__":
                 tf.summary.scalar("Capital", capital,step = bisai_counter)
             while True:
                 if (step_counter % 1000 ==0) and (epsilon>0):
-                    epsilon = epsilon-0.00025#也就是经过400万次转移epsilon降到0
+                    epsilon = epsilon-0.001#也就是经过100万次转移epsilon降到0
                 state = jiangwei(state,capital,frametime,bianpan_env.mean_invested)#先降维，并整理形状，把capital放进去
                 action_index = eval_Q.predict(state)[0]#获得行动q_value
                 if random.random() < epsilon:#如果落在随机区域
