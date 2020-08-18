@@ -1,4 +1,5 @@
 #和sofort3的区别就在于frametime的归一化方式(改用50000归一)，以及随机次数减少到100万次
+#之前sofort初代在第二年的12月末表现特别不好，所以或许要考虑可能存在的季节影响？
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
 import tensorflow as tf
