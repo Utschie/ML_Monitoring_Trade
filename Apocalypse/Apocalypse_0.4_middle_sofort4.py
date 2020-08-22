@@ -1,4 +1,4 @@
-#和sofort3的区别就在于frametime的归一化方式(改用50000归一)，以及随机次数减少到100万次
+#和sofort3的区别就在于frametime的归一化方式(改用50000归一)，以及随机次数减少到200万次
 #分位数改成了0.01为步长的101个分位数，神经网络输入共312个
 #batch改成了50
 #初始学习率改成了0.0001
@@ -188,7 +188,7 @@ if __name__ == "__main__":
                 tf.summary.scalar("Capital", capital,step = bisai_counter)
             while True:
                 if (step_counter % 1000 ==0) and (epsilon>0):
-                    epsilon = epsilon-0.001#也就是经过100万次转移epsilon降到0
+                    epsilon = epsilon-0.0005#也就是经过200万次转移epsilon降到0
                 state = jiangwei(state,capital,frametime,bianpan_env.mean_invested)#先降维，并整理形状，把capital放进去
                 action_index = eval_Q.predict(state)[0]#获得行动q_value
                 if random.random() < epsilon:#如果落在随机区域
