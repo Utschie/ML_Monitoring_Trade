@@ -1,4 +1,8 @@
 #和sofort3的区别就在于frametime的归一化方式(改用50000归一)，以及随机次数减少到100万次
+#分位数改成了0.01为步长的101个分位数，神经网络输入共312个
+#batch改成了50
+#初始学习率改成了0.0001
+#负收益改成了-30
 #之前sofort初代在第二年的12月末表现特别不好，所以或许要考虑可能存在的季节影响？
 #然后如果输入值增多呢，比如用101个分位数而不是21个？
 #应该还是要回归出一个结果无关的仅靠跨期差异的网络，然后和sofort网络合伙作为操盘的两种策略，再通过q值选取策略，或者通过q值随机选取策略
@@ -26,7 +30,7 @@ class Env():#定义一个环境用来与网络交互
         self.cidlist = list(map(float,cidlist))#把各个元素字符串类型转成浮点数类型
         self.filepath = filepath
         self.episode = self.episode_generator(self.filepath)#通过load_toNet函数得到当场比赛的episode生成器对象
-        self.capital = 500#每场比赛有500欧可支配资金
+        self.capital = 500.0#每场比赛有500欧可支配资金
         self.gesamt_revenue = 0#初始化实际收益
         self.action_counter=0.0
         self.no_action_counter = 0.0
@@ -76,7 +80,7 @@ class Env():#定义一个环境用来与网络交互
         else:#如果不够执行行动
             self.action_counter+=1
             self.wrong_action_counter+=1
-            revenue = -50
+            revenue = -30
         if action ==[0,0,0]:
             self.no_action_counter+=1#计算无行动率
         #计算本次行动的收益
@@ -97,16 +101,16 @@ class Env():#定义一个环境用来与网络交互
 
 class Q_Network(tf.keras.Model):
     def __init__(self,
-                      n_companies=72,
+                      n_companies=312,
                       n_actions=1331):#有默认值的属性必须放在没默认值属性的后面
         self.n_companies = n_companies
         self.n_actions = n_actions
         super().__init__()#调用tf.keras.Model的类初始化方法
-        self.dense1 = tf.keras.layers.Dense(units=144, activation=tf.nn.relu)#输入层
-        self.dense2 = tf.keras.layers.Dense(units=144, activation=tf.nn.relu)#一个隐藏层
-        self.dense3 = tf.keras.layers.Dense(units=144, activation=tf.nn.relu)
-        self.dense4 = tf.keras.layers.Dense(units=int(1.8*self.n_companies), activation=tf.nn.relu)
-        self.dense5 = tf.keras.layers.Dense(units=int(1.8*self.n_companies), activation=tf.nn.relu)
+        self.dense1 = tf.keras.layers.Dense(units=624, activation=tf.nn.relu)#输入层
+        self.dense2 = tf.keras.layers.Dense(units=624, activation=tf.nn.relu)#一个隐藏层
+        self.dense3 = tf.keras.layers.Dense(units=624, activation=tf.nn.relu)
+        self.dense4 = tf.keras.layers.Dense(units=624, activation=tf.nn.relu)
+        self.dense5 = tf.keras.layers.Dense(units=624, activation=tf.nn.relu)
         self.dense6 = tf.keras.layers.Dense(units=self.n_actions)#输出层代表着在当前最大赔率前，买和不买的六种行动的价值
 
     def call(self,state): #输入从env那里获得的statematrix
@@ -134,10 +138,10 @@ def jiangwei(state,capital,frametime,mean_invested):#所有变量都归一化
     invested[3] = mean_invested[3]/500.0
     invested[4] = mean_invested[4]/25.0
     invested[5] = mean_invested[5]/500.0
-    percenttilelist = [np.percentile(state,i,axis = 0)[1:4] for i in range(0,105,5)]
+    percenttilelist = [np.percentile(state,i,axis = 0)[1:4] for i in np.arange(0.0, 1.01, 0.01)]
     percentile = np.vstack(percenttilelist)#把当前状态的0%-100%分位数放到一个矩阵里
     state = tf.concat((percentile.flatten()/25.0,[capital/500.0],[frametime],invested,[length]),-1)#除以25是因为一般来讲赔率最高开到25
-    state = tf.reshape(state,(1,72))#63个分位数数据+8个capital,frametime和mean_invested,length共72个输入
+    state = tf.reshape(state,(1,312))#303个分位数数据+9个capital,frametime和mean_invested(6个),length共72个输入
     return state
 
 
@@ -146,12 +150,12 @@ if __name__ == "__main__":
     start0 = time.time()
     summary_writer = tf.summary.create_file_writer('./tensorboard_0.4_middle_sofort4') #在代码所在文件夹同目录下创建tensorboard文件夹（本代码在jupyternotbook里跑，所以在jupyternotebook里可以看到）
     #########设置超参数
-    learning_rate = 0.001#学习率
+    learning_rate = 0.0001#学习率
     opt = tf.keras.optimizers.Adam(learning_rate)#设定最优化方法
     gamma = 1.0
     epsilon = 1.            # 探索起始时的探索率
     #final_epsilon = 0.01            # 探索终止时的探索率
-    batch_size = 100
+    batch_size = 50
     resultlist = pd.read_csv('D:\\data\\results_20141130-20160630.csv',index_col = 0)#得到赛果和比赛ID的对应表
     actions_table = [[a,b,c] for a in range(0,55,5) for b in range(0,55,5) for c in range(0,55,5)]#给神经网络输出层对应一个行动表
     step_counter = 0
