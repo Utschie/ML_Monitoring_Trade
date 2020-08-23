@@ -11,7 +11,7 @@
 #好像没必要随机那么久，因为好像有个100万次就可以转贪心了，400万次有点夸张了
 #400万次随机用了6天12小时才随机完
 #然后一场空，几乎不行动————20200823
-#尝试把随机次数减少，然后神经网络层数减少
+#尝试把随机次数减少（到20万次），然后神经网络层数减少
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
 import tensorflow as tf
@@ -187,7 +187,7 @@ if __name__ == "__main__":
                 tf.summary.scalar("Capital", capital,step = bisai_counter)
             while True:
                 if (step_counter % 1000 ==0) and (epsilon>0):
-                    epsilon = epsilon-0.002#也就是经过400万次转移epsilon降到0
+                    epsilon = epsilon-0.005#也就是经过20万次转移epsilon降到0
                 state = jiangwei(state,capital,frametime,bianpan_env.mean_invested)#先降维，并整理形状，把capital放进去
                 action_index = eval_Q.predict(state)[0]#获得行动q_value
                 if random.random() < epsilon:#如果落在随机区域
