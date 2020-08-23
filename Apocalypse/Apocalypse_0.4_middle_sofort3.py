@@ -11,6 +11,7 @@
 #好像没必要随机那么久，因为好像有个100万次就可以转贪心了，400万次有点夸张了
 #400万次随机用了6天12小时才随机完
 #然后一场空，几乎不行动————20200823
+#尝试把随机次数减少，然后神经网络层数减少
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
 import tensorflow as tf
@@ -54,7 +55,7 @@ class Env():#定义一个环境用来与网络交互
             #在填充成矩阵之前需要知道所有数据中到底有多少个cid
             self.statematrix=np.delete(statematrix, 1, axis=-1)#去掉cid后，最后得到一个1*410*8的张量，这里axis是2或者-1（代表最后一个）都行
             self.frametime = i
-            yield self.statematrix,float(self.frametime)/float(self.max_frametime)
+            yield self.statematrix,self.frametime
 
     def revenue(self,action):#收益计算器，根据行动和终止与否，计算收益给出，每次算一次revenue，capital都会变化，除了终盘
         #先把行动存起来
@@ -83,7 +84,7 @@ class Env():#定义一个环境用来与网络交互
         else:#如果不够执行行动
             self.action_counter+=1
             self.wrong_action_counter+=1
-            revenue = -25
+            revenue = -50
         if action ==[0,0,0]:
             self.no_action_counter+=1#计算无行动率
         #计算本次行动的收益
@@ -112,16 +113,12 @@ class Q_Network(tf.keras.Model):
         self.dense1 = tf.keras.layers.Dense(units=144, activation=tf.nn.relu)#输入层
         self.dense2 = tf.keras.layers.Dense(units=144, activation=tf.nn.relu)#一个隐藏层
         self.dense3 = tf.keras.layers.Dense(units=144, activation=tf.nn.relu)
-        self.dense4 = tf.keras.layers.Dense(units=int(1.8*self.n_companies), activation=tf.nn.relu)
-        self.dense5 = tf.keras.layers.Dense(units=int(1.8*self.n_companies), activation=tf.nn.relu)
         self.dense6 = tf.keras.layers.Dense(units=self.n_actions)#输出层代表着在当前最大赔率前，买和不买的六种行动的价值
 
     def call(self,state): #输入从env那里获得的statematrix
         x = self.dense1(state)#输出神经网络
         x = self.dense2(x)#
         x = self.dense3(x)
-        x = self.dense4(x)
-        x = self.dense5(x)
         q_value = self.dense6(x)#
         return q_value#q_value是一个（1,1331）的张量
 
@@ -142,7 +139,7 @@ def jiangwei(state,capital,frametime,mean_invested):#所有变量都归一化
     invested[5] = mean_invested[5]/500.0
     percenttilelist = [np.percentile(state,i,axis = 0)[1:4] for i in range(0,105,5)]
     percentile = np.vstack(percenttilelist)#把当前状态的0%-100%分位数放到一个矩阵里
-    state = tf.concat((percentile.flatten()/25.0,[capital/500.0],[frametime],invested,[length]),-1)#除以25是因为一般来讲赔率最高开到25
+    state = tf.concat((percentile.flatten()/25.0,[capital/500.0],[frametime/50000.0],invested,[length]),-1)#除以25是因为一般来讲赔率最高开到25
     state = tf.reshape(state,(1,72))#63个分位数数据+8个capital,frametime和mean_invested,length共72个输入
     return state
 
@@ -190,7 +187,7 @@ if __name__ == "__main__":
                 tf.summary.scalar("Capital", capital,step = bisai_counter)
             while True:
                 if (step_counter % 1000 ==0) and (epsilon>0):
-                    epsilon = epsilon-0.00025#也就是经过400万次转移epsilon降到0
+                    epsilon = epsilon-0.002#也就是经过400万次转移epsilon降到0
                 state = jiangwei(state,capital,frametime,bianpan_env.mean_invested)#先降维，并整理形状，把capital放进去
                 action_index = eval_Q.predict(state)[0]#获得行动q_value
                 if random.random() < epsilon:#如果落在随机区域
