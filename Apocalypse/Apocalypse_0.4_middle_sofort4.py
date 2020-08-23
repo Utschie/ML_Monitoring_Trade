@@ -8,6 +8,7 @@
 #应该还是要回归出一个结果无关的仅靠跨期差异的网络，然后和sofort网络合伙作为操盘的两种策略，再通过q值选取策略，或者通过q值随机选取策略
 #需要研究一下LSTM模型和doubleDQN并将模型升级————20200818
 #需要后期改变一下学习方式改用SGD+momentum精调————20200818
+#有的比赛提前30多万分钟开盘也是太猛了！————20200823
 
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu

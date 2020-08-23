@@ -34,13 +34,14 @@ class Env():#定义一个环境用来与网络交互
     def episode_generator(self,filepath):#传入单场比赛文件路径，得到一个每一幕的generator
         data = pd.read_csv(filepath)#读取文件
         frametimelist=data.frametime.value_counts().sort_index(ascending=False).index#将frametime的值读取成列表
+        self.max_frametime = frametimelist[0]
         for i in frametimelist:#其中frametimelist里的数据是整型
             state = data.groupby('frametime').get_group(i)#从第一次变盘开始得到当次转移
             statematrix = np.array(state)#转成numpy多维数组
             #在填充成矩阵之前需要知道所有数据中到底有多少个cid
             self.statematrix=np.delete(statematrix, 1, axis=-1)#去掉cid后，最后得到一个1*410*8的张量，这里axis是2或者-1（代表最后一个）都行
             self.frametime = i
-            yield self.statematrix,self.frametime
+            yield self.statematrix,float(self.frametime)/float(self.max_frametime)
 
     def revenue(self,action):#收益计算器，根据行动和终止与否，计算收益给出，每次算一次revenue，capital都会变化，除了终盘
         #先把行动存起来
@@ -69,7 +70,7 @@ class Env():#定义一个环境用来与网络交互
         else:#如果不够执行行动
             self.action_counter+=1
             self.wrong_action_counter+=1
-            revenue = -100
+            revenue = -50
         if action ==[0,0,0]:
             self.no_action_counter+=1#计算无行动率
         #计算本次行动的收益
@@ -78,11 +79,11 @@ class Env():#定义一个环境用来与网络交互
     def get_state(self):
         next_state,frametime=self.episode.__next__()
         done = False
-        if int(frametime) ==0:
+        if frametime ==0.0:
             done = True
         return next_state, frametime,done,self.capital#网络从此取出下一幕
     
-    def get_zinsen(self):#本局利润
+    def get_zinsen(self):
         self.gesamt_touzi =500.0-self.capital
         zinsen  = float(self.gesamt_revenue)/float(self.gesamt_touzi+0.000001)
         return zinsen#这里必须是500.0，否则出来的是结果自动取整数部分，也就是0
@@ -98,12 +99,16 @@ class Q_Network(tf.keras.Model):
         self.dense1 = tf.keras.layers.Dense(units=144, activation=tf.nn.relu)#输入层
         self.dense2 = tf.keras.layers.Dense(units=144, activation=tf.nn.relu)#一个隐藏层
         self.dense3 = tf.keras.layers.Dense(units=144, activation=tf.nn.relu)
+        self.dense4 = tf.keras.layers.Dense(units=144, activation=tf.nn.relu)
+        self.dense5 = tf.keras.layers.Dense(units=144, activation=tf.nn.relu)
         self.dense6 = tf.keras.layers.Dense(units=self.n_actions)#输出层代表着在当前最大赔率前，买和不买的六种行动的价值
 
     def call(self,state): #输入从env那里获得的statematrix
         x = self.dense1(state)#输出神经网络
         x = self.dense2(x)#
         x = self.dense3(x)
+        x = self.dense4(x)
+        x = self.dense5(x)
         q_value = self.dense6(x)#
         return q_value#q_value是一个（1,1331）的张量
 
@@ -112,20 +117,28 @@ class Q_Network(tf.keras.Model):
         return tf.argmax(q_values,axis=-1)#tf.argmax函数是返回最大数值的下标，用来对应动作
     
 
-def jiangwei(state,capital,mean_invested):
-    frametime = state[0][0]/80000.0#frametime最多80000秒之前开赔
+
+def jiangwei(state,capital,frametime,mean_invested):#所有变量都归一化
+    invested = [0.,0.,0.,0.,0.,0.]
     state=np.delete(state, 0, axis=-1)
-    length = len(state)#出赔率的公司数
+    length = len(state)/410.0#出赔率的公司数归一化
+    invested[0] = mean_invested[0]/25.0
+    invested[1] = mean_invested[1]/500.0
+    invested[2] = mean_invested[2]/25.0
+    invested[3] = mean_invested[3]/500.0
+    invested[4] = mean_invested[4]/25.0
+    invested[5] = mean_invested[5]/500.0
     percenttilelist = [np.percentile(state,i,axis = 0)[1:4] for i in range(0,105,5)]
     percentile = np.vstack(percenttilelist)#把当前状态的0%-100%分位数放到一个矩阵里
-    state = tf.concat((percentile.flatten()/25.0,[capital],[frametime],mean_invested,[length]),-1)#除以25是因为一般来讲赔率最高开到25
+    state = tf.concat((percentile.flatten()/25.0,[capital/500.0],[frametime],invested,[length]),-1)#除以25是因为一般来讲赔率最高开到25
     state = tf.reshape(state,(1,72))#63个分位数数据+8个capital,frametime和mean_invested,length共72个输入
     return state
 
 
+
 if __name__ == "__main__":
     start0 = time.time()
-    summary_writer = tf.summary.create_file_writer('./tensorboard_0.4_middle_sofort_test') #在代码所在文件夹同目录下创建tensorboard文件夹（本代码在jupyternotbook里跑，所以在jupyternotebook里可以看到）
+    summary_writer = tf.summary.create_file_writer('./tensorboard_0.4_middle_sofort3_test') #在代码所在文件夹同目录下创建tensorboard文件夹（本代码在jupyternotbook里跑，所以在jupyternotebook里可以看到）
     #########设置超参数
     #final_epsilon = 0.01            # 探索终止时的探索率
     epsilon = 0.0 
@@ -135,7 +148,7 @@ if __name__ == "__main__":
     revenue_list = []#记录近20场比赛的收益率
     zonglirun = 0.0#总利润
     target_Q = Q_Network()#初始化目标Q网络
-    weights_path = 'D:\\data\\eval_Q_weights_0.4_middle_sofort.ckpt'
+    weights_path = 'D:\\data\\eval_Q_weights_0.4_middle_sofort3.ckpt'
     target_Q.load_weights(weights_path)
     filefolderlist = os.listdir('F:\\test')
     ################下面是单场比赛的流程
@@ -155,7 +168,7 @@ if __name__ == "__main__":
             bianpan_env = Env(filepath,result)#每场比赛做一个环境
             state,frametime,done,capital =  bianpan_env.get_state()#把第一个状态作为初始化状态
             while True:
-                state = jiangwei(state,capital,bianpan_env.mean_invested)#先降维，并整理形状，把capital放进去
+                state = jiangwei(state,capital,frametime,bianpan_env.mean_invested)#先降维，并整理形状，把capital放进去
                 action_index = target_Q.predict(state)[0]#获得行动q_value
                 if random.random() < epsilon:#如果落在随机区域
                     action = random.choice(range(0,1331))#action是一个坐标
