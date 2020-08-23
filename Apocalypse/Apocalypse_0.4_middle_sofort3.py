@@ -9,6 +9,7 @@
 #(-25,0.999999,amsgrad=True)的情况下梯度爆掉了，也不知道是因为-25还是因为gamma值还是amsgrad
 #其实并不是很确定frametime是按照当场比赛的比例归一化好还是按绝对最大值归一化好，因为反应的一个是绝对时间一个是相对时间————20200818
 #好像没必要随机那么久，因为好像有个100万次就可以转贪心了，400万次有点夸张了
+#400万次随机用了6天12小时才随机完
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
 import tensorflow as tf
