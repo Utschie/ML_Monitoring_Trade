@@ -1,6 +1,6 @@
 #和sofort3的区别就在于frametime的归一化方式(改用50000归一)，以及随机次数减少到200万次
 #分位数改成了0.01为步长的101个分位数，神经网络输入共312个
-#batch改成了50
+#batch改成了32
 #初始学习率改成了0.0001
 #负收益改成了-30
 #之前sofort初代在第二年的12月末表现特别不好，所以或许要考虑可能存在的季节影响？
@@ -9,6 +9,7 @@
 #需要研究一下LSTM模型和doubleDQN并将模型升级————20200818
 #需要后期改变一下学习方式改用SGD+momentum精调————20200818
 #有的比赛提前30多万分钟开盘也是太猛了！————20200823
+#gamma=0.999999
 
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
@@ -153,10 +154,10 @@ if __name__ == "__main__":
     #########设置超参数
     learning_rate = 0.0001#学习率
     opt = tf.keras.optimizers.Adam(learning_rate)#设定最优化方法
-    gamma = 1.0
+    gamma = 0.999999
     epsilon = 1.            # 探索起始时的探索率
     #final_epsilon = 0.01            # 探索终止时的探索率
-    batch_size = 50
+    batch_size = 32
     resultlist = pd.read_csv('D:\\data\\results_20141130-20160630.csv',index_col = 0)#得到赛果和比赛ID的对应表
     actions_table = [[a,b,c] for a in range(0,55,5) for b in range(0,55,5) for c in range(0,55,5)]#给神经网络输出层对应一个行动表
     step_counter = 0
@@ -189,7 +190,7 @@ if __name__ == "__main__":
                 tf.summary.scalar("Capital", capital,step = bisai_counter)
             while True:
                 if (step_counter % 1000 ==0) and (epsilon>0):
-                    epsilon = epsilon-0.0005#也就是经过200万次转移epsilon降到0
+                    epsilon = epsilon-0.002#也就是经过50万次转移epsilon降到0
                 state = jiangwei(state,capital,frametime,bianpan_env.mean_invested)#先降维，并整理形状，把capital放进去
                 action_index = eval_Q.predict(state)[0]#获得行动q_value
                 if random.random() < epsilon:#如果落在随机区域
