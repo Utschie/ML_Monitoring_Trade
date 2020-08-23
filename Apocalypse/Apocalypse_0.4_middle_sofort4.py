@@ -10,6 +10,7 @@
 #需要后期改变一下学习方式改用SGD+momentum精调————20200818
 #有的比赛提前30多万分钟开盘也是太猛了！————20200823
 #gamma=0.999999
+#3层
 
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
@@ -111,16 +112,12 @@ class Q_Network(tf.keras.Model):
         self.dense1 = tf.keras.layers.Dense(units=624, activation=tf.nn.relu)#输入层
         self.dense2 = tf.keras.layers.Dense(units=624, activation=tf.nn.relu)#一个隐藏层
         self.dense3 = tf.keras.layers.Dense(units=624, activation=tf.nn.relu)
-        self.dense4 = tf.keras.layers.Dense(units=624, activation=tf.nn.relu)
-        self.dense5 = tf.keras.layers.Dense(units=624, activation=tf.nn.relu)
         self.dense6 = tf.keras.layers.Dense(units=self.n_actions)#输出层代表着在当前最大赔率前，买和不买的六种行动的价值
 
     def call(self,state): #输入从env那里获得的statematrix
         x = self.dense1(state)#输出神经网络
         x = self.dense2(x)#
         x = self.dense3(x)
-        x = self.dense4(x)
-        x = self.dense5(x)
         q_value = self.dense6(x)#
         return q_value#q_value是一个（1,1331）的张量
 
