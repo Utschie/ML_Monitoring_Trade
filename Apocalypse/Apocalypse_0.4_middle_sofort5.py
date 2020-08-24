@@ -1,6 +1,7 @@
 #基于sofort3更改，为了鼓励行动，不行动时给予负收益-5
 #memorysize改成10万
 #其实memory_size小了一点学习的可能会更充分，比如总共10万次转移的memory，那么平均每次转移都能被抽10次
+#如果memory_size小的话或许可以考虑缩小学习频率这样或许可以防止在某个memory里学习次数过多？
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
 import tensorflow as tf
