@@ -1,5 +1,5 @@
 #基于sofort3更改，为了鼓励行动，不行动时给予负收益-5
-#memorysize改成20万
+#memorysize改成10万
 #其实memory_size小了一点学习的可能会更充分，比如总共10万次转移的memory，那么平均每次转移都能被抽10次
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
@@ -151,7 +151,7 @@ if __name__ == "__main__":
     learn_step_counter = 0
     target_repalce_counter = 0 
     bisai_counter = 1
-    memory_size = 200000
+    memory_size = 100000
     replay_buffer = deque(maxlen=memory_size)#建立一个记忆回放区
     eval_Q = Q_Network()#初始化行动Q网络
     target_Q = Q_Network()#初始化目标Q网络
