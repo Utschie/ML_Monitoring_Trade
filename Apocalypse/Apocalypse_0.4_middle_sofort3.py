@@ -12,6 +12,7 @@
 #400万次随机用了6天12小时才随机完
 #然后一场空，几乎不行动————20200823
 #尝试把随机次数减少（到20万次），然后神经网络层数减少
+#在大概8万次转移后loss突然猛增————20200825
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
 import tensorflow as tf
