@@ -5,6 +5,7 @@
 #或者或许可以考虑按着比赛来学习啊，把几场比赛放进reply_buffer里，然后抽出某几场比赛来学————20200824
 #其实或许可以不用分成1331个策略，或许可以用其他的计数法来映射这1331个策略，这样就可以减少输出单元的个数————20200825
 #wrong_action_rate在随机过程中下降的并不平稳，进入贪心后也时有发生
+#回测集效果非常差劲
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
 import tensorflow as tf
