@@ -108,7 +108,7 @@ class Env():#定义一个环境用来与网络交互
 
 class Q_Network(tf.keras.Model):
     def __init__(self,
-                      n_companies=72,
+                      n_companies=71,
                       n_actions=1331):#有默认值的属性必须放在没默认值属性的后面
         self.n_companies = n_companies
         self.n_actions = n_actions
@@ -147,7 +147,7 @@ def jiangwei(state,capital,mean_invested):#所有变量都归一化
     percenttilelist = [np.percentile(state,i,axis = 0)[1:4] for i in range(0,105,5)]
     percentile = np.vstack(percenttilelist)#把当前状态的0%-100%分位数放到一个矩阵里
     state = tf.concat((percentile.flatten()/25.0,[capital/500.0],invested,[length]),-1)#除以25是因为一般来讲赔率最高开到25
-    state = tf.reshape(state,(1,72))#63个分位数数据+8个capital,frametime和mean_invested,length共72个输入
+    state = tf.reshape(state,(1,71))#63个分位数数据+8个capital,frametime和mean_invested,length共72个输入
     return state
 
 
@@ -194,7 +194,7 @@ if __name__ == "__main__":
                 tf.summary.scalar("Capital", capital,step = bisai_counter)
             while True:
                 if (step_counter % 1000 ==0) and (epsilon>0):
-                    epsilon = epsilon-0.002#也就是经过20万次转移epsilon降到0
+                    epsilon = epsilon-0.002#也就是经过50万次转移epsilon降到0
                 state = jiangwei(state,capital,bianpan_env.mean_invested)#先降维，并整理形状，把capital放进去
                 action_index = eval_Q.predict(state)[0]#获得行动q_value
                 if random.random() < epsilon:#如果落在随机区域
