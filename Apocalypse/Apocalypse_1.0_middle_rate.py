@@ -1,0 +1,2 @@
+#1.0以上的模型都是基于DDQN或Dueling DQN以及priorited reply方法的模型
+# 本模型是middle_rate版
