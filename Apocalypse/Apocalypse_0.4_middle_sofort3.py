@@ -14,6 +14,7 @@
 #尝试把随机次数减少（到20万次），然后神经网络层数减少
 #在大概8万次转移后loss突然猛增————20200825
 #把frametime去掉了
+#给了无行动-5的负收益还会遇到wrong_action到80%之后非常震荡下降的情况，最后也不收敛，这次试一下给一个0.9999的gamma值————20200826
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
 import tensorflow as tf
