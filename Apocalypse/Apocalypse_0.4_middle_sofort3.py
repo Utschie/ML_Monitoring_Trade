@@ -17,6 +17,8 @@
 #给了无行动-5的负收益还会遇到wrong_action到80%之后非常震荡下降的情况，最后也不收敛，这次试一下给一个0.99的gamma值和0的负收益————20200826
 #gamma=0.99且0负收益倒是不震荡，但是刚随机完后行动率为0————20200826
 #但只需要贪心学习一会儿投资率还会上来
+#但是再贪心一段时间后loss又会上来，然后wrong_action_rate上来，所以这次尝试把错误的负收益改成-200试一下，这样就是拥有最大负收益————20200827
+#然后再把0行动的负收益改成-1试一下
 #或许可以把策略改成当前余额的百分之多少，这样或许就可以不用考虑wrong_action的问题了，不用设定负收益了，不过策略总数可能会增多————20200826
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
@@ -90,9 +92,9 @@ class Env():#定义一个环境用来与网络交互
         else:#如果不够执行行动
             self.action_counter+=1
             self.wrong_action_counter+=1
-            revenue = -100
+            revenue = -200
         if action ==[0,0,0]:
-            revenue = -5
+            revenue = -1
             self.no_action_counter+=1#计算无行动率
         #计算本次行动的收益
         return revenue
@@ -162,7 +164,7 @@ if __name__ == "__main__":
     #########设置超参数
     learning_rate = 0.001#学习率
     opt = tf.keras.optimizers.Adam(learning_rate,amsgrad=True)#设定最优化方法
-    gamma = 1.0
+    gamma = 0.99
     epsilon = 1.            # 探索起始时的探索率
     #final_epsilon = 0.01            # 探索终止时的探索率
     batch_size = 100
