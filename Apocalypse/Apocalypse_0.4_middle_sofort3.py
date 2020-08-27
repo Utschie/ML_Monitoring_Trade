@@ -18,7 +18,7 @@
 #gamma=0.99且0负收益倒是不震荡，但是刚随机完后行动率为0————20200826
 #但只需要贪心学习一会儿投资率还会上来
 #但是再贪心一段时间后loss又会上来，然后wrong_action_rate上来，所以这次尝试把错误的负收益改成-200试一下，这样就是拥有最大负收益————20200827
-#然后再把0行动的负收益改成-1试一下
+#现在暂时无行动负收益为0，如果不行再改成-1试一下
 #或许可以把策略改成当前余额的百分之多少，这样或许就可以不用考虑wrong_action的问题了，不用设定负收益了，不过策略总数可能会增多————20200826
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
@@ -94,7 +94,7 @@ class Env():#定义一个环境用来与网络交互
             self.wrong_action_counter+=1
             revenue = -200
         if action ==[0,0,0]:
-            revenue = -1
+            revenue = 0
             self.no_action_counter+=1#计算无行动率
         #计算本次行动的收益
         return revenue
