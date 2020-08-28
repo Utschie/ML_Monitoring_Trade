@@ -1,37 +1,5 @@
-'''
-即时收益+结果相关+可变长度输入+终赔不参与投资+归一化+400万次转移转贪心+-50负收益+gamma(0.999999)折现一点+Adam(0.001,amsgrad=True)+还是6层
-'''
-#加入了无行动率的指标，用来测算每场比赛，不行动的比例
-#sofort无需随机就可以自己开始行动
-#我猜大概是由于负回报设计得过大，所以测试中几乎稳定在85%的投资率，可以试试较小一点的
-#把出赔率的公司数也改成了0-1之间，然后frametime也变成了0-1之间,capital改成0-500也变成0-1之间
-#-50的负收益也可保证下降
-#(-25,0.999999,amsgrad=True)的情况下梯度爆掉了，也不知道是因为-25还是因为gamma值还是amsgrad
-#其实并不是很确定frametime是按照当场比赛的比例归一化好还是按绝对最大值归一化好，因为反应的一个是绝对时间一个是相对时间————20200818
-#好像没必要随机那么久，因为好像有个100万次就可以转贪心了，400万次有点夸张了
-#400万次随机用了6天12小时才随机完
-#然后一场空，几乎不行动————20200823
-#尝试把随机次数减少（到20万次），然后神经网络层数减少
-#在大概8万次转移后loss突然猛增————20200825
-#把frametime去掉了
-#给了无行动-5的负收益还会遇到wrong_action到80%之后非常震荡下降的情况，最后也不收敛，这次试一下给一个0.99的gamma值和0的负收益————20200826
-#gamma=0.99且0负收益倒是不震荡，但是刚随机完后行动率为0————20200826
-#但只需要贪心学习一会儿投资率还会上来
-#但是再贪心一段时间大约到400场时后loss又会上来，然后wrong_action_rate上来，所以这次尝试把错误的负收益改成-200试一下，这样就是拥有最大负收益————20200827
-#现在暂时无行动负收益为0，如果不行再改成-1试一下
-#或许可以把策略改成当前余额的百分之多少，这样或许就可以不用考虑wrong_action的问题了，不用设定负收益了，不过策略总数可能会增多————20200826
-#一个重要的问题在于，变成贪心后学习一段时间后wrong_action总是不出现，于是在学习过程中慢慢偏移，就把原来学到的关于错误行动的东西扔掉了，于是wrong_action又回来了————20200828
-#也就是说，reply_buffer里应该一直维持着适当比例的wrong_action来使得在之后学习的过程中一直能维持关于wrong_action的知识————20200828
-#所以或者考虑在要把限定投资多少钱放到模型背景里，或者就是给神经网络本身添加约束条件，或者就是用投资率这样的指标直接限定投资————20200828
-#再或者看能不能只更新部分参数使得支配wrong_action的那部分参数维持不变————20200828
-#还有一个有趣的点，就是随机策略下，那些能获得高收益的比赛场次都是一样的，所以或许把最终的策略改成某种随机策略，比如在收益最高的几种策略里随机选一个————20200828
-#最终在最高的几个q值策略里随机选一个也可以解决学习完不行动的问题
-#又或者把最终的Q值当做使用这1331种策略的概率，收益越大被选择的概率越大————20200828
-#要采用随机策略，则可以在输出层用一个softmax函数，使最后输出是一组概率值，然后再利用概率选择行动————20200828
-#但是上面那种方法没有理论支撑，dqn还是一种确定式策略方法，所以dqn的模型还是暂时考虑如何让学习的知识不丢，然后priorited reply等问题上————20200828
-#如果一开始就从95%的贪心率开始学习，那后面到差不多到99%随机率的时候，loss就会爬上来，所以或许reply_buffer里应该有5%的wrong_action
-#可以尝试不设定wrong_action_rate,而是直接在网络的predict函数里选择的时候就把错误的操作排除
-#那么此时的迭代方程代码也要改一下,神经网络也要改一下
+#本版本直接在神经网络的选择行动时就只返回符合要求的行动的最大值
+#那么reply_buffer里要加入capital，好让神经网络利用它找出复合要求的q值最大值
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
 import tensorflow as tf
@@ -147,9 +115,17 @@ class Q_Network(tf.keras.Model):
         q_value = self.dense6(x)#
         return q_value#q_value是一个（1,1331）的张量
     
-    def predict(self, state):#用来对应动作
+    def eval(self,state):
         q_values = self(state)
-        return tf.argmax(q_values,axis=-1)#找出最大q值所对应的行动索引
+        ss
+
+    def predict(self, state,capital,actions_table):#用来对应动作
+        q_values = self(state)
+        index = np.argwhere(np.sum(actions_table,axis=1)<=capital)#找出所有小于剩余资本的操作的索引
+        new_q_value = []
+        for i in index:
+            new_q_value.append(q_values[0].numpy()[i])#找出所有满足条件的操作的q值 
+        return index[tf.argmax(new_q_value)]#找出最大q值所对应的行动索引
     
 
 def jiangwei(state,capital,mean_invested):#所有变量都归一化
@@ -214,7 +190,7 @@ if __name__ == "__main__":
                 if (step_counter % 1000 ==0) and (epsilon>0.05):
                     epsilon = epsilon-0.002#也就是经过50万次转移epsilon降到0.05
                 state = jiangwei(state,capital,bianpan_env.mean_invested)#先降维，并整理形状，把capital放进去
-                action_index = eval_Q.predict(state)[0]#获得行动
+                action_index = eval_Q.predict(state,capital,actions_table)[0]#获得行动
                 if random.random() < epsilon:#如果落在随机区域
                     action = random.choice(range(0,1331))#action是一个坐标
                 else:
