@@ -29,6 +29,7 @@
 #又或者把最终的Q值当做使用这1331种策略的概率，收益越大被选择的概率越大————20200828
 #要采用随机策略，则可以在输出层用一个softmax函数，使最后输出是一组概率值，然后再利用概率选择行动————20200828
 #但是上面那种方法没有理论支撑，dqn还是一种确定式策略方法，所以dqn的模型还是暂时考虑如何让学习的知识不丢，然后priorited reply等问题上————20200828
+#如果一开始就从95%的贪心率开始学习，那后面到差不多到99%随机率的时候，loss就会爬上来，所以或许reply_buffer里应该有5%的wrong_action
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
 import tensorflow as tf
