@@ -3,7 +3,8 @@
 +随机策略
 '''
 #采用随机策略，用softmax函数把q_value映射到0-1之间的数上，且整个向量的和为1
-#
+#如果采用随机策略，那么每次行动的策略未必是q值最大的策略，TD方程里的基于next_state的迭代值该怎么取呢？
+#还是取最大q_值吗？还是也用随机策略选择q_值，还是基于概率计算平均q值？————20200828
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
 import tensorflow as tf
