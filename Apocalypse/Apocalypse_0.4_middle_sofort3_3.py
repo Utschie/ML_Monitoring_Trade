@@ -1,5 +1,6 @@
 #本版本直接在神经网络的选择行动时就只返回符合要求的行动的最大值
 #那么reply_buffer里要加入capital，好让神经网络利用它找出复合要求的q值最大值
+#如果把action_table按照总capital大小排序那么在神经网络的predict函数里就不用遍历摘出来，只需要找到最大满足条件的index然后向下截断即可————20200924
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
 import tensorflow as tf
@@ -112,20 +113,25 @@ class Q_Network(tf.keras.Model):
         x = self.dense3(x)
         x = self.dense4(x)
         x = self.dense5(x)
-        q_value = self.dense6(x)#
-        return q_value#q_value是一个（1,1331）的张量
-    
-    def eval(self,state):
-        q_values = self(state)
-        ss
+        q_values = self.dense6(x)#
+        return q_values#q_value是一个（1,1331）的张量
 
-    def predict(self, state,capital,actions_table):#用来对应动作
+    def predict(self,state,capital,actions_table):#用来对应动作
+        q_values = self(state)
+        index = np.argwhere(np.sum(actions_table,axis=1)<=capital)#找出所有小于剩余资本的操作的索引列表
+        new_q_value = []
+        for i in index:
+            new_q_value.append(q_values[0].numpy()[i])#找出索引列表对应的q值
+        action_index = index[tf.argmax(new_q_value)]#找出最大q值所对应的行动索引
+        return action_index#找出最大q值所对应的行动索引
+
+    def filter(self,state,capital,actions_table):
         q_values = self(state)
         index = np.argwhere(np.sum(actions_table,axis=1)<=capital)#找出所有小于剩余资本的操作的索引
         new_q_value = []
         for i in index:
-            new_q_value.append(q_values[0].numpy()[i])#找出所有满足条件的操作的q值 
-        return index[tf.argmax(new_q_value)]#找出最大q值所对应的行动索引
+            new_q_value.append(q_values[0].numpy()[i])#找出所有满足条件的操作的q值
+        return new_q_value#返回所有满足条件的q值
     
 
 def jiangwei(state,capital,mean_invested):#所有变量都归一化
@@ -198,7 +204,6 @@ if __name__ == "__main__":
                 revenue = bianpan_env.revenue(actions_table[action])#根据行动和是否终赔计算收益
                 next_state,done,next_capital = bianpan_env.get_state()#获得下一个状态,终止状态的next_state为0矩阵
                 if done:
-                    replay_buffer.append((state, action, revenue,jiangwei(next_state,next_capital,bianpan_env.mean_invested),1))
                     with summary_writer.as_default():
                         tf.summary.scalar('Zinsen',bianpan_env.get_zinsen(),step = bisai_counter)
                         tf.summary.scalar('rest_capital',bianpan_env.gesamt_revenue+500,step = bisai_counter)
@@ -206,24 +211,28 @@ if __name__ == "__main__":
                         tf.summary.scalar('investion_rate',bianpan_env.gesamt_touzi/500.0,step = bisai_counter)
                         tf.summary.scalar('no_action_rate',bianpan_env.no_action_counter/bianpan_env.action_counter,step = bisai_counter)
                         break
+                    replay_buffer.append((state, capital,next_capital,action, revenue,jiangwei(next_state,next_capital,bianpan_env.mean_invested),1))
+                    state = next_state
+                    capital = next_capital
                 else:#如果没终盘
-                    replay_buffer.append((state, action, revenue,jiangwei(next_state,next_capital,bianpan_env.mean_invested),0))
+                    replay_buffer.append((state,capital,next_capital,action, revenue,jiangwei(next_state,next_capital,bianpan_env.mean_invested),0))
                 #这里需要标识一下终止状态，钱花光了就终止了
-                state = next_state
-                capital = next_capital
+                    state = next_state
+                    capital = next_capital
                 #下面是参数更新过程
                 if (step_counter >1000) and (step_counter%10 == 0) :#1000步之后每转移10次进行一次eval_Q的学习
                     if step_counter >= batch_size:
-                        batch_state, batch_action, batch_revenue, batch_next_state ,batch_done= zip(*random.sample(replay_buffer, batch_size))#zip(*...)解开分给别人的意思 
+                        batch_state, batch_capital,batch_next_capital,batch_action, batch_revenue, batch_next_state ,batch_done= zip(*random.sample(replay_buffer, batch_size))#zip(*...)解开分给别人的意思 
                     else:
-                        batch_state, batch_action, batch_revenue, batch_next_state ,batch_done= zip(*random.sample(replay_buffer, step_counter))
+                        batch_state, batch_captial,batch_next_capital,batch_action, batch_revenue, batch_next_state ,batch_done= zip(*random.sample(replay_buffer, step_counter))
                     #y_true = batch_revenue+tf.reduce_max(target_Q.predict(np.array(batch_next_state)),axis = 1)*(1-np.array(batch_done))#reduce_max来返回最大值，暂不考虑折现率gamma,
                         #tensorflow中张量相乘是对应行相乘，所以eval_Q(batch_state)有多少列，one_hot就得有多少列，如下
                     #y_pred = tf.reduce_sum(tf.squeeze(eval_Q(np.array(batch_state)))*tf.one_hot(np.array(batch_action),depth=1331,on_value=1.0, off_value=0.0),axis=1)#one_hot来生成对应位置为1的矩阵，depth是列数，reduce_sum(axis=1)来求各行和转成一维张量
                     #tf.squeeze是用来去掉张量里所有为1的维度
                     with tf.GradientTape() as tape:
-                        loss =  tf.keras.losses.mean_squared_error(y_true = batch_revenue+gamma*tf.reduce_max(tf.squeeze(target_Q(np.array(batch_next_state))),axis = -1)*(1-np.array(batch_done))
-                        ,y_pred =tf.reduce_sum(tf.squeeze(eval_Q(np.array(batch_state)))*tf.one_hot(np.array(batch_action),depth=1331,on_value=1.0, off_value=0.0),axis=1))#y_true和y_pred都是第0维为batch_size的张量
+                        y_true = batch_revenue+gamma*tf.reduce_max(tf.squeeze(target_Q.filter(np.array(batch_next_state),np.array(batch_next_capital),actions_table)),axis = -1)*(1-np.array(batch_done))
+                        y_pred = tf.reduce_sum(tf.squeeze(eval_Q.filter(np.array(batch_state),np.array(batch_capital),actions_table))*tf.one_hot(np.array(batch_action),depth=1331,on_value=1.0, off_value=0.0),axis=1)
+                        loss =  tf.keras.losses.mean_squared_error(y_true = y_true,y_pred =y_pred)#y_true和y_pred都是第0维为batch_size的张量
                     grads = tape.gradient(loss, eval_Q.variables)
                     with summary_writer.as_default():
                         tf.summary.scalar('loss',loss,step = learn_step_counter)
