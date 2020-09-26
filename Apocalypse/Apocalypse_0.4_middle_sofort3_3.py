@@ -1,6 +1,8 @@
 #本版本直接在神经网络的选择行动时就只返回符合要求的行动的最大值
 #那么reply_buffer里要加入capital，好让神经网络利用它找出复合要求的q值最大值
 #如果把action_table按照总capital大小排序那么在神经网络的predict函数里就不用遍历摘出来，只需要找到最大满足条件的index然后向下截断即可————20200924
+#由于用比较和与capital大小的方式来抽取index会遇到用batch输入时由于actions_table和batch的shape不同无法broadcast的情况
+#所以可以尝试用map方法，或者对actions重新排序截取————20200926
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
 import tensorflow as tf
@@ -116,17 +118,17 @@ class Q_Network(tf.keras.Model):
         q_values = self.dense6(x)#
         return q_values#q_value是一个（1,1331）的张量
 
-    def predict(self,state,capital,actions_table):#用来对应动作
-        q_values = self(state)
-        index = np.argwhere(np.sum(actions_table,axis=1)<=capital)#找出所有小于剩余资本的操作的索引列表
+    def predict(self,state,capital):#用来对应动作
+        q_values = self.call(state)#先根据jiangwei好的state求q值
+        index = tf.squeeze(np.argwhere(np.sum(actions_table,axis=1)<=capital),axis=-1)
         new_q_value = []
         for i in index:
-            new_q_value.append(q_values[0].numpy()[i])#找出索引列表对应的q值
-        action_index = index[tf.argmax(new_q_value)]#找出最大q值所对应的行动索引
+            new_q_value.append(q_values[0].numpy()[i])#将索引列表所对应的q值依次加入new_q_value里，从而形成了index和q值按顺序对应的两个列表
+        action_index = index[tf.argmax(new_q_value)]#new_q_value的单个元素即index_list中对应位置的动作的q值
         return action_index#找出最大q值所对应的行动索引
 
-    def filter(self,state,capital,actions_table):
-        q_values = self(state)
+    def filter(self,state,capital):
+        q_values = self.call(state)
         index = np.argwhere(np.sum(actions_table,axis=1)<=capital)#找出所有小于剩余资本的操作的索引
         new_q_value = []
         for i in index:
@@ -154,7 +156,7 @@ def jiangwei(state,capital,mean_invested):#所有变量都归一化
  
 if __name__ == "__main__":
     start0 = time.time()
-    summary_writer = tf.summary.create_file_writer('./tensorboard_0.4_middle_sofort3') #在代码所在文件夹同目录下创建tensorboard文件夹（本代码在jupyternotbook里跑，所以在jupyternotebook里可以看到）
+    summary_writer = tf.summary.create_file_writer('./tensorboard_0.4_middle_sofort3_3') #在代码所在文件夹同目录下创建tensorboard文件夹（本代码在jupyternotbook里跑，所以在jupyternotebook里可以看到）
     #########设置超参数
     learning_rate = 0.001#学习率
     opt = tf.keras.optimizers.Adam(learning_rate,amsgrad=True)#设定最优化方法
@@ -172,7 +174,7 @@ if __name__ == "__main__":
     replay_buffer = deque(maxlen=memory_size)#建立一个记忆回放区
     eval_Q = Q_Network()#初始化行动Q网络
     target_Q = Q_Network()#初始化目标Q网络
-    weights_path = 'D:\\data\\eval_Q_weights_0.4_middle_sofort3.ckpt'
+    weights_path = 'D:\\data\\eval_Q_weights_0.4_middle_sofort3_3.ckpt'
     filefolderlist = os.listdir('F:\\cleaned_data_20141130-20160630')
     ################下面是单场比赛的流程
 
@@ -196,10 +198,11 @@ if __name__ == "__main__":
                 if (step_counter % 1000 ==0) and (epsilon>0.05):
                     epsilon = epsilon-0.002#也就是经过50万次转移epsilon降到0.05
                 state = jiangwei(state,capital,bianpan_env.mean_invested)#先降维，并整理形状，把capital放进去
-                action_index = eval_Q.predict(state,capital,actions_table)[0]#获得行动
                 if random.random() < epsilon:#如果落在随机区域
-                    action = random.choice(range(0,1331))#action是一个坐标
+                    qualified_index = tf.squeeze(np.argwhere(np.sum(actions_table,axis=1)<=capital),axis=-1)#找到符合条件的行动的index_list
+                    action = random.choice(qualified_index)#在qualified_index中随机选取一个动作,注意随机挑选出返回的是列表
                 else:
+                    action_index = eval_Q.predict(state,capital)#用predict，选择最优行动
                     action = action_index#否则按着贪心选，这里[0]是因为predict返回的是一个单元素列表
                 revenue = bianpan_env.revenue(actions_table[action])#根据行动和是否终赔计算收益
                 next_state,done,next_capital = bianpan_env.get_state()#获得下一个状态,终止状态的next_state为0矩阵
@@ -211,9 +214,10 @@ if __name__ == "__main__":
                         tf.summary.scalar('investion_rate',bianpan_env.gesamt_touzi/500.0,step = bisai_counter)
                         tf.summary.scalar('no_action_rate',bianpan_env.no_action_counter/bianpan_env.action_counter,step = bisai_counter)
                         break
-                    replay_buffer.append((state, capital,next_capital,action, revenue,jiangwei(next_state,next_capital,bianpan_env.mean_invested),1))
+                    replay_buffer.append((state,capital,next_capital,action, revenue,jiangwei(next_state,next_capital,bianpan_env.mean_invested),1))
                     state = next_state
                     capital = next_capital
+
                 else:#如果没终盘
                     replay_buffer.append((state,capital,next_capital,action, revenue,jiangwei(next_state,next_capital,bianpan_env.mean_invested),0))
                 #这里需要标识一下终止状态，钱花光了就终止了
@@ -224,14 +228,16 @@ if __name__ == "__main__":
                     if step_counter >= batch_size:
                         batch_state, batch_capital,batch_next_capital,batch_action, batch_revenue, batch_next_state ,batch_done= zip(*random.sample(replay_buffer, batch_size))#zip(*...)解开分给别人的意思 
                     else:
-                        batch_state, batch_captial,batch_next_capital,batch_action, batch_revenue, batch_next_state ,batch_done= zip(*random.sample(replay_buffer, step_counter))
+                        batch_state, batch_capital,batch_next_capital,batch_action, batch_revenue, batch_next_state ,batch_done= zip(*random.sample(replay_buffer, step_counter))
                     #y_true = batch_revenue+tf.reduce_max(target_Q.predict(np.array(batch_next_state)),axis = 1)*(1-np.array(batch_done))#reduce_max来返回最大值，暂不考虑折现率gamma,
                         #tensorflow中张量相乘是对应行相乘，所以eval_Q(batch_state)有多少列，one_hot就得有多少列，如下
                     #y_pred = tf.reduce_sum(tf.squeeze(eval_Q(np.array(batch_state)))*tf.one_hot(np.array(batch_action),depth=1331,on_value=1.0, off_value=0.0),axis=1)#one_hot来生成对应位置为1的矩阵，depth是列数，reduce_sum(axis=1)来求各行和转成一维张量
                     #tf.squeeze是用来去掉张量里所有为1的维度
                     with tf.GradientTape() as tape:
-                        y_true = batch_revenue+gamma*tf.reduce_max(tf.squeeze(target_Q.filter(np.array(batch_next_state),np.array(batch_next_capital),actions_table)),axis = -1)*(1-np.array(batch_done))
-                        y_pred = tf.reduce_sum(tf.squeeze(eval_Q.filter(np.array(batch_state),np.array(batch_capital),actions_table))*tf.one_hot(np.array(batch_action),depth=1331,on_value=1.0, off_value=0.0),axis=1)
+                        qualified_q_values=list(map(target_Q.filter,batch_next_state,batch_next_capital))#对batch中的每一个求出符合条件的q值
+                        y_true = batch_revenue+np.array(list(map(tf.reduce_max,qualified_q_values)))*(1-np.array(batch_done))
+                        one_hot_matrix = tf.one_hot(np.array(batch_action),depth=1331,on_value=1.0, off_value=0.0)
+                        y_pred=tf.reduce_sum(tf.squeeze(eval_Q(np.array(batch_state)))*one_hot_matrix,axis=1)
                         loss =  tf.keras.losses.mean_squared_error(y_true = y_true,y_pred =y_pred)#y_true和y_pred都是第0维为batch_size的张量
                     grads = tape.gradient(loss, eval_Q.variables)
                     with summary_writer.as_default():
