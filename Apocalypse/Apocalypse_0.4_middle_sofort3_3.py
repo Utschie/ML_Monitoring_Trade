@@ -2,7 +2,9 @@
 #那么reply_buffer里要加入capital，好让神经网络利用它找出复合要求的q值最大值
 #如果把action_table按照总capital大小排序那么在神经网络的predict函数里就不用遍历摘出来，只需要找到最大满足条件的index然后向下截断即可————20200924
 #由于用比较和与capital大小的方式来抽取index会遇到用batch输入时由于actions_table和batch的shape不同无法broadcast的情况
-#所以可以尝试用map方法，或者对actions重新排序截取————20200926
+#所以可以尝试用map方法，或者对actions重新排序截取————20200926(已搞定，暂时用map方法)
+#当只在符合条件的行动中选择时，容易出现的一个问题是每次的batch可能都是无行动，即并不是每次学习都会更新参数
+#所以应考虑使用大batch或者priorited replay等方法————20200926
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
 import tensorflow as tf
@@ -195,8 +197,8 @@ if __name__ == "__main__":
             with summary_writer.as_default():
                 tf.summary.scalar("Capital", capital,step = bisai_counter)
             while True:
-                if (step_counter % 1000 ==0) and (epsilon>0.05):
-                    epsilon = epsilon-0.002#也就是经过50万次转移epsilon降到0.05
+                if (step_counter % 1000 ==0) and (epsilon > 0):
+                    epsilon = epsilon-0.005#也就是经过20万次转移epsilon降到0以下
                 state = jiangwei(state,capital,bianpan_env.mean_invested)#先降维，并整理形状，把capital放进去
                 if random.random() < epsilon:#如果落在随机区域
                     qualified_index = tf.squeeze(np.argwhere(np.sum(actions_table,axis=1)<=capital),axis=-1)#找到符合条件的行动的index_list
