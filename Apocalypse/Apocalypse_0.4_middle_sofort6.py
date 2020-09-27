@@ -341,7 +341,7 @@ if __name__ == "__main__":
                     state = next_state
                     capital = next_capital
                 #下面是参数更新过程
-                if (step_counter >10000) and (step_counter%2000 == 0) :#10000步之后每转移10次进行一次eval_Q的学习
+                if (step_counter >10000) and (step_counter%2000 == 0) :#10000步之后每转移2000次进行一次eval_Q的学习
                     if step_counter >= batch_size:
                         tree_idx, batch_memory, ISWeights = memory.sample(batch_size)
                         batch_state, batch_capital,batch_next_capital,batch_action, batch_revenue, batch_next_state ,batch_done = zip(*batch_memory)
