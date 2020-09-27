@@ -3,6 +3,7 @@
 #即把一场比赛的所有转移作为一次游戏存入reply_buffer,reply_buffer里有200场比赛，每次抽取5场进行学习，每进行一场学习一次
 #由于这样的batch_size数量就很多，所以要测试一下cpu和GPU哪个快
 #在前面回放区未满的时候，由于一些p为0，会出现除数为0的情况————20200927（已搞定）
+#现在时batch_size是20000，然后100万次转移后解除随机
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
 import tensorflow as tf
@@ -275,7 +276,7 @@ if __name__ == "__main__":
     gamma = 0.99
     epsilon = 1.            # 探索起始时的探索率
     #final_epsilon = 0.01            # 探索终止时的探索率
-    batch_size = 100
+    batch_size = 20000
     resultlist = pd.read_csv('D:\\data\\results_20141130-20160630.csv',index_col = 0)#得到赛果和比赛ID的对应表
     actions_table = [[a,b,c] for a in range(0,55,5) for b in range(0,55,5) for c in range(0,55,5)]#给神经网络输出层对应一个行动表
     step_counter = 0
@@ -309,7 +310,7 @@ if __name__ == "__main__":
                 tf.summary.scalar("Capital", capital,step = bisai_counter)
             while True:
                 if (step_counter % 1000 ==0) and (epsilon > 0):
-                    epsilon = epsilon-0.005#也就是经过20万次转移epsilon降到0以下
+                    epsilon = epsilon-0.001#也就是经过100万次转移epsilon降到0以下
                 state = jiangwei(state,capital,bianpan_env.mean_invested)#先降维，并整理形状，把capital放进去
                 if random.random() < epsilon:#如果落在随机区域
                     qualified_index = tf.squeeze(np.argwhere(np.sum(actions_table,axis=1)<=capital),axis=-1)#找到符合条件的行动的index_list
@@ -340,7 +341,7 @@ if __name__ == "__main__":
                     state = next_state
                     capital = next_capital
                 #下面是参数更新过程
-                if (step_counter >1000) and (step_counter%10 == 0) :#1000步之后每转移10次进行一次eval_Q的学习
+                if (step_counter >10000) and (step_counter%2000 == 0) :#10000步之后每转移10次进行一次eval_Q的学习
                     if step_counter >= batch_size:
                         tree_idx, batch_memory, ISWeights = memory.sample(batch_size)
                         batch_state, batch_capital,batch_next_capital,batch_action, batch_revenue, batch_next_state ,batch_done = zip(*batch_memory)
