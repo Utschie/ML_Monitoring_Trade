@@ -2,7 +2,7 @@
 #本版本打算大换血，使用big_batch，测试利用gpu性能
 #即把一场比赛的所有转移作为一次游戏存入reply_buffer,reply_buffer里有200场比赛，每次抽取5场进行学习，每进行一场学习一次
 #由于这样的batch_size数量就很多，所以要测试一下cpu和GPU哪个快
-#在前面回放区未满的时候
+#在前面回放区未满的时候，由于一些p为0，会出现除数为0的情况————20200927（已搞定）
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
 import tensorflow as tf
@@ -208,17 +208,25 @@ class Q_Network(tf.keras.Model):
         super().__init__()#调用tf.keras.Model的类初始化方法
         self.dense1 = tf.keras.layers.Dense(units=144, activation=tf.nn.relu)#输入层
         self.dense2 = tf.keras.layers.Dense(units=144, activation=tf.nn.relu)#一个隐藏层
+        self.dense2_d = tf.keras.layers.Dropout(0.5)
         self.dense3 = tf.keras.layers.Dense(units=144, activation=tf.nn.relu)
+        self.dense3_d = tf.keras.layers.Dropout(0.5)
         self.dense4 = tf.keras.layers.Dense(units=144, activation=tf.nn.relu)
+        self.dense4_d = tf.keras.layers.Dropout(0.5)
         self.dense5 = tf.keras.layers.Dense(units=144, activation=tf.nn.relu)
+        self.dense5_d = tf.keras.layers.Dropout(0.5)
         self.dense6 = tf.keras.layers.Dense(units=self.n_actions)#输出层代表着在当前最大赔率前，买和不买的六种行动的价值
 
     def call(self,state): #输入从env那里获得的statematrix
         x = self.dense1(state)#输出神经网络
         x = self.dense2(x)#
+        x = self.dense2_d(x)
         x = self.dense3(x)
+        x = self.dense3_d(x)
         x = self.dense4(x)
+        x = self.dense4_d(x)
         x = self.dense5(x)
+        x = self.dense5_d(x)
         q_values = self.dense6(x)#
         return q_values#q_value是一个（1,1331）的张量
 
@@ -267,7 +275,7 @@ if __name__ == "__main__":
     gamma = 0.99
     epsilon = 1.            # 探索起始时的探索率
     #final_epsilon = 0.01            # 探索终止时的探索率
-    batch_size = 20000
+    batch_size = 100
     resultlist = pd.read_csv('D:\\data\\results_20141130-20160630.csv',index_col = 0)#得到赛果和比赛ID的对应表
     actions_table = [[a,b,c] for a in range(0,55,5) for b in range(0,55,5) for c in range(0,55,5)]#给神经网络输出层对应一个行动表
     step_counter = 0
