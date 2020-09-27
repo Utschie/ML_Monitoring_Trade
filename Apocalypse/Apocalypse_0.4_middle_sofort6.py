@@ -358,7 +358,8 @@ if __name__ == "__main__":
                         y_true = batch_revenue+np.array(list(map(tf.reduce_max,qualified_q_values)))*(1-np.array(batch_done))
                         one_hot_matrix = tf.one_hot(np.array(batch_action),depth=1331,on_value=1.0, off_value=0.0)
                         y_pred=tf.reduce_sum(tf.squeeze(eval_Q(np.array(batch_state)))*one_hot_matrix,axis=1)
-                        loss =  tf.reduce_mean(ISWeights * tf.math.squared_difference(y_true, y_pred))#y_true和y_pred都是第0维为batch_size的张量
+                        loss = tf.keras.losses.MSE(y_true = y_true,y_pred =y_pred,sample_weight = ISWeights)
+                        #或者loss =  tf.reduce_mean(ISWeights * tf.math.squared_difference(y_true, y_pred))#y_true和y_pred都是第0维为batch_size的张量
                         abs_errors = tf.abs(y_true - y_pred)#计算abs_error用与更新tree,得到保存着每个样本的abs_errors的向量
                     grads = tape.gradient(loss, eval_Q.variables)
                     memory.batch_update(tree_idx, abs_errors)#计算完td-error后更新tree
