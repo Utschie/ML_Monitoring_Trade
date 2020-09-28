@@ -356,8 +356,8 @@ if __name__ == "__main__":
                     with tf.GradientTape() as tape:
                         #y_true是用DDQN的方式求
                         eval_actions=np.array(list(map(eval_Q.predict,batch_next_state,batch_next_capital)))#对batch中的每一个用eval_Q选择符合条件的动作索引
-                        eval_actions = tf.squeeze(eval_actions)#变成二维
-                        one_hot_matrix = tf.one_hot(np.array(eval_actions),depth=1331,on_value=1.0,off_value=0.0)
+                        eval_actions = tf.squeeze(eval_actions)#变成一维，共有batch_size元素
+                        one_hot_matrix = tf.one_hot(np.array(eval_actions),depth=1331,on_value=1.0,off_value=0.0)#有batch_size行，1331列
                         max_Q_value = tf.reduce_sum(tf.squeeze(target_Q(np.array(batch_next_state)))*one_hot_matrix,axis=1)
                         y_true = batch_revenue+max_Q_value*(1-np.array(batch_done))
                         #y_pred
