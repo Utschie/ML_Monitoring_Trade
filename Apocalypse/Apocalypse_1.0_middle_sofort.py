@@ -1,2 +1,2 @@
 ##1.0以上的模型都是基于DDQN或Dueling DQN以及priorited reply方法的模型
-#本模型是middle_sofort版，用比赛做大batch下降
+#本模型是middle_sofort版，用比赛做大batch下降，使用了DDQN，Dueling DQN和priorited reply
