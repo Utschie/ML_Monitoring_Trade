@@ -1,6 +1,4 @@
-#1.0以上的模型都是基于DDQN或Dueling DQN以及priorited reply方法的模型
-#本模型是middle_sofort版，用比赛做大batch下降，使用了DDQN，Dueling DQN和priorited reply
-#Tensorflow要到2.3.0及以上版本，loss里才有sample_weight这个选项
+#本模型只是比1.0_middle_sofort的4个策略选择改成4个
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
 import tensorflow as tf
@@ -200,7 +198,7 @@ class Memory(object):  # stored as ( s, a, r, s_ ) in SumTree，一个记忆回�
 class Q_Network(tf.keras.Model):
     def __init__(self,
                       n_companies=71,
-                      n_actions=1331):#有默认值的属性必须放在没默认值属性的后面
+                      n_actions=4):#有默认值的属性必须放在没默认值属性的后面
         self.n_companies = n_companies
         self.n_actions = n_actions
         super().__init__()#调用tf.keras.Model的类初始化方法
@@ -229,7 +227,7 @@ class Q_Network(tf.keras.Model):
         v = self.dense6_v(x)
         a = self.dense6_a(x)
         q_values = v+(a-tf.reduce_mean(a, axis=1, keepdims=True))#Dueling DQN
-        return q_values#q_value是一个（1,1331）的张量
+        return q_values#q_value是一个（1,4）的张量
 
     def predict(self,state,capital):#用来对应动作
         q_values = self.call(state)#先根据jiangwei好的state求q值
@@ -269,7 +267,7 @@ def jiangwei(state,capital,mean_invested):#所有变量都归一化
  
 if __name__ == "__main__":
     start0 = time.time()
-    summary_writer = tf.summary.create_file_writer('./tensorboard_1.0_middle_sofort') #在代码所在文件夹同目录下创建tensorboard文件夹（本代码在jupyternotbook里跑，所以在jupyternotebook里可以看到）
+    summary_writer = tf.summary.create_file_writer('./tensorboard_1.0_middle_sofort2') #在代码所在文件夹同目录下创建tensorboard文件夹（本代码在jupyternotbook里跑，所以在jupyternotebook里可以看到）
     #########设置超参数
     learning_rate = 0.001#学习率
     opt = tf.keras.optimizers.Adam(learning_rate,amsgrad=True)#设定最优化方法
@@ -278,7 +276,7 @@ if __name__ == "__main__":
     #final_epsilon = 0.01            # 探索终止时的探索率
     batch_size = 5000
     resultlist = pd.read_csv('D:\\data\\results_20141130-20160630.csv',index_col = 0)#得到赛果和比赛ID的对应表
-    actions_table = [[a,b,c] for a in range(0,55,5) for b in range(0,55,5) for c in range(0,55,5)]#给神经网络输出层对应一个行动表
+    actions_table = [[0,0,0],[5,0,0],[0,5,0],[0,0,5]]#给神经网络输出层对应一个行动表
     step_counter = 0
     learn_step_counter = 0
     target_repalce_counter = 0 
@@ -288,7 +286,7 @@ if __name__ == "__main__":
     replay_buffer = deque(maxlen=memory_size)#建立一个记忆回放区
     eval_Q = Q_Network()#初始化行动Q网络
     target_Q = Q_Network()#初始化目标Q网络
-    weights_path = 'D:\\data\\eval_Q_weights_1.0_middle_sofort.ckpt'
+    weights_path = 'D:\\data\\eval_Q_weights_1.0_middle_sofort2.ckpt'
     filefolderlist = os.listdir('F:\\cleaned_data_20141130-20160630')
     ################下面是单场比赛的流程
 
@@ -308,7 +306,7 @@ if __name__ == "__main__":
             state,done,capital =  bianpan_env.get_state()#把第一个状态作为初始化状态
             with summary_writer.as_default():
                 tf.summary.scalar("Capital", capital,step = bisai_counter)
-
+                
             while True:
                 if (step_counter % 1000 ==0) and (epsilon > 0):
                     epsilon = epsilon-0.001#也就是经过100万次转移epsilon降到0以下
@@ -342,7 +340,7 @@ if __name__ == "__main__":
                     state = next_state
                     capital = next_capital
                 #下面是参数更新过程
-                if (step_counter >2000) and (step_counter%50 == 0) :#10000步之后每转移2000次进行一次eval_Q的学习
+                if (step_counter >2000) and (step_counter%50 == 0) :#2000步之后每转移50次进行一次eval_Q的学习
                     if step_counter >= batch_size:
                         tree_idx, batch_memory, ISWeights = memory.sample(batch_size)
                         batch_state, batch_capital,batch_next_capital,batch_action, batch_revenue, batch_next_state ,batch_done = zip(*batch_memory)
@@ -352,17 +350,17 @@ if __name__ == "__main__":
                         batch_state, batch_capital,batch_next_capital,batch_action, batch_revenue, batch_next_state ,batch_done = zip(*batch_memory)
                     #y_true = batch_revenue+tf.reduce_max(target_Q.predict(np.array(batch_next_state)),axis = 1)*(1-np.array(batch_done))#reduce_max来返回最大值，暂不考虑折现率gamma,
                         #tensorflow中张量相乘是对应行相乘，所以eval_Q(batch_state)有多少列，one_hot就得有多少列，如下
-                    #y_pred = tf.reduce_sum(tf.squeeze(eval_Q(np.array(batch_state)))*tf.one_hot(np.array(batch_action),depth=1331,on_value=1.0, off_value=0.0),axis=1)#one_hot来生成对应位置为1的矩阵，depth是列数，reduce_sum(axis=1)来求各行和转成一维张量
+                    #y_pred = tf.reduce_sum(tf.squeeze(eval_Q(np.array(batch_state)))*tf.one_hot(np.array(batch_action),depth=4,on_value=1.0, off_value=0.0),axis=1)#one_hot来生成对应位置为1的矩阵，depth是列数，reduce_sum(axis=1)来求各行和转成一维张量
                     #tf.squeeze是用来去掉张量里所有为1的维度
                     with tf.GradientTape() as tape:
                         #y_true是用DDQN的方式求
                         eval_actions=np.array(list(map(eval_Q.predict,batch_next_state,batch_next_capital)))#对batch中的每一个用eval_Q选择符合条件的动作索引
                         eval_actions = tf.squeeze(eval_actions)#变成一维，共有batch_size元素
-                        one_hot_matrix = tf.one_hot(np.array(eval_actions),depth=1331,on_value=1.0,off_value=0.0)#有batch_size行，1331列
+                        one_hot_matrix = tf.one_hot(np.array(eval_actions),depth=4,on_value=1.0,off_value=0.0)#有batch_size行，4列
                         max_Q_value = tf.reduce_sum(tf.squeeze(target_Q(np.array(batch_next_state)))*one_hot_matrix,axis=1)
                         y_true = batch_revenue+max_Q_value*(1-np.array(batch_done))
                         #y_pred
-                        one_hot_matrix = tf.one_hot(np.array(batch_action),depth=1331,on_value=1.0, off_value=0.0)
+                        one_hot_matrix = tf.one_hot(np.array(batch_action),depth=4,on_value=1.0, off_value=0.0)
                         y_pred=tf.reduce_sum(tf.squeeze(eval_Q(np.array(batch_state)))*one_hot_matrix,axis=1)
                         loss = tf.reduce_mean(ISWeights * tf.math.squared_difference(y_true, y_pred))
                         #或者loss =  tf.reduce_mean(ISWeights * tf.math.squared_difference(y_true, y_pred))#y_true和y_pred都是第0维为batch_size的张量

@@ -4,6 +4,7 @@
 #由于这样的batch_size数量就很多，所以要测试一下cpu和GPU哪个快
 #在前面回放区未满的时候，由于一些p为0，会出现除数为0的情况————20200927（已搞定）
 #现在时batch_size是20000，然后100万次转移后解除随机
+#如果每次学习隔的步骤太多的话，和target_Q交换的次数就太少
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
 import tensorflow as tf
@@ -276,7 +277,7 @@ if __name__ == "__main__":
     gamma = 0.99
     epsilon = 1.            # 探索起始时的探索率
     #final_epsilon = 0.01            # 探索终止时的探索率
-    batch_size = 20000
+    batch_size = 5000
     resultlist = pd.read_csv('D:\\data\\results_20141130-20160630.csv',index_col = 0)#得到赛果和比赛ID的对应表
     actions_table = [[a,b,c] for a in range(0,55,5) for b in range(0,55,5) for c in range(0,55,5)]#给神经网络输出层对应一个行动表
     step_counter = 0
@@ -341,7 +342,7 @@ if __name__ == "__main__":
                     state = next_state
                     capital = next_capital
                 #下面是参数更新过程
-                if (step_counter >10000) and (step_counter%2000 == 0) :#10000步之后每转移2000次进行一次eval_Q的学习
+                if (step_counter >10000) and (step_counter%50 == 0) :#10000步之后每转移400次进行一次eval_Q的学习
                     if step_counter >= batch_size:
                         tree_idx, batch_memory, ISWeights = memory.sample(batch_size)
                         batch_state, batch_capital,batch_next_capital,batch_action, batch_revenue, batch_next_state ,batch_done = zip(*batch_memory)
@@ -358,7 +359,7 @@ if __name__ == "__main__":
                         y_true = batch_revenue+np.array(list(map(tf.reduce_max,qualified_q_values)))*(1-np.array(batch_done))
                         one_hot_matrix = tf.one_hot(np.array(batch_action),depth=1331,on_value=1.0, off_value=0.0)
                         y_pred=tf.reduce_sum(tf.squeeze(eval_Q(np.array(batch_state)))*one_hot_matrix,axis=1)
-                        loss = tf.keras.losses.MeanSquaredError(y_true = y_true,y_pred =y_pred,sample_weight = ISWeights)
+                        loss = tf.reduce_mean(ISWeights*tf.math.squared_difference(y_true, y_pred))
                         #或者loss =  tf.reduce_mean(ISWeights * tf.math.squared_difference(y_true, y_pred))#y_true和y_pred都是第0维为batch_size的张量
                         abs_errors = tf.abs(y_true - y_pred)#计算abs_error用与更新tree,得到保存着每个样本的abs_errors的向量
                     grads = tape.gradient(loss, eval_Q.variables)
@@ -368,7 +369,7 @@ if __name__ == "__main__":
                     opt.apply_gradients(grads_and_vars=zip(grads, eval_Q.variables))
                     learn_step_counter+=1#每学习一次，学习步数+1
                     print('已学习'+str(learn_step_counter)+'次')
-                    if (learn_step_counter % 300 == 0) and (learn_step_counter > 0):#每学习300次，target_Q网络参数进行一次变量替换
+                    if (learn_step_counter % 200 == 0) and (learn_step_counter > 0):#每学习300次，target_Q网络参数进行一次变量替换
                         eval_Q.save_weights(weights_path, overwrite=True)#保存并覆盖之前的检查点，储存权重
                         target_Q.load_weights(weights_path)#读取eval_Q刚刚保存的权重
                         target_repalce_counter+=1
