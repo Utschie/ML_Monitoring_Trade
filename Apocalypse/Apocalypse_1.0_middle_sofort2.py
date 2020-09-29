@@ -1,6 +1,6 @@
 #本模型只是比1.0_middle_sofort的4个策略选择改成4个
 import os
-os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
+#os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
 import tensorflow as tf
 from collections import deque
 import numpy as np
