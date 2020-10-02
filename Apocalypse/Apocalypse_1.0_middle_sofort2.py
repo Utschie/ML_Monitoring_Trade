@@ -1,4 +1,5 @@
 #本模型只是比1.0_middle_sofort的4个策略选择改成4个
+#之前忘记了乘gamma————20201002
 import os
 #os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
 import tensorflow as tf
@@ -305,8 +306,7 @@ if __name__ == "__main__":
             bianpan_env = Env(filepath,result)#每场比赛做一个环境
             state,done,capital =  bianpan_env.get_state()#把第一个状态作为初始化状态
             with summary_writer.as_default():
-                tf.summary.scalar("Capital", capital,step = bisai_counter)
-                
+                tf.summary.scalar("Capital", capital,step = bisai_counter)  
             while True:
                 if (step_counter % 1000 ==0) and (epsilon > 0):
                     epsilon = epsilon-0.001#也就是经过100万次转移epsilon降到0以下
@@ -358,7 +358,7 @@ if __name__ == "__main__":
                         eval_actions = tf.squeeze(eval_actions)#变成一维，共有batch_size元素
                         one_hot_matrix = tf.one_hot(np.array(eval_actions),depth=4,on_value=1.0,off_value=0.0)#有batch_size行，4列
                         max_Q_value = tf.reduce_sum(tf.squeeze(target_Q(np.array(batch_next_state)))*one_hot_matrix,axis=1)
-                        y_true = batch_revenue+max_Q_value*(1-np.array(batch_done))
+                        y_true = batch_revenue+gamma*max_Q_value*(1-np.array(batch_done))
                         #y_pred
                         one_hot_matrix = tf.one_hot(np.array(batch_action),depth=4,on_value=1.0, off_value=0.0)
                         y_pred=tf.reduce_sum(tf.squeeze(eval_Q(np.array(batch_state)))*one_hot_matrix,axis=1)

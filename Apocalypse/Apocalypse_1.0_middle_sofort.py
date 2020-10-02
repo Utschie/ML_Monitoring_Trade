@@ -360,7 +360,7 @@ if __name__ == "__main__":
                         eval_actions = tf.squeeze(eval_actions)#变成一维，共有batch_size元素
                         one_hot_matrix = tf.one_hot(np.array(eval_actions),depth=1331,on_value=1.0,off_value=0.0)#有batch_size行，1331列
                         max_Q_value = tf.reduce_sum(tf.squeeze(target_Q(np.array(batch_next_state)))*one_hot_matrix,axis=1)
-                        y_true = batch_revenue+max_Q_value*(1-np.array(batch_done))
+                        y_true = batch_revenue+gamma*max_Q_value*(1-np.array(batch_done))
                         #y_pred
                         one_hot_matrix = tf.one_hot(np.array(batch_action),depth=1331,on_value=1.0, off_value=0.0)
                         y_pred=tf.reduce_sum(tf.squeeze(eval_Q(np.array(batch_state)))*one_hot_matrix,axis=1)

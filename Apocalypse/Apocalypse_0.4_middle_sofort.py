@@ -5,6 +5,7 @@
 #sofort无需随机就可以自己开始行动
 #我猜大概是由于负回报设计得过大，所以测试中几乎稳定在85%的投资率，可以试试较小一点的
 #把出赔率的公司数也改成了0-1之间，然后frametime也变成了0-1之间,capital改成0-500也变成0-1之间
+#之前忘记了乘gamma————20201002
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
 import tensorflow as tf
