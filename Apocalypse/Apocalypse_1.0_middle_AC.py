@@ -456,6 +456,13 @@ if __name__ == "__main__":
                         target_repalce_counter+=1
                         print('目标Q网络已更新'+str(target_repalce_counter)+'次')
                 if done:#终盘时储存信息，同时更新actor，清除actor内存
+                    with summary_writer.as_default():
+                        tf.summary.scalar('Zinsen',bianpan_env.get_zinsen(),step = bisai_counter)
+                        tf.summary.scalar('rest_capital',bianpan_env.gesamt_revenue+500,step = bisai_counter)
+                        tf.summary.scalar('wrong_action_rate',bianpan_env.wrong_action_counter/bianpan_env.action_counter,step = bisai_counter)
+                        tf.summary.scalar('investion_rate',bianpan_env.gesamt_touzi/500.0,step = bisai_counter)
+                        tf.summary.scalar('no_action_rate',bianpan_env.no_action_counter/bianpan_env.action_counter,step = bisai_counter)
+                        break
                     transition = np.array((state,capital,next_capital,action, revenue,jiangwei(next_state,next_capital,bianpan_env.mean_invested),1))
                     actor.memory.store(transition)
                     critic.memory.store(transition)
@@ -464,13 +471,6 @@ if __name__ == "__main__":
                     episode_memory = actor.memory.get_memory()
                     td_error = critic.get_td_error(episode_memory)#获取td_errir
                     actor_loss = actor.learn(td_error)#actor学习
-                    with summary_writer.as_default():
-                        tf.summary.scalar('Zinsen',bianpan_env.get_zinsen(),step = bisai_counter)
-                        tf.summary.scalar('rest_capital',bianpan_env.gesamt_revenue+500,step = bisai_counter)
-                        tf.summary.scalar('wrong_action_rate',bianpan_env.wrong_action_counter/bianpan_env.action_counter,step = bisai_counter)
-                        tf.summary.scalar('investion_rate',bianpan_env.gesamt_touzi/500.0,step = bisai_counter)
-                        tf.summary.scalar('no_action_rate',bianpan_env.no_action_counter/bianpan_env.action_counter,step = bisai_counter)
-                        break
 
                 else:
                     transition = np.array((state,capital,next_capital,action, revenue,jiangwei(next_state,next_capital,bianpan_env.mean_invested),0))
