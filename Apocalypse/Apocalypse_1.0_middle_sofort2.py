@@ -320,6 +320,10 @@ if __name__ == "__main__":
                 revenue = bianpan_env.revenue(actions_table[action])#根据行动和是否终赔计算收益
                 next_state,done,next_capital = bianpan_env.get_state()#获得下一个状态,终止状态的next_state为0矩阵
                 if done:
+                    transition = np.array((state,capital,next_capital,action, revenue,jiangwei(next_state,next_capital,bianpan_env.mean_invested),1))
+                    memory.store(transition)
+                    state = next_state
+                    capital = next_capital
                     with summary_writer.as_default():
                         tf.summary.scalar('Zinsen',bianpan_env.get_zinsen(),step = bisai_counter)
                         tf.summary.scalar('rest_capital',bianpan_env.gesamt_revenue+500,step = bisai_counter)

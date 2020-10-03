@@ -205,6 +205,8 @@ class Actor_Memory(object):#建立一个演员的当前回合记忆，不过每�
         self.memory.append(transition)
     def get_memory(self):
         return self.memory#把记忆还给它
+    def clear(self):
+        self.memory = deque()
 
 class Q_Network(tf.keras.Model):#给critic定义的q网络
     def __init__(self,
@@ -333,6 +335,7 @@ class Actor(object):
     def __init__(self,lr=0.001):
         self.net = Policy_Network()#初始化网络
         self.opt = tf.keras.optimizers.Adam(lr,amsgrad=True)#设定最优化方法
+        self.memory = Actor_Memory()
 
     def choose_action(self,state,capital):
         actions, possibilities = zip(*self.net.possibility(state,capital))#获得行动概率二元组并解耦
@@ -340,25 +343,28 @@ class Actor(object):
         action = actions[index]#根据索引选择行动的索引，即对应action_table里的索引
         return action
 
-    def learn(self,memory,td_error):#把当前回合的记忆和critic算出的td_error传给它
-        batch_state, batch_capital,batch_action = zip(*memory)#把本回合的转移拆成两个batch
+    def learn(self,td_error):#把当前回合的记忆和critic算出的td_error传给它
+        memory = self.memory.get_memory()
+        batch_state, batch_capital,batch_next_capital,batch_action, batch_revenue, batch_next_state ,batch_done = zip(*memory)#把本回合的转移拆成两个batch
         batch_parameters = self.net.filter(batch_state,batch_capital)#获得经过筛选后的parameters的值
         with tf.GradientTape() as tape:    
             neg_log_prob = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=batch_parameters, labels=batch_action)
             loss = tf.reduce_mean(neg_log_prob * td_error)
         grads = tape.gradient(loss, self.net.variables)
-        opt.apply_gradients(grads_and_vars=zip(grads, self.net.variables))
+        self.opt.apply_gradients(grads_and_vars=zip(grads, self.net.variables))
+        return loss
         
         
 class Critic(object):#只需要做每次学习，以及把相应的td_error传给Actor
     def __init__(self,lr=0.001):
         self.eval_Q = Q_Network()#给它一个评价Q网络
         self.target_Q = Q_Network()#给它一个目标Q网络
-        self.gamma = 0.99
+        self.gamma = 0.999
         self.memory_size = 500000
         self.batch_size=1000
         self.memory = Critic_Memory(capacity=self.memory_size)
         self.opt = tf.keras.optimizers.Adam(lr,amsgrad=True)#设定最优化方法
+        self.target_repalce_counter = 0
 
     def get_td_error(self,memory):#由于critic的学习和actor的学习未必同步，所以专门做一个get_td_error的函数，用来计算本回合的td_error
         batch_state, batch_capital,batch_next_capital,batch_action, batch_revenue, batch_next_state ,batch_done = zip(*memory)#从Actor_memory里提取出batch
@@ -391,6 +397,7 @@ class Critic(object):#只需要做每次学习，以及把相应的td_error传�
         grads = tape.gradient(loss, self.eval_Q.variables)
         self.memory.batch_update(tree_idx, abs_errors)#计算完td-error后更新tree
         self.opt.apply_gradients(grads_and_vars=zip(grads, self.eval_Q.variables))#更新参数
+        return loss#返回loss好可以记录下来输出
 
 
         
@@ -404,22 +411,73 @@ if __name__ == "__main__":
     start0 = time.time()
     summary_writer = tf.summary.create_file_writer('./tensorboard_1.0_middle_AC') #在代码所在文件夹同目录下创建tensorboard文件夹（本代码在jupyternotbook里跑，所以在jupyternotebook里可以看到）
     #########设置超参数
-    learning_rate = 0.001#学习率
-    opt = tf.keras.optimizers.Adam(learning_rate,amsgrad=True)#设定最优化方法
-    gamma = 0.99
     epsilon = 1.            # 探索起始时的探索率
     #final_epsilon = 0.01            # 探索终止时的探索率
-    batch_size = 500
+    batch_size = 1000
     resultlist = pd.read_csv('D:\\data\\results_20141130-20160630.csv',index_col = 0)#得到赛果和比赛ID的对应表
     actions_table = [[0,0,0],[5,0,0],[0,5,0],[0,0,5]]#给神经网络输出层对应一个行动表
     step_counter = 0
     learn_step_counter = 0
     target_repalce_counter = 0 
     bisai_counter = 1
-    memory_size = 500000
-    memory = Critic_Memory(capacity=memory_size)
-    replay_buffer = deque(maxlen=memory_size)#建立一个记忆回放区
-    eval_Q = Q_Network()#初始化行动Q网络
-    target_Q = Q_Network()#初始化目标Q网络
     weights_path = 'D:\\data\\eval_Q_weights_1.0_middle_AC.ckpt'
     filefolderlist = os.listdir('F:\\cleaned_data_20141130-20160630')
+    actor = Actor()#实例化一个actor
+    critic = Critic()#实例化一个critic
+    for i in filefolderlist:#挨个文件夹训练
+        filelist = os.listdir('F:\\cleaned_data_20141130-20160630\\'+i)
+        for j in filelist:#挨场比赛训练
+            start=time.time()
+            filepath = 'F:\\cleaned_data_20141130-20160630\\'+i+'\\'+j#文件路径
+            bisai_id = int(re.findall(r'\\(\d*?).csv',filepath)[0])#从filepath中得到bisai代码的整型数
+            try:
+                result = resultlist.loc[bisai_id]#其中result.host即为主队进球，result.guest则为客队进球
+            except Exception:#因为有的比赛结果没有存进去
+                continue
+            bianpan_env = Env(filepath,result)#每场比赛做一个环境
+            actor.memory.clear()#每场比赛开始前要清空记忆
+            state,done,capital =  bianpan_env.get_state()#把第一个状态作为初始化状态
+            while True:
+                if (step_counter % 1000 ==0) and (epsilon > 0):
+                    epsilon = epsilon-0.001#也就是经过100万次转移epsilon降到0以下
+                state = jiangwei(state,capital,bianpan_env.mean_invested)#先降维，并整理形状，把capital放进去
+                if random.random() < epsilon:#如果落在随机区域
+                    qualified_index = tf.squeeze(np.argwhere(np.sum(actions_table,axis=1)<=capital),axis=-1)#找到符合条件的行动的index_list
+                    action = random.choice(qualified_index)#在qualified_index中随机选取一个动作,注意随机挑选出返回的是列表
+                else:
+                    action = actor.choose_action(state,capital)
+                revenue = bianpan_env.revenue(actions_table[action])#根据行动和是否终赔计算收益
+                next_state,done,next_capital = bianpan_env.get_state()#获得下一个状态,终止状态的next_state为0矩阵
+                if (step_counter >2000) and (step_counter%100 == 0) :
+                    critic_loss = critic.learn()
+                if (learn_step_counter % 300 == 0) and (learn_step_counter > 0):#每学习300次，target_Q网络参数进行一次变量替换
+                        critic.eval_Q.save_weights(weights_path, overwrite=True)#保存并覆盖之前的检查点，储存权重
+                        critic.target_Q.load_weights(weights_path)#读取eval_Q刚刚保存的权重
+                        target_repalce_counter+=1
+                        print('目标Q网络已更新'+str(target_repalce_counter)+'次')
+                if done:#终盘时储存信息，同时更新actor，清除actor内存
+                    transition = np.array((state,capital,next_capital,action, revenue,jiangwei(next_state,next_capital,bianpan_env.mean_invested),1))
+                    actor.memory.store(transition)
+                    critic.memory.store(transition)
+                    state = next_state
+                    capital = next_capital
+                    episode_memory = actor.memory.get_memory()
+                    td_error = critic.get_td_error(episode_memory)#获取td_errir
+                    actor_loss = actor.learn(td_error)#actor学习
+                    with summary_writer.as_default():
+                        tf.summary.scalar('Zinsen',bianpan_env.get_zinsen(),step = bisai_counter)
+                        tf.summary.scalar('rest_capital',bianpan_env.gesamt_revenue+500,step = bisai_counter)
+                        tf.summary.scalar('wrong_action_rate',bianpan_env.wrong_action_counter/bianpan_env.action_counter,step = bisai_counter)
+                        tf.summary.scalar('investion_rate',bianpan_env.gesamt_touzi/500.0,step = bisai_counter)
+                        tf.summary.scalar('no_action_rate',bianpan_env.no_action_counter/bianpan_env.action_counter,step = bisai_counter)
+                        break
+
+                else:
+                    transition = np.array((state,capital,next_capital,action, revenue,jiangwei(next_state,next_capital,bianpan_env.mean_invested),0))
+                    actor.memory.store(transition)
+                    critic.memory.store(transition)
+                    state = next_state
+                    capital = next_capital
+
+
+
