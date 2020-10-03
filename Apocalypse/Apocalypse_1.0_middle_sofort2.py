@@ -1,5 +1,6 @@
 #本模型只是比1.0_middle_sofort的4个策略选择改成4个
 #之前忘记了乘gamma————20201002
+#一个可能存在的问题是，即便是纯随机策略，由于投注总金额的限制，导致后期的变盘根本不会被用到，而全都只能选择0，应该解决信息利用不充分的问题————20201004
 import os
 #os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
 import tensorflow as tf
