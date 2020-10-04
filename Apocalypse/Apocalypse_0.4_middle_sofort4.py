@@ -205,7 +205,7 @@ if __name__ == "__main__":
                         tf.summary.scalar('wrong_action_rate',bianpan_env.wrong_action_counter/bianpan_env.action_counter,step = bisai_counter)
                         tf.summary.scalar('investion_rate',bianpan_env.gesamt_touzi/500.0,step = bisai_counter)
                         tf.summary.scalar('no_action_rate',bianpan_env.no_action_counter/bianpan_env.action_counter,step = bisai_counter)
-                        break
+                    break
                 else:#如果没终盘
                     replay_buffer.append((state, action, revenue,jiangwei(next_state,next_capital,frametime,bianpan_env.mean_invested),0))
                 #这里需要标识一下终止状态，钱花光了就终止了

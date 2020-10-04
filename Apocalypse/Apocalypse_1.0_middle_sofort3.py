@@ -1,4 +1,4 @@
-#本模型只是比1.0_middle_sofort的4个策略选择改成4个
+#本模型只是比1.0_middle_sofort加入了考虑frametime，并将revenue改成根据机会成本计算的收益，以及在输出中显示钱花光那一时刻的frametime
 #之前忘记了乘gamma————20201002
 #一个可能存在的问题是，即便是纯随机策略，由于投注总金额的限制，导致后期的变盘根本不会被用到，而全都只能选择0，应该解决信息利用不充分的问题————20201004
 import os
@@ -270,7 +270,10 @@ def jiangwei(state,capital,frametime,mean_invested):#所有变量都归一化
  
 if __name__ == "__main__":
     start0 = time.time()
-    summary_writer = tf.summary.create_file_writer('./tensorboard_1.0_middle_sofort2') #在代码所在文件夹同目录下创建tensorboard文件夹（本代码在jupyternotbook里跑，所以在jupyternotebook里可以看到）
+    summary_writer = tf.summary.create_file_writer('./tensorboard_1.0_middle_sofort3') #在代码所在文件夹同目录下创建tensorboard文件夹（本代码在jupyternotbook里跑，所以在jupyternotebook里可以看到）
+    summary_writer2 = tf.summary.create_file_writer('./tensorboard_1.0_middle_sofort3/use_out_time')
+    summary_writer3 = tf.summary.create_file_writer('./tensorboard_1.0_middle_sofort3/max_frametime')
+    summary_writer4 = tf.summary.create_file_writer('./tensorboard_1.0_middle_sofort3/used_step_ratio')
     #########设置超参数
     learning_rate = 0.001#学习率
     opt = tf.keras.optimizers.Adam(learning_rate,amsgrad=True)#设定最优化方法
@@ -289,7 +292,7 @@ if __name__ == "__main__":
     replay_buffer = deque(maxlen=memory_size)#建立一个记忆回放区
     eval_Q = Q_Network()#初始化行动Q网络
     target_Q = Q_Network()#初始化目标Q网络
-    weights_path = 'D:\\data\\eval_Q_weights_1.0_middle_sofort2.ckpt'
+    weights_path = 'D:\\data\\eval_Q_weights_1.0_middle_sofort3.ckpt'
     filefolderlist = os.listdir('F:\\cleaned_data_20141130-20160630')
     ################下面是单场比赛的流程
 
@@ -307,6 +310,9 @@ if __name__ == "__main__":
                 continue
             bianpan_env = Env(filepath,result)#每场比赛做一个环境
             state,frametime,done,capital =  bianpan_env.get_state()#把第一个状态作为初始化状态
+            end_switch = False
+            bisai_steps = 0
+            used_steps = 0
             with summary_writer.as_default():
                 tf.summary.scalar("Capital", capital,step = bisai_counter)  
             while True:
@@ -321,6 +327,12 @@ if __name__ == "__main__":
                     action = action_index#否则按着贪心选，这里[0]是因为predict返回的是一个单元素列表
                 revenue = bianpan_env.revenue(actions_table[action])#根据行动和是否终赔计算收益
                 next_state,next_frametime,done,next_capital = bianpan_env.get_state()#获得下一个状态,终止状态的next_state为0矩阵
+                bisai_steps+=1
+                if (next_capital<= 0) and (end_switch == False):
+                    use_out_time = frametime
+                    end_switch == True
+                if end_switch == False:#如果没花光
+                    used_steps+=1
                 if done:
                     with summary_writer.as_default():
                         tf.summary.scalar('Zinsen',bianpan_env.get_zinsen(),step = bisai_counter)
@@ -328,7 +340,13 @@ if __name__ == "__main__":
                         tf.summary.scalar('wrong_action_rate',bianpan_env.wrong_action_counter/bianpan_env.action_counter,step = bisai_counter)
                         tf.summary.scalar('investion_rate',bianpan_env.gesamt_touzi/500.0,step = bisai_counter)
                         tf.summary.scalar('no_action_rate',bianpan_env.no_action_counter/bianpan_env.action_counter,step = bisai_counter)
-                        break
+                    with summary_writer2.as_default():
+                        tf.summary.scalar('times',use_out_time/bianpan_env.max_frametime,step =bisai_counter)
+                    with summary_writer3.as_default():
+                        tf.summary.scalar('times',use_out_time/bianpan_env.max_frametime,step =bisai_counter)
+                    with summary_writer4.as_default():
+                        tf.summary.scalar('used_steps_ratio',used_steps/bisai_steps,step =bisai_counter)
+                    break
 
                     transition = np.array((state,capital,next_capital,action, revenue,jiangwei(next_state,next_capital,next_frametime,bianpan_env.mean_invested),1))
                     memory.store(transition)
@@ -387,4 +405,3 @@ if __name__ == "__main__":
             print('比赛'+filepath+'已完成'+'\n'+'用时'+str(end-start)+'秒\n')
     end0 = time.time()
     print('20141130-20160630总共用了'+str(end0-start0)+'秒')
-

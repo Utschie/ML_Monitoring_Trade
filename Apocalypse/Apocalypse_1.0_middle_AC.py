@@ -462,7 +462,7 @@ if __name__ == "__main__":
                         tf.summary.scalar('wrong_action_rate',bianpan_env.wrong_action_counter/bianpan_env.action_counter,step = bisai_counter)
                         tf.summary.scalar('investion_rate',bianpan_env.gesamt_touzi/500.0,step = bisai_counter)
                         tf.summary.scalar('no_action_rate',bianpan_env.no_action_counter/bianpan_env.action_counter,step = bisai_counter)
-                        break
+                    break
                     transition = np.array((state,capital,next_capital,action, revenue,jiangwei(next_state,next_capital,bianpan_env.mean_invested),1))
                     actor.memory.store(transition)
                     critic.memory.store(transition)
