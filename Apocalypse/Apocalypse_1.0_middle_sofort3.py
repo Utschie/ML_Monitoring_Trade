@@ -344,18 +344,15 @@ if __name__ == "__main__":
                         tf.summary.scalar('times',use_out_time/bianpan_env.max_frametime,step =bisai_counter)
                     with summary_writer4.as_default():
                         tf.summary.scalar('used_steps_ratio',used_steps/bisai_steps,step =bisai_counter)
-                    break
-
                     transition = np.array((state,capital,next_capital,action, revenue,jiangwei(next_state,next_capital,next_frametime,bianpan_env.mean_invested),1))
                     memory.store(transition)
                     state = next_state
                     capital = next_capital
                     frametime = next_frametime
-
+                    break
                 else:#如果没终盘
                     transition = np.array((state,capital,next_capital,action, revenue,jiangwei(next_state,next_capital,next_frametime,bianpan_env.mean_invested),0))
                     memory.store(transition)
-                #这里需要标识一下终止状态，钱花光了就终止了
                     state = next_state
                     capital = next_capital
                     frametime = next_frametime
