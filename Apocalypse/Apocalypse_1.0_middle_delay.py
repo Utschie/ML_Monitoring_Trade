@@ -292,6 +292,7 @@ if __name__ == "__main__":
     eval_Q = Q_Network()#初始化行动Q网络
     target_Q = Q_Network()#初始化目标Q网络
     weights_path = 'D:\\data\\eval_Q_weights_1.0_middle_delay.ckpt'
+    target_weights_path = 'D:\\data\\target_Q_weights_1.0_middle_delay.ckpt'
     filefolderlist = os.listdir('F:\\cleaned_data_20141130-20160630')
     ################下面是单场比赛的流程
 
@@ -394,6 +395,7 @@ if __name__ == "__main__":
                     if (learn_step_counter % 300 == 0) and (learn_step_counter > 0):#每学习300次，target_Q网络参数进行一次变量替换
                         eval_Q.save_weights(weights_path, overwrite=True)#保存并覆盖之前的检查点，储存权重
                         target_Q.load_weights(weights_path)#读取eval_Q刚刚保存的权重
+                        target_Q.save_weights(target_weights_path, overwrite=True)
                         target_repalce_counter+=1
                         print('目标Q网络已更新'+str(target_repalce_counter)+'次')
                 step_counter+=1#每转移一次，步数+1
