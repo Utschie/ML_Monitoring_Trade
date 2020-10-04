@@ -1,6 +1,5 @@
 #本模型只是比1.0_middle_sofort加入了考虑frametime，以及在输出中显示钱花光那一时刻的frametime————20201004（已搞定）
-#并将revenue改成根据机会成本计算的收益————20201004（好像不太可行）
-#尝试改成延迟收益————20201004
+#本模型是延迟收益，只有终赔时收益才会为正————20201004
 #一个可能存在的问题是，即便是纯随机策略，由于投注总金额的限制，导致后期的变盘根本不会被用到，而全都只能选择0，应该解决信息利用不充分的问题————20201004
 import os
 #os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
@@ -65,16 +64,17 @@ class Env():#定义一个环境用来与网络交互
             self.mean_guest = [(np.prod(self.mean_guest)+np.prod(peilv_action[2]))/(guest_middle+0.00000000001),guest_middle]
             self.mean_invested = self.mean_host+self.mean_fair+self.mean_guest
             if self.result.host > self.result.guest:
-                revenue = max_host*action[0]-sum(action)
+                sofort_revenue = max_host*action[0]-sum(action)#计算即时收益sofort_revenue
             elif self.result.host == self.result.guest:
-                revenue = max_fair*action[1]-sum(action)
+                sofort_revenue = max_fair*action[1]-sum(action)
             else:
-                revenue = max_guest*action[2]-sum(action)
+                sofort_revenue = max_guest*action[2]-sum(action)
             self.gesamt_revenue+=revenue#最终计算收益时在加上，以表示所有赢得钱，因为后面要除以总投资
+            revenue = -sum(action)#当前收益为负
         else:#如果不够执行行动
             self.action_counter+=1
             self.wrong_action_counter+=1
-            revenue = -200
+            revenue = 0
         if action ==[0,0,0]:
             revenue = 0
             self.no_action_counter+=1#计算无行动率
@@ -268,10 +268,10 @@ def jiangwei(state,capital,frametime,mean_invested):#所有变量都归一化
  
 if __name__ == "__main__":
     start0 = time.time()
-    summary_writer = tf.summary.create_file_writer('./tensorboard_1.0_middle_sofort3') #在代码所在文件夹同目录下创建tensorboard文件夹（本代码在jupyternotbook里跑，所以在jupyternotebook里可以看到）
-    summary_writer2 = tf.summary.create_file_writer('./tensorboard_1.0_middle_sofort3/use_out_time')
-    summary_writer3 = tf.summary.create_file_writer('./tensorboard_1.0_middle_sofort3/max_frametime')
-    summary_writer4 = tf.summary.create_file_writer('./tensorboard_1.0_middle_sofort3/used_step_ratio')
+    summary_writer = tf.summary.create_file_writer('./tensorboard_1.0_middle_delay') #在代码所在文件夹同目录下创建tensorboard文件夹（本代码在jupyternotbook里跑，所以在jupyternotebook里可以看到）
+    summary_writer2 = tf.summary.create_file_writer('./tensorboard_1.0_middle_delay/use_out_time')
+    summary_writer3 = tf.summary.create_file_writer('./tensorboard_1.0_middle_delay/max_frametime')
+    summary_writer4 = tf.summary.create_file_writer('./tensorboard_1.0_middle_delay/used_step_ratio')
     #########设置超参数
     learning_rate = 0.001#学习率
     opt = tf.keras.optimizers.Adam(learning_rate,amsgrad=True)#设定最优化方法
@@ -290,7 +290,7 @@ if __name__ == "__main__":
     replay_buffer = deque(maxlen=memory_size)#建立一个记忆回放区
     eval_Q = Q_Network()#初始化行动Q网络
     target_Q = Q_Network()#初始化目标Q网络
-    weights_path = 'D:\\data\\eval_Q_weights_1.0_middle_sofort3.ckpt'
+    weights_path = 'D:\\data\\eval_Q_weights_1.0_middle_delay.ckpt'
     filefolderlist = os.listdir('F:\\cleaned_data_20141130-20160630')
     ################下面是单场比赛的流程
 
@@ -332,6 +332,7 @@ if __name__ == "__main__":
                 if end_switch == False:#如果没花光
                     used_steps+=1
                 if done:
+                    revenue = bianpan_env.gesamt_revenue
                     with summary_writer.as_default():
                         tf.summary.scalar('Zinsen',bianpan_env.get_zinsen(),step = bisai_counter)
                         tf.summary.scalar('rest_capital',bianpan_env.gesamt_revenue+500,step = bisai_counter)
