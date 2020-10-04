@@ -69,7 +69,7 @@ class Env():#定义一个环境用来与网络交互
                 sofort_revenue = max_fair*action[1]-sum(action)
             else:
                 sofort_revenue = max_guest*action[2]-sum(action)
-            self.gesamt_revenue+=revenue#最终计算收益时在加上，以表示所有赢得钱，因为后面要除以总投资
+            self.gesamt_revenue+=sofort_revenue#最终计算收益时在加上，以表示所有赢得钱，因为后面要除以总投资
             revenue = -sum(action)#当前收益为负
         else:#如果不够执行行动
             self.action_counter+=1
