@@ -339,9 +339,9 @@ if __name__ == "__main__":
                         tf.summary.scalar('investion_rate',bianpan_env.gesamt_touzi/500.0,step = bisai_counter)
                         tf.summary.scalar('no_action_rate',bianpan_env.no_action_counter/bianpan_env.action_counter,step = bisai_counter)
                     with summary_writer2.as_default():
-                        tf.summary.scalar('times',use_out_time/bianpan_env.max_frametime,step =bisai_counter)
+                        tf.summary.scalar('times',use_out_time,step =bisai_counter)
                     with summary_writer3.as_default():
-                        tf.summary.scalar('times',use_out_time/bianpan_env.max_frametime,step =bisai_counter)
+                        tf.summary.scalar('times',bianpan_env.max_frametime,step =bisai_counter)
                     with summary_writer4.as_default():
                         tf.summary.scalar('used_steps_ratio',used_steps/bisai_steps,step =bisai_counter)
                     transition = np.array((state,capital,next_capital,action, revenue,jiangwei(next_state,next_capital,next_frametime,bianpan_env.mean_invested),1))
