@@ -86,7 +86,7 @@ class Env():#定义一个环境用来与网络交互
         done = False
         if self.frametime ==0.0:
             done = True
-        return next_state,done,self.capital#网络从此取出下一幕
+        return next_state,self.frametime,done,self.capital#网络从此取出下一幕
     
     def get_zinsen(self):
         self.gesamt_touzi =500.0-self.capital
@@ -155,7 +155,7 @@ class SumTree(object):
 
 class Critic_Memory(object):  # stored as ( s, a, r, s_ ) in SumTree，一个记忆回放区的类，里面就是一棵书，以及和环境交互的抽样和p值计算方法
     epsilon = 0.01  # small amount to avoid zero priority
-    alpha = 0.6  # [0~1] convert the importance of TD error to priority
+    alpha = 1.0  # [0~1] convert the importance of TD error to priority
     beta = 0.4  # importance-sampling, from initial value increasing to 1
     beta_increment_per_sampling = 0.001
     abs_err_upper = 1.  # clipped abs error
@@ -209,20 +209,17 @@ class Actor_Memory(object):#建立一个演员的当前回合记忆，不过每�
         self.memory = deque()
 
 class Q_Network(tf.keras.Model):#给critic定义的q网络
-    def __init__(self,
-                      n_companies=71,
-                      n_actions=4):#有默认值的属性必须放在没默认值属性的后面
-        self.n_companies = n_companies
+    def __init__(self,n_actions=4):#有默认值的属性必须放在没默认值属性的后面
         self.n_actions = n_actions
         super().__init__()#调用tf.keras.Model的类初始化方法
-        self.dense1 = tf.keras.layers.Dense(units=144, activation=tf.nn.relu)#输入层
-        self.dense2 = tf.keras.layers.Dense(units=144, activation=tf.nn.relu)#一个隐藏层
+        self.dense1 = tf.keras.layers.Dense(units=600, activation=tf.nn.relu)#输入层
+        self.dense2 = tf.keras.layers.Dense(units=600, activation=tf.nn.relu)#一个隐藏层
         self.dense2_d = tf.keras.layers.Dropout(0.5)
-        self.dense3 = tf.keras.layers.Dense(units=144, activation=tf.nn.relu)
+        self.dense3 = tf.keras.layers.Dense(units=600, activation=tf.nn.relu)
         self.dense3_d = tf.keras.layers.Dropout(0.5)
-        self.dense4 = tf.keras.layers.Dense(units=144, activation=tf.nn.relu)
+        self.dense4 = tf.keras.layers.Dense(units=600, activation=tf.nn.relu)
         self.dense4_d = tf.keras.layers.Dropout(0.5)
-        self.dense5 = tf.keras.layers.Dense(units=144, activation=tf.nn.relu)
+        self.dense5 = tf.keras.layers.Dense(units=600, activation=tf.nn.relu)
         self.dense5_d = tf.keras.layers.Dropout(0.5)
         self.dense6_v = tf.keras.layers.Dense(units=1, activation=tf.nn.relu)
         self.dense6_a = tf.keras.layers.Dense(units=self.n_actions)#输出层代表着在当前最大赔率前，买和不买的六种行动的价值
@@ -260,9 +257,10 @@ class Q_Network(tf.keras.Model):#给critic定义的q网络
         return new_q_value#返回所有满足条件的q值
     
 
-def jiangwei(state,capital,mean_invested):#所有变量都归一化
+def jiangwei(state,capital,frametime,mean_invested):#所有变量都归一化
     invested = [0.,0.,0.,0.,0.,0.]
     state=np.delete(state, 0, axis=-1)
+    frametime = frametime/50000.0
     length = len(state)/410.0#出赔率的公司数归一化
     invested[0] = mean_invested[0]/25.0
     invested[1] = mean_invested[1]/500.0
@@ -272,26 +270,23 @@ def jiangwei(state,capital,mean_invested):#所有变量都归一化
     invested[5] = mean_invested[5]/500.0
     percenttilelist = [np.percentile(state,i,axis = 0)[1:4] for i in range(0,105,5)]
     percentile = np.vstack(percenttilelist)#把当前状态的0%-100%分位数放到一个矩阵里
-    state = tf.concat((percentile.flatten()/25.0,[capital/500.0],invested,[length]),-1)#除以25是因为一般来讲赔率最高开到25
-    state = tf.reshape(state,(1,71))#63个分位数数据+8个capital,frametime和mean_invested,length共72个输入
+    state = tf.concat((percentile.flatten()/25.0,[capital/500.0],[frametime],invested,[length]),-1)#除以25是因为一般来讲赔率最高开到25
+    state = tf.reshape(state,(1,72))#63个分位数数据+8个capital,frametime和mean_invested,length共72个输入
     return state
 
 
 class Policy_Network(tf.keras.Model):#给actor定义的policy网络
-    def __init__(self,
-                      n_companies=71,
-                      n_actions=4):#有默认值的属性必须放在没默认值属性的后面
-        self.n_companies = n_companies
+    def __init__(self,n_actions=4):#有默认值的属性必须放在没默认值属性的后面
         self.n_actions = n_actions
         super().__init__()#调用tf.keras.Model的类初始化方法
-        self.dense1 = tf.keras.layers.Dense(units=144, activation=tf.nn.relu)#输入层
-        self.dense2 = tf.keras.layers.Dense(units=144, activation=tf.nn.relu)#一个隐藏层
+        self.dense1 = tf.keras.layers.Dense(units=600, activation=tf.nn.relu)#输入层
+        self.dense2 = tf.keras.layers.Dense(units=600, activation=tf.nn.relu)#一个隐藏层
         self.dense2_d = tf.keras.layers.Dropout(0.5)
-        self.dense3 = tf.keras.layers.Dense(units=144, activation=tf.nn.relu)
+        self.dense3 = tf.keras.layers.Dense(units=600, activation=tf.nn.relu)
         self.dense3_d = tf.keras.layers.Dropout(0.5)
-        self.dense4 = tf.keras.layers.Dense(units=144, activation=tf.nn.relu)
+        self.dense4 = tf.keras.layers.Dense(units=600, activation=tf.nn.relu)
         self.dense4_d = tf.keras.layers.Dropout(0.5)
-        self.dense5 = tf.keras.layers.Dense(units=144, activation=tf.nn.relu)
+        self.dense5 = tf.keras.layers.Dense(units=600, activation=tf.nn.relu)
         self.dense5_d = tf.keras.layers.Dropout(0.5)
         self.dense6_v = tf.keras.layers.Dense(units=1, activation=tf.nn.relu)
         self.dense6_a = tf.keras.layers.Dense(units=self.n_actions)#输出层代表着在当前最大赔率前，买和不买的六种行动的价值
@@ -436,18 +431,18 @@ if __name__ == "__main__":
                 continue
             bianpan_env = Env(filepath,result)#每场比赛做一个环境
             actor.memory.clear()#每场比赛开始前要清空记忆
-            state,done,capital =  bianpan_env.get_state()#把第一个状态作为初始化状态
+            state,frametime,done,capital =  bianpan_env.get_state()#把第一个状态作为初始化状态
             while True:
                 if (step_counter % 1000 ==0) and (epsilon > 0):
                     epsilon = epsilon-0.001#也就是经过100万次转移epsilon降到0以下
-                state = jiangwei(state,capital,bianpan_env.mean_invested)#先降维，并整理形状，把capital放进去
+                state = jiangwei(state,capital,frametime,bianpan_env.mean_invested)#先降维，并整理形状，把capital放进去
                 if random.random() < epsilon:#如果落在随机区域
                     qualified_index = tf.squeeze(np.argwhere(np.sum(actions_table,axis=1)<=capital),axis=-1)#找到符合条件的行动的index_list
                     action = random.choice(qualified_index)#在qualified_index中随机选取一个动作,注意随机挑选出返回的是列表
                 else:
                     action = actor.choose_action(state,capital)
                 revenue = bianpan_env.revenue(actions_table[action])#根据行动和是否终赔计算收益
-                next_state,done,next_capital = bianpan_env.get_state()#获得下一个状态,终止状态的next_state为0矩阵
+                next_state,next_frametime,done,next_capital = bianpan_env.get_state()#获得下一个状态,终止状态的next_state为0矩阵
                 if (step_counter >2000) and (step_counter%100 == 0) :
                     critic_loss = critic.learn()
                 if (learn_step_counter % 300 == 0) and (learn_step_counter > 0):#每学习300次，target_Q网络参数进行一次变量替换
@@ -462,21 +457,23 @@ if __name__ == "__main__":
                         tf.summary.scalar('wrong_action_rate',bianpan_env.wrong_action_counter/bianpan_env.action_counter,step = bisai_counter)
                         tf.summary.scalar('investion_rate',bianpan_env.gesamt_touzi/500.0,step = bisai_counter)
                         tf.summary.scalar('no_action_rate',bianpan_env.no_action_counter/bianpan_env.action_counter,step = bisai_counter)
-                    transition = np.array((state,capital,next_capital,action, revenue,jiangwei(next_state,next_capital,bianpan_env.mean_invested),1))
+                    transition = np.array((state,capital,next_capital,action, revenue,jiangwei(next_state,next_capital,next_frametime,bianpan_env.mean_invested),1))
                     actor.memory.store(transition)
                     critic.memory.store(transition)
                     state = next_state
                     capital = next_capital
+                    frametime = next_frametime
                     episode_memory = actor.memory.get_memory()
                     td_error = critic.get_td_error(episode_memory)#获取td_errir
                     actor_loss = actor.learn(td_error)#actor学习
                     break
                 else:
-                    transition = np.array((state,capital,next_capital,action, revenue,jiangwei(next_state,next_capital,bianpan_env.mean_invested),0))
+                    transition = np.array((state,capital,next_capital,action, revenue,jiangwei(next_state,next_capital,next_frametime,bianpan_env.mean_invested),1))
                     actor.memory.store(transition)
                     critic.memory.store(transition)
                     state = next_state
                     capital = next_capital
+                    frametime = next_frametime
 
 
 

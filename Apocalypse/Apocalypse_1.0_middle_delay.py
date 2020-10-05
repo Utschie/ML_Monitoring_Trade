@@ -1,7 +1,9 @@
-#本模型只是比1.0_middle_sofort加入了考虑frametime，以及在输出中显示钱花光那一时刻的frametime————20201004（已搞定）
+#本模型是基于1.0_middle_sofort3改成延迟收益————20201005
 #本模型是延迟收益，只有终赔时收益才会为正————20201004
 #一个可能存在的问题是，即便是纯随机策略，由于投注总金额的限制，导致后期的变盘根本不会被用到，而全都只能选择0，应该解决信息利用不充分的问题————20201004
 #现在改成延迟策略，如果自然传递不回去，那么就在transition传入记忆回放区之前，先把每次转移的revenue折现处理一下，然后再把整场比赛的信息传入回放区————20201004
+#由于用了dropout，所以把每层节点数扩大四倍
+#把记忆树的alpha改成1.0，更容易随机到优先级大的样本学习
 import os
 #os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
 import tensorflow as tf
@@ -155,7 +157,7 @@ class SumTree(object):
 
 class Memory(object):  # stored as ( s, a, r, s_ ) in SumTree，一个记忆回放区的类，里面就是一棵书，以及和环境交互的抽样和p值计算方法
     epsilon = 0.01  # small amount to avoid zero priority
-    alpha = 0.6  # [0~1] convert the importance of TD error to priority
+    alpha = 1.0  # [0~1] convert the importance of TD error to priority
     beta = 0.4  # importance-sampling, from initial value increasing to 1
     beta_increment_per_sampling = 0.001
     abs_err_upper = 1.  # clipped abs error
@@ -203,14 +205,14 @@ class Q_Network(tf.keras.Model):
     def __init__(self,n_actions=4):#有默认值的属性必须放在没默认值属性的后面
         self.n_actions = n_actions
         super().__init__()#调用tf.keras.Model的类初始化方法
-        self.dense1 = tf.keras.layers.Dense(units=144, activation=tf.nn.relu)#输入层
-        self.dense2 = tf.keras.layers.Dense(units=144, activation=tf.nn.relu)#一个隐藏层
+        self.dense1 = tf.keras.layers.Dense(units=600, activation=tf.nn.relu)#输入层
+        self.dense2 = tf.keras.layers.Dense(units=600, activation=tf.nn.relu)#一个隐藏层
         self.dense2_d = tf.keras.layers.Dropout(0.5)
-        self.dense3 = tf.keras.layers.Dense(units=144, activation=tf.nn.relu)
+        self.dense3 = tf.keras.layers.Dense(units=600, activation=tf.nn.relu)
         self.dense3_d = tf.keras.layers.Dropout(0.5)
-        self.dense4 = tf.keras.layers.Dense(units=144, activation=tf.nn.relu)
+        self.dense4 = tf.keras.layers.Dense(units=600, activation=tf.nn.relu)
         self.dense4_d = tf.keras.layers.Dropout(0.5)
-        self.dense5 = tf.keras.layers.Dense(units=144, activation=tf.nn.relu)
+        self.dense5 = tf.keras.layers.Dense(units=600, activation=tf.nn.relu)
         self.dense5_d = tf.keras.layers.Dropout(0.5)
         self.dense6_v = tf.keras.layers.Dense(units=1, activation=tf.nn.relu)
         self.dense6_a = tf.keras.layers.Dense(units=self.n_actions)#输出层代表着在当前最大赔率前，买和不买的六种行动的价值
