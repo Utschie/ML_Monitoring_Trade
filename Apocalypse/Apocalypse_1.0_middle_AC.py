@@ -2,6 +2,7 @@
 #需要考虑如果经过筛选选择符合条件的行动，那么actor在学习的时候所计算出的all_acts,是应该采用所有的actions计算出的值还是经过筛选得出的值
 #考虑传给actor的td_error需不需要abs,暂时用abs
 #本模型暂不考虑初期的随机试验
+#为了迁移1.0_sofort2的权重，先不考虑frametime的事情
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
 import tensorflow as tf
@@ -258,10 +259,10 @@ class Q_Network(tf.keras.Model):#给critic定义的q网络
         return new_q_value#返回所有满足条件的q值
     
 
-def jiangwei(state,capital,frametime,mean_invested):#所有变量都归一化
+def jiangwei(state,capital,mean_invested):#所有变量都归一化
     invested = [0.,0.,0.,0.,0.,0.]
     state=np.delete(state, 0, axis=-1)
-    frametime = frametime/50000.0
+    #frametime = frametime/50000.0
     length = len(state)/410.0#出赔率的公司数归一化
     invested[0] = mean_invested[0]/25.0
     invested[1] = mean_invested[1]/500.0
@@ -271,8 +272,8 @@ def jiangwei(state,capital,frametime,mean_invested):#所有变量都归一化
     invested[5] = mean_invested[5]/500.0
     percenttilelist = [np.percentile(state,i,axis = 0)[1:4] for i in range(0,105,5)]
     percentile = np.vstack(percenttilelist)#把当前状态的0%-100%分位数放到一个矩阵里
-    state = tf.concat((percentile.flatten()/25.0,[capital/500.0],[frametime],invested,[length]),-1)#除以25是因为一般来讲赔率最高开到25
-    state = tf.reshape(state,(1,72))#63个分位数数据+8个capital,frametime和mean_invested,length共72个输入
+    state = tf.concat((percentile.flatten()/25.0,[capital/500.0],invested,[length]),-1)#除以25是因为一般来讲赔率最高开到25
+    state = tf.reshape(state,(1,71))#63个分位数数据+8个capital,frametime和mean_invested,length共72个输入
     return state
 
 
@@ -448,7 +449,7 @@ if __name__ == "__main__":
             used_steps = 0
             while True:
                 step_counter+=1#每转移一次，步数+1
-                state = jiangwei(state,capital,frametime,bianpan_env.mean_invested)#先降维，并整理形状，把capital放进去
+                state = jiangwei(state,capital,bianpan_env.mean_invested)#先降维，并整理形状，把capital放进去
                 action = actor.choose_action(state,capital)
                 revenue = bianpan_env.revenue(actions_table[action])#根据行动和是否终赔计算收益
                 next_state,next_frametime,done,next_capital = bianpan_env.get_state()#获得下一个状态,终止状态的next_state为0矩阵
@@ -485,7 +486,7 @@ if __name__ == "__main__":
                         tf.summary.scalar('steps',used_steps,step =bisai_counter)
                     with summary_writer5.as_default():
                         tf.summary.scalar('steps',bisai_steps,step =bisai_counter)
-                    transition = np.array((state,capital,next_capital,action, revenue,jiangwei(next_state,next_capital,next_frametime,bianpan_env.mean_invested),1))
+                    transition = np.array((state,capital,next_capital,action, revenue,jiangwei(next_state,next_capital,bianpan_env.mean_invested),1))
                     actor.memory.store(transition)
                     critic.memory.store(transition)
                     state = next_state
@@ -496,7 +497,7 @@ if __name__ == "__main__":
                     actor_loss = actor.learn(td_error)#actor学习
                     break
                 else:
-                    transition = np.array((state,capital,next_capital,action, revenue,jiangwei(next_state,next_capital,next_frametime,bianpan_env.mean_invested),1))
+                    transition = np.array((state,capital,next_capital,action, revenue,jiangwei(next_state,next_capital,bianpan_env.mean_invested),1))
                     actor.memory.store(transition)
                     critic.memory.store(transition)
                     state = next_state
