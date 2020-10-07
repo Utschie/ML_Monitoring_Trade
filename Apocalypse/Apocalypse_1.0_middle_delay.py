@@ -4,6 +4,7 @@
 #现在改成延迟策略，如果自然传递不回去，那么就在transition传入记忆回放区之前，先把每次转移的revenue折现处理一下，然后再把整场比赛的信息传入回放区————20201004
 #由于用了dropout，所以把每层节点数扩大四倍
 #把记忆树的alpha改成1.0，更容易随机到优先级大的样本学习
+#暂时没有用gamma
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
 import tensorflow as tf
