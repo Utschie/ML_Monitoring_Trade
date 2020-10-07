@@ -458,8 +458,45 @@ if __name__ == "__main__":
                 revenue = bianpan_env.revenue(actions_table[action])#根据行动和是否终赔计算收益
                 next_state,next_frametime,done,next_capital = bianpan_env.get_state()#获得下一个状态,终止状态的next_state为0矩阵
                 bisai_steps+=1
+                if (next_capital<= 0) and (end_switch == False):
+                    use_out_time = frametime
+                    end_switch = True
+                if end_switch == False:#如果没花光
+                    used_steps+=1
                 if(step_counter<=2000):
-                    print('已转移'+str(step_counter)+'步')
+                    print('已转移'+str(step_counter)+'步')               
+                if done:#终盘时储存信息，同时更新actor，清除actor内存
+                    with summary_writer.as_default():
+                        tf.summary.scalar('Zinsen',bianpan_env.get_zinsen(),step = bisai_counter)
+                        tf.summary.scalar('rest_capital',bianpan_env.gesamt_revenue+500,step = bisai_counter)
+                        tf.summary.scalar('wrong_action_rate',bianpan_env.wrong_action_counter/bianpan_env.action_counter,step = bisai_counter)
+                        tf.summary.scalar('investion_rate',bianpan_env.gesamt_touzi/500.0,step = bisai_counter)
+                        tf.summary.scalar('no_action_rate',bianpan_env.no_action_counter/bianpan_env.action_counter,step = bisai_counter)
+                    with summary_writer2.as_default():
+                        tf.summary.scalar('times',use_out_time,step =bisai_counter)
+                    with summary_writer3.as_default():
+                        tf.summary.scalar('times',bianpan_env.max_frametime,step =bisai_counter)
+                    with summary_writer4.as_default():
+                        tf.summary.scalar('steps',used_steps,step =bisai_counter)
+                    with summary_writer5.as_default():
+                        tf.summary.scalar('steps',bisai_steps,step =bisai_counter)
+                    transition = np.array((state,capital,next_capital,action, revenue,jiangwei(next_state,next_capital,next_frametime,bianpan_env.mean_invested),1))
+                    actor.memory.store(transition)
+                    critic.memory.store(transition)
+                    state = next_state
+                    capital = next_capital
+                    frametime = next_frametime
+                    episode_memory = actor.memory.get_memory()
+                    td_error = critic.get_td_error(episode_memory)#获取td_errir
+                    actor_loss = actor.learn(td_error)#actor学习
+                    break
+                else:
+                    transition = np.array((state,capital,next_capital,action, revenue,jiangwei(next_state,next_capital,next_frametime,bianpan_env.mean_invested),0))
+                    actor.memory.store(transition)
+                    critic.memory.store(transition)
+                    state = next_state
+                    capital = next_capital
+                    frametime = next_frametime
                 if (step_counter >2000) and (step_counter%50 == 0) :
                     critic_loss = critic.learn()
                     learn_step_counter+=1#每学习一次，学习步数+1
@@ -470,43 +507,6 @@ if __name__ == "__main__":
                         critic.target_Q.save_weights(target_weights_path, overwrite=True)
                         target_repalce_counter+=1
                         print('critic目标Q网络已更新'+str(target_repalce_counter)+'次')
-                    if (next_capital<= 0) and (end_switch == False):
-                        use_out_time = frametime
-                        end_switch = True
-                    if end_switch == False:#如果没花光
-                        used_steps+=1
-                    if done:#终盘时储存信息，同时更新actor，清除actor内存
-                        with summary_writer.as_default():
-                            tf.summary.scalar('Zinsen',bianpan_env.get_zinsen(),step = bisai_counter)
-                            tf.summary.scalar('rest_capital',bianpan_env.gesamt_revenue+500,step = bisai_counter)
-                            tf.summary.scalar('wrong_action_rate',bianpan_env.wrong_action_counter/bianpan_env.action_counter,step = bisai_counter)
-                            tf.summary.scalar('investion_rate',bianpan_env.gesamt_touzi/500.0,step = bisai_counter)
-                            tf.summary.scalar('no_action_rate',bianpan_env.no_action_counter/bianpan_env.action_counter,step = bisai_counter)
-                        with summary_writer2.as_default():
-                            tf.summary.scalar('times',use_out_time,step =bisai_counter)
-                        with summary_writer3.as_default():
-                            tf.summary.scalar('times',bianpan_env.max_frametime,step =bisai_counter)
-                        with summary_writer4.as_default():
-                            tf.summary.scalar('steps',used_steps,step =bisai_counter)
-                        with summary_writer5.as_default():
-                            tf.summary.scalar('steps',bisai_steps,step =bisai_counter)
-                        transition = np.array((state,capital,next_capital,action, revenue,jiangwei(next_state,next_capital,next_frametime,bianpan_env.mean_invested),1))
-                        actor.memory.store(transition)
-                        critic.memory.store(transition)
-                        state = next_state
-                        capital = next_capital
-                        frametime = next_frametime
-                        episode_memory = actor.memory.get_memory()
-                        td_error = critic.get_td_error(episode_memory)#获取td_errir
-                        actor_loss = actor.learn(td_error)#actor学习
-                        break
-                    else:
-                        transition = np.array((state,capital,next_capital,action, revenue,jiangwei(next_state,next_capital,next_frametime,bianpan_env.mean_invested),0))
-                        actor.memory.store(transition)
-                        critic.memory.store(transition)
-                        state = next_state
-                        capital = next_capital
-                        frametime = next_frametime
             end=time.time()
             bisai_counter+=1
             print('比赛'+filepath+'已完成'+'\n'+'用时'+str(end-start)+'秒\n')
