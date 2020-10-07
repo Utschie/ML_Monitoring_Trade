@@ -347,6 +347,8 @@ class Actor(object):
             batch_parameters = self.net(tf.squeeze(batch_state))#获得parameters的值  
             neg_log_prob = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=batch_parameters, labels=batch_action)
             loss = tf.reduce_mean(neg_log_prob * td_error)
+        with summary_writer6.as_default():
+            tf.summary.scalar('losses',loss,step = bisai_counter)#python里的主程序里的全局变量不用特别声明
         grads = tape.gradient(loss, self.net.variables)
         self.opt.apply_gradients(grads_and_vars=zip(grads, self.net.variables))
         return loss
@@ -393,8 +395,8 @@ class Critic(object):#只需要做每次学习，以及把相应的td_error传�
             #或者loss =  tf.reduce_mean(ISWeights * tf.math.squared_difference(y_true, y_pred))#y_true和y_pred都是第0维为batch_size的张量
             abs_errors = tf.abs(y_true - y_pred)#计算abs_error用与更新tree,得到保存着每个样本的abs_errors的向量
         grads = tape.gradient(loss, self.eval_Q.variables)
-        with summary_writer.as_default():
-            tf.summary.scalar('loss',loss,step = learn_step_counter)#python里的主程序里的全局变量不用特别声明
+        with summary_writer7.as_default():
+            tf.summary.scalar('losses',loss,step = learn_step_counter)#python里的主程序里的全局变量不用特别声明
         self.memory.batch_update(tree_idx, abs_errors)#计算完td-error后更新tree
         self.opt.apply_gradients(grads_and_vars=zip(grads, self.eval_Q.variables))#更新参数
         return loss#返回loss好可以记录下来输出
@@ -413,6 +415,8 @@ if __name__ == "__main__":
     summary_writer3 = tf.summary.create_file_writer('./tensorboard_1.0_middle_AC/max_frametime')
     summary_writer4 = tf.summary.create_file_writer('./tensorboard_1.0_middle_AC/used_steps')
     summary_writer5 = tf.summary.create_file_writer('./tensorboard_1.0_middle_AC/bisai_steps')
+    summary_writer6 = tf.summary.create_file_writer('./tensorboard_1.0_middle_AC/actor_loss')
+    summary_writer7 = tf.summary.create_file_writer('./tensorboard_1.0_middle_AC/critic_loss')
     start0 = time.time()
     epsilon = 1.            # 探索起始时的探索率
     #final_epsilon = 0.01            # 探索终止时的探索率
