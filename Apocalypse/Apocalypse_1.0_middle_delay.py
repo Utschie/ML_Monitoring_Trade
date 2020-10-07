@@ -5,7 +5,7 @@
 #由于用了dropout，所以把每层节点数扩大四倍
 #把记忆树的alpha改成1.0，更容易随机到优先级大的样本学习
 import os
-#os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
+os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
 import tensorflow as tf
 from collections import deque
 import numpy as np
@@ -282,7 +282,7 @@ if __name__ == "__main__":
     gamma = 0.99
     epsilon = 1.            # 探索起始时的探索率
     #final_epsilon = 0.01            # 探索终止时的探索率
-    batch_size = 500
+    batch_size = 250
     resultlist = pd.read_csv('D:\\data\\results_20141130-20160630.csv',index_col = 0)#得到赛果和比赛ID的对应表
     actions_table = [[0,0,0],[5,0,0],[0,5,0],[0,0,5]]#给神经网络输出层对应一个行动表
     step_counter = 0
@@ -333,7 +333,7 @@ if __name__ == "__main__":
                 bisai_steps+=1
                 if (next_capital<= 0) and (end_switch == False):
                     use_out_time = frametime
-                    end_switch == True
+                    end_switch = True
                 if end_switch == False:#如果没花光
                     used_steps+=1
                 if done:
@@ -365,7 +365,7 @@ if __name__ == "__main__":
                     capital = next_capital
                     frametime = next_frametime
                 #下面是参数更新过程
-                if (step_counter >2000) and (step_counter%50 == 0) :#2000步之后每转移50次进行一次eval_Q的学习
+                if (step_counter >2000) and (step_counter%25 == 0) :#2000步之后每转移50次进行一次eval_Q的学习
                     if step_counter >= batch_size:
                         tree_idx, batch_memory, ISWeights = memory.sample(batch_size)
                         batch_state, batch_capital,batch_next_capital,batch_action, batch_revenue, batch_next_state ,batch_done = zip(*batch_memory)
