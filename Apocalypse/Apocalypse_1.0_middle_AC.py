@@ -360,7 +360,7 @@ class Critic(object):#只需要做每次学习，以及把相应的td_error传�
         self.target_Q = Q_Network()#给它一个目标Q网络
         self.gamma = 0.999
         self.memory_size = 500000
-        self.batch_size=250
+        self.batch_size=500
         self.memory = Critic_Memory(capacity=self.memory_size)
         self.opt = tf.keras.optimizers.Adam(lr,amsgrad=True)#设定最优化方法
         self.target_repalce_counter = 0
@@ -459,16 +459,16 @@ if __name__ == "__main__":
                 next_state,next_frametime,done,next_capital = bianpan_env.get_state()#获得下一个状态,终止状态的next_state为0矩阵
                 if(step_counter<=2000):
                     print('已转移'+str(step_counter)+'步')
-                if (step_counter >2000) and (step_counter%25 == 0) :
+                if (step_counter >2000) and (step_counter%50 == 0) :
                     critic_loss = critic.learn()
                     learn_step_counter+=1#每学习一次，学习步数+1
                     print('critic已学习'+str(learn_step_counter)+'次')
                 if (learn_step_counter % 300 == 0) and (learn_step_counter > 0):#每学习300次，target_Q网络参数进行一次变量替换
-                        critic.eval_Q.save_weights(weights_path, overwrite=True)#保存并覆盖之前的检查点，储存权重
-                        critic.target_Q.load_weights(weights_path)#读取eval_Q刚刚保存的权重
-                        critic.target_Q.save_weights(target_weights_path, overwrite=True)
-                        target_repalce_counter+=1
-                        print('critic目标Q网络已更新'+str(target_repalce_counter)+'次')
+                    critic.eval_Q.save_weights(weights_path, overwrite=True)#保存并覆盖之前的检查点，储存权重
+                    critic.target_Q.load_weights(weights_path)#读取eval_Q刚刚保存的权重
+                    critic.target_Q.save_weights(target_weights_path, overwrite=True)
+                    target_repalce_counter+=1
+                    print('critic目标Q网络已更新'+str(target_repalce_counter)+'次')
                 bisai_steps+=1
                 if (next_capital<= 0) and (end_switch == False):
                     use_out_time = frametime
