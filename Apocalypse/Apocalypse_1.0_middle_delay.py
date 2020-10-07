@@ -5,6 +5,7 @@
 #由于用了dropout，所以把每层节点数扩大四倍
 #把记忆树的alpha改成1.0，更容易随机到优先级大的样本学习
 #暂时没有用gamma
+#出于是delay，如果使用暂时使用0.999
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
 import tensorflow as tf
@@ -280,7 +281,7 @@ if __name__ == "__main__":
     #########设置超参数
     learning_rate = 0.001#学习率
     opt = tf.keras.optimizers.Adam(learning_rate,amsgrad=True)#设定最优化方法
-    gamma = 0.99
+    gamma = 0.999
     epsilon = 1.            # 探索起始时的探索率
     #final_epsilon = 0.01            # 探索终止时的探索率
     batch_size = 250
