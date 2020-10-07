@@ -1,6 +1,6 @@
 #本模型是AC（Actor-Critic）模型，用来实现随机策略，并结合DDQN和Dueling DQN
 #需要考虑如果经过筛选选择符合条件的行动，那么actor在学习的时候所计算出的all_acts,是应该采用所有的actions计算出的值还是经过筛选得出的值
-#考虑传给actor的td_error需不需要abs,暂时不用abs
+#考虑传给actor的td_error需不需要abs,暂时用abs
 #本模型暂不考虑初期的随机试验
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
@@ -213,14 +213,14 @@ class Q_Network(tf.keras.Model):#给critic定义的q网络
     def __init__(self,n_actions=4):#有默认值的属性必须放在没默认值属性的后面
         self.n_actions = n_actions
         super().__init__()#调用tf.keras.Model的类初始化方法
-        self.dense1 = tf.keras.layers.Dense(units=600, activation=tf.nn.relu)#输入层
-        self.dense2 = tf.keras.layers.Dense(units=600, activation=tf.nn.relu)#一个隐藏层
+        self.dense1 = tf.keras.layers.Dense(units=144, activation=tf.nn.relu)#输入层
+        self.dense2 = tf.keras.layers.Dense(units=144, activation=tf.nn.relu)#一个隐藏层
         self.dense2_d = tf.keras.layers.Dropout(0.5)
-        self.dense3 = tf.keras.layers.Dense(units=600, activation=tf.nn.relu)
+        self.dense3 = tf.keras.layers.Dense(units=144, activation=tf.nn.relu)
         self.dense3_d = tf.keras.layers.Dropout(0.5)
-        self.dense4 = tf.keras.layers.Dense(units=600, activation=tf.nn.relu)
+        self.dense4 = tf.keras.layers.Dense(units=144, activation=tf.nn.relu)
         self.dense4_d = tf.keras.layers.Dropout(0.5)
-        self.dense5 = tf.keras.layers.Dense(units=600, activation=tf.nn.relu)
+        self.dense5 = tf.keras.layers.Dense(units=144, activation=tf.nn.relu)
         self.dense5_d = tf.keras.layers.Dropout(0.5)
         self.dense6_v = tf.keras.layers.Dense(units=1, activation=tf.nn.relu)
         self.dense6_a = tf.keras.layers.Dense(units=self.n_actions)#输出层代表着在当前最大赔率前，买和不买的六种行动的价值
@@ -280,14 +280,14 @@ class Policy_Network(tf.keras.Model):#给actor定义的policy网络
     def __init__(self,n_actions=4):#有默认值的属性必须放在没默认值属性的后面
         self.n_actions = n_actions
         super().__init__()#调用tf.keras.Model的类初始化方法
-        self.dense1 = tf.keras.layers.Dense(units=600, activation=tf.nn.relu)#输入层
-        self.dense2 = tf.keras.layers.Dense(units=600, activation=tf.nn.relu)#一个隐藏层
+        self.dense1 = tf.keras.layers.Dense(units=144, activation=tf.nn.relu)#输入层
+        self.dense2 = tf.keras.layers.Dense(units=144, activation=tf.nn.relu)#一个隐藏层
         self.dense2_d = tf.keras.layers.Dropout(0.5)
-        self.dense3 = tf.keras.layers.Dense(units=600, activation=tf.nn.relu)
+        self.dense3 = tf.keras.layers.Dense(units=144, activation=tf.nn.relu)
         self.dense3_d = tf.keras.layers.Dropout(0.5)
-        self.dense4 = tf.keras.layers.Dense(units=600, activation=tf.nn.relu)
+        self.dense4 = tf.keras.layers.Dense(units=144, activation=tf.nn.relu)
         self.dense4_d = tf.keras.layers.Dropout(0.5)
-        self.dense5 = tf.keras.layers.Dense(units=600, activation=tf.nn.relu)
+        self.dense5 = tf.keras.layers.Dense(units=144, activation=tf.nn.relu)
         self.dense5_d = tf.keras.layers.Dropout(0.5)
         self.dense6_v = tf.keras.layers.Dense(units=1, activation=tf.nn.relu)
         self.dense6_a = tf.keras.layers.Dense(units=self.n_actions)#输出层代表着在当前最大赔率前，买和不买的六种行动的价值
@@ -342,8 +342,8 @@ class Actor(object):
     def learn(self,td_error):#把当前回合的记忆和critic算出的td_error传给它
         memory = self.memory.get_memory()
         batch_state, batch_capital,batch_next_capital,batch_action, batch_revenue, batch_next_state ,batch_done = zip(*memory)#把本回合的转移拆成两个batch
-        batch_parameters = self.net(tf.squeeze(a))#获得parameters的值
-        with tf.GradientTape() as tape:    
+        with tf.GradientTape() as tape:  
+            batch_parameters = self.net(tf.squeeze(batch_state))#获得parameters的值  
             neg_log_prob = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=batch_parameters, labels=batch_action)
             loss = tf.reduce_mean(neg_log_prob * td_error)
         grads = tape.gradient(loss, self.net.variables)
@@ -372,8 +372,8 @@ class Critic(object):#只需要做每次学习，以及把相应的td_error传�
         one_hot_matrix = tf.one_hot(np.array(batch_action),depth=4,on_value=1.0, off_value=0.0)
         y_pred=tf.reduce_sum(tf.squeeze(self.eval_Q(np.array(batch_state)))*one_hot_matrix,axis=1)
         td_error = y_true-y_pred
-        #abs_error = tf.abs(td_error)
-        return td_error
+        abs_error = tf.abs(td_error)
+        return abs_error
     
     def learn(self):
         tree_idx, batch_memory, ISWeights = self.memory.sample(self.batch_size)
@@ -392,6 +392,8 @@ class Critic(object):#只需要做每次学习，以及把相应的td_error传�
             #或者loss =  tf.reduce_mean(ISWeights * tf.math.squared_difference(y_true, y_pred))#y_true和y_pred都是第0维为batch_size的张量
             abs_errors = tf.abs(y_true - y_pred)#计算abs_error用与更新tree,得到保存着每个样本的abs_errors的向量
         grads = tape.gradient(loss, self.eval_Q.variables)
+        with summary_writer.as_default():
+            tf.summary.scalar('loss',loss,step = learn_step_counter)#python里的主程序里的全局变量不用特别声明
         self.memory.batch_update(tree_idx, abs_errors)#计算完td-error后更新tree
         self.opt.apply_gradients(grads_and_vars=zip(grads, self.eval_Q.variables))#更新参数
         return loss#返回loss好可以记录下来输出
@@ -421,9 +423,13 @@ if __name__ == "__main__":
     bisai_counter = 1
     weights_path = 'D:\\data\\eval_Q_weights_1.0_middle_AC.ckpt'
     target_weights_path = 'D:\\data\\target_Q_weights_1.0_middle_AC.ckpt'
+    pre_weights_path = 'D:\\data\\target_Q_weights_1.0_middle_sofort2.ckpt'
     filefolderlist = os.listdir('F:\\cleaned_data_20141130-20160630')
     actor = Actor()#实例化一个actor
+    actor.net.load_weights(pre_weights_path)#读入1.0_sofort2的权重
     critic = Critic()#实例化一个critic
+    critic.eval_Q.load_weights(pre_weights_path)#读入1.0_sofort2的权重
+    critic.target_Q.load_weights(pre_weights_path)#读入1.0_sofort2的权重
     for i in filefolderlist:#挨个文件夹训练
         filelist = os.listdir('F:\\cleaned_data_20141130-20160630\\'+i)
         for j in filelist:#挨场比赛训练
