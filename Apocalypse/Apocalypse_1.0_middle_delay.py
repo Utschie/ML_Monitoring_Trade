@@ -274,7 +274,8 @@ if __name__ == "__main__":
     summary_writer = tf.summary.create_file_writer('./tensorboard_1.0_middle_delay') #在代码所在文件夹同目录下创建tensorboard文件夹（本代码在jupyternotbook里跑，所以在jupyternotebook里可以看到）
     summary_writer2 = tf.summary.create_file_writer('./tensorboard_1.0_middle_delay/use_out_time')
     summary_writer3 = tf.summary.create_file_writer('./tensorboard_1.0_middle_delay/max_frametime')
-    summary_writer4 = tf.summary.create_file_writer('./tensorboard_1.0_middle_delay/used_step_ratio')
+    summary_writer4 = tf.summary.create_file_writer('./tensorboard_1.0_middle_delay/used_steps')
+    summary_writer5 = tf.summary.create_file_writer('./tensorboard_1.0_middle_delay/bisai_steps')
     #########设置超参数
     learning_rate = 0.001#学习率
     opt = tf.keras.optimizers.Adam(learning_rate,amsgrad=True)#设定最优化方法
@@ -348,7 +349,9 @@ if __name__ == "__main__":
                     with summary_writer3.as_default():
                         tf.summary.scalar('times',bianpan_env.max_frametime,step =bisai_counter)
                     with summary_writer4.as_default():
-                        tf.summary.scalar('used_steps_ratio',used_steps/bisai_steps,step =bisai_counter)
+                        tf.summary.scalar('steps',used_steps,step =bisai_counter)
+                    with summary_writer5.as_default():
+                        tf.summary.scalar('steps',bisai_steps,step =bisai_counter)
                     transition = np.array((state,capital,next_capital,action, revenue,jiangwei(next_state,next_capital,next_frametime,bianpan_env.mean_invested),1))
                     memory.store(transition)
                     state = next_state
