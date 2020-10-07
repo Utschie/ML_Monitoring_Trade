@@ -1,6 +1,6 @@
 #本模型是AC（Actor-Critic）模型，用来实现随机策略，并结合DDQN和Dueling DQN
 #需要考虑如果经过筛选选择符合条件的行动，那么actor在学习的时候所计算出的all_acts,是应该采用所有的actions计算出的值还是经过筛选得出的值
-#考虑传给actor的td_error需不需要abs,暂时用abs
+#考虑传给actor的td_error需不需要abs,暂时不用abs
 #本模型暂不考虑初期的随机试验
 #为了迁移1.0_sofort2的权重，先不考虑frametime的事情
 import os
@@ -375,8 +375,8 @@ class Critic(object):#只需要做每次学习，以及把相应的td_error传�
         one_hot_matrix = tf.one_hot(np.array(batch_action),depth=4,on_value=1.0, off_value=0.0)
         y_pred=tf.reduce_sum(tf.squeeze(self.eval_Q(np.array(batch_state)))*one_hot_matrix,axis=1)
         td_error = y_true-y_pred
-        abs_error = tf.abs(td_error)
-        return abs_error
+        #abs_error = tf.abs(td_error)
+        return td_error
     
     def learn(self):
         tree_idx, batch_memory, ISWeights = self.memory.sample(self.batch_size)
