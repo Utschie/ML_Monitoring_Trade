@@ -1,6 +1,7 @@
 #本模型只是比1.0_middle_sofort的4种策略版，是效果看起来很不错的一版
 #它的batch_size=500甚至比另一个batch_size=1000的模型效果更好
 #本版本就是在tensorflow里实际跑的那一版，没有使用gamma，即默认gamma为1
+#虽然在test集上表现还行，有8%的利率，但是在test2集上表现非常差
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
 import tensorflow as tf
