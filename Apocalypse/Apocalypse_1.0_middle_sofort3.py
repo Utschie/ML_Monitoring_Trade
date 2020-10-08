@@ -326,8 +326,8 @@ if __name__ == "__main__":
             with summary_writer.as_default():
                 tf.summary.scalar("Capital", capital,step = bisai_counter)  
             while True:
-                if (step_counter % 1000 ==0) and (epsilon > 0):
-                    epsilon = epsilon-0.001#也就是经过100万次转移epsilon降到0以下
+                if (step_counter % 1000 ==0) and (epsilon > 0) and (step_counter>1000000):
+                    epsilon = epsilon-0.001#也就先来100万次纯随机，然后再来100万次渐进随机，最后放开
                 state = jiangwei(state,capital,frametime,bianpan_env.mean_invested)#先降维，并整理形状，把capital放进去
                 if step_counter>1000000:#在100万次转移之前都按照给定时间点选择
                     if frametime <= timepoints[0]:#如果frametime到达第一个时间点，则进行随机选择
