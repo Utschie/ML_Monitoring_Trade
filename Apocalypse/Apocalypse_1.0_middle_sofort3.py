@@ -350,7 +350,7 @@ if __name__ == "__main__":
                 bisai_steps+=1
                 if (next_capital<= 0) and (end_switch == False):
                     use_out_time = frametime
-                    end_switch == True
+                    end_switch = True
                 if end_switch == False:#如果没花光
                     used_steps+=1
                 if done:
