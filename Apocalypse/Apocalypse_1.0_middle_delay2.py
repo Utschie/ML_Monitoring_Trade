@@ -1,12 +1,6 @@
-#本模型是基于1.0_middle_sofort3改成延迟收益————20201005
-#本模型是延迟收益，只有终赔时收益才会为正————20201004
-#一个可能存在的问题是，即便是纯随机策略，由于投注总金额的限制，导致后期的变盘根本不会被用到，而全都只能选择0，应该解决信息利用不充分的问题————20201004
-#现在改成延迟策略，如果自然传递不回去，那么就在transition传入记忆回放区之前，先把每次转移的revenue折现处理一下，然后再把整场比赛的信息传入回放区————20201004
-#由于用了dropout，所以把每层节点数扩大四倍
-#把记忆树的alpha改成1.0，更容易随机到优先级大的样本学习
-#暂时没有用gamma
-#出于是delay，如果使用暂时使用0.999
-#当前的随机探索策略时纯随机探索，每随机一场比赛只能把used_steps提高到0.1955，那要想used_steps到达2000，即平均每场转移的次数，需要探索超过10000场比赛，即2000万次转移————20201008
+#本模型是基于1.0_middle_delay，针对随机探索做的改进
+#在得到max_frametime之后，在0-max_frametime之间随机选取时间点，然后再在确定的时间点下进行交易
+#而逐渐降低随机程度分成两部分，一个是通过减少随机选取的时间点，从125个直到0个，而动作随机的减少方式则是通过降低随机率————20201008
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
 import tensorflow as tf
@@ -283,7 +277,8 @@ if __name__ == "__main__":
     learning_rate = 0.001#学习率
     opt = tf.keras.optimizers.Adam(learning_rate,amsgrad=True)#设定最优化方法
     gamma = 0.999
-    epsilon = 1.            # 探索起始时的探索率
+    epsilon = 1.            # 动作策略探索起始时的探索率
+    N_random_points = 160 #重复试验，0.75的概率发生，发生次数少于100次（即钱没花光的情况）的概率已经到了万分之3，所以160个时间点，在那之前肯定花完了 
     #final_epsilon = 0.01            # 探索终止时的探索率
     batch_size = 250
     resultlist = pd.read_csv('D:\\data\\results_20141130-20160630.csv',index_col = 0)#得到赛果和比赛ID的对应表
@@ -315,6 +310,10 @@ if __name__ == "__main__":
             except Exception:#因为有的比赛结果没有存进去
                 continue
             bianpan_env = Env(filepath,result)#每场比赛做一个环境
+            max_frametime = bianpan_env.max_frametime#得到本场比赛最大的frametime
+            timepoints =np.random.randint(0,max_frametime,N_random_points)#生成N_random_points个随机整数
+            timepoints = -np.sort(-timepoints)#把时间点从大到小降序排列，即规定了可选时间点，在可选时间点处进行随机探索
+
             state,frametime,done,capital =  bianpan_env.get_state()#把第一个状态作为初始化状态
             end_switch = False
             bisai_steps = 0
@@ -325,13 +324,18 @@ if __name__ == "__main__":
                 if (step_counter % 1000 ==0) and (epsilon > 0):
                     epsilon = epsilon-0.001#也就是经过100万次转移epsilon降到0以下
                 state = jiangwei(state,capital,frametime,bianpan_env.mean_invested)#先降维，并整理形状，把capital放进去
-                if random.random() < epsilon:#如果落在随机区域
-                    qualified_index = tf.squeeze(np.argwhere(np.sum(actions_table,axis=1)<=capital),axis=-1)#找到符合条件的行动的index_list
-                    action = random.choice(qualified_index)#在qualified_index中随机选取一个动作,注意随机挑选出返回的是列表
-                else:
-                    action_index = eval_Q.predict(state,capital)#用predict，选择最优行动
-                    action = action_index#否则按着贪心选，这里[0]是因为predict返回的是一个单元素列表
-                revenue = bianpan_env.revenue(actions_table[action])#根据行动和是否终赔计算收益
+                if frametime <= timepoints[0]:#如果frametime到达第一个时间点，则进行随机选择
+                    if random.random() < epsilon:#如果落在随机区域
+                        qualified_index = tf.squeeze(np.argwhere(np.sum(actions_table,axis=1)<=capital),axis=-1)#找到符合条件的行动的index_list
+                        action = random.choice(qualified_index)#在qualified_index中随机选取一个动作,注意随机挑选出返回的是列表
+                    else:
+                        action_index = eval_Q.predict(state,capital)#用predict，选择最优行动
+                        action = action_index#否则按着贪心选，这里[0]是因为predict返回的是一个单元素列表
+                    timepoints = np.delete(timepoints,0)#然后去掉第一个元素，于是第二个时间点又变成了最大的
+                    revenue = bianpan_env.revenue(actions_table[action])#计算收益
+                else:#其余时刻
+                    revenue = 0
+                    action = [0]
                 next_state,next_frametime,done,next_capital = bianpan_env.get_state()#获得下一个状态,终止状态的next_state为0矩阵
                 bisai_steps+=1
                 if (next_capital<= 0) and (end_switch == False):
