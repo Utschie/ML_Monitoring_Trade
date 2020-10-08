@@ -276,7 +276,7 @@ if __name__ == "__main__":
     #########设置超参数
     learning_rate = 0.001#学习率
     opt = tf.keras.optimizers.Adam(learning_rate,amsgrad=True)#设定最优化方法
-    gamma = 0.999
+    gamma = 0.999999
     epsilon = 1.            # 动作策略探索起始时的探索率
     N_random_points = 160 #重复试验，0.75的概率发生，发生次数少于100次（即钱没花光的情况）的概率已经到了万分之3，所以160个时间点，在那之前肯定花完了 
     #final_epsilon = 0.01            # 探索终止时的探索率
