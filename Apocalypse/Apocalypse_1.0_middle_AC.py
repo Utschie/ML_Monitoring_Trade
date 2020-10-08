@@ -3,6 +3,7 @@
 #考虑传给actor的td_error需不需要abs,暂时不用abs
 #本模型暂不考虑初期的随机试验
 #为了迁移1.0_sofort2的权重，先不考虑frametime的事情
+#actor的learn的loss函数是参考莫烦的方式改动，需要调试一下————20201009
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
 import tensorflow as tf
@@ -345,8 +346,10 @@ class Actor(object):
         batch_state, batch_capital,batch_next_capital,batch_action, batch_revenue, batch_next_state ,batch_done = zip(*memory)#把本回合的转移拆成两个batch
         with tf.GradientTape() as tape:  
             batch_parameters = self.net(tf.squeeze(batch_state))#获得parameters的值  
-            neg_log_prob = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=batch_parameters, labels=batch_action)
-            loss = tf.reduce_mean(neg_log_prob * td_error)
+            acts_prob = tf.nn.softmax(batch_parameters)#把parameters们都softmax化成概率
+            one_hot_matrix = tf.one_hot(np.array(batch_action),depth=4,on_value=1.0, off_value=0.0)
+            log_prob = tf.math.log(acts_prob*one_hot_matrix)#将对应行动的概率求log，参考莫烦的AC_CartPole
+            loss = -tf.reduce_mean(log_prob * td_error)#带个负号
         with summary_writer6.as_default():
             tf.summary.scalar('losses',loss,step = bisai_counter)#python里的主程序里的全局变量不用特别声明
         grads = tape.gradient(loss, self.net.variables)

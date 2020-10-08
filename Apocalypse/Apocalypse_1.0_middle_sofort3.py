@@ -5,6 +5,7 @@
 #由于用了dropout，所以把每层节点数扩大四倍
 #把记忆树的alpha改成1.0，更容易随机到优先级大的样本学习
 #随机探索过程采用delay2的探索方式
+#大约需要5天的时间随机结束，那么之后学习可能至少要10天以上————20201009
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
 import tensorflow as tf
