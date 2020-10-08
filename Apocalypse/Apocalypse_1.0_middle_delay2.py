@@ -335,8 +335,8 @@ if __name__ == "__main__":
                         timepoints = np.delete(timepoints,0)#然后去掉第一个元素，于是第二个时间点又变成了最大的
                         revenue = bianpan_env.revenue(actions_table[action])#计算收益
                     else:#其余时刻
-                        revenue = 0
                         action = 0
+                        revenue = bianpan_env.revenue(actions_table[action])#计算收益
                 else:
                     action_index = eval_Q.predict(state,capital)#用predict，选择最优行动
                     action = action_index#否则按着贪心选
