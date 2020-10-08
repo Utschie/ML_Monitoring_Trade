@@ -324,18 +324,23 @@ if __name__ == "__main__":
                 if (step_counter % 1000 ==0) and (epsilon > 0):
                     epsilon = epsilon-0.001#也就是经过100万次转移epsilon降到0以下
                 state = jiangwei(state,capital,frametime,bianpan_env.mean_invested)#先降维，并整理形状，把capital放进去
-                if frametime <= timepoints[0]:#如果frametime到达第一个时间点，则进行随机选择
-                    if random.random() < epsilon:#如果落在随机区域
-                        qualified_index = tf.squeeze(np.argwhere(np.sum(actions_table,axis=1)<=capital),axis=-1)#找到符合条件的行动的index_list
-                        action = random.choice(qualified_index)#在qualified_index中随机选取一个动作,注意随机挑选出返回的是列表
-                    else:
-                        action_index = eval_Q.predict(state,capital)#用predict，选择最优行动
-                        action = action_index#否则按着贪心选，这里[0]是因为predict返回的是一个单元素列表
-                    timepoints = np.delete(timepoints,0)#然后去掉第一个元素，于是第二个时间点又变成了最大的
+                if step_counter>1000000:#在100万次转移之前都按照给定时间点选择
+                    if frametime <= timepoints[0]:#如果frametime到达第一个时间点，则进行随机选择
+                        if random.random() < epsilon:#如果落在随机区域
+                            qualified_index = tf.squeeze(np.argwhere(np.sum(actions_table,axis=1)<=capital),axis=-1)#找到符合条件的行动的index_list
+                            action = random.choice(qualified_index)
+                        else:
+                            action_index = eval_Q.predict(state,capital)#用predict，选择最优行动
+                            action = action_index#否则按着贪心选
+                        timepoints = np.delete(timepoints,0)#然后去掉第一个元素，于是第二个时间点又变成了最大的
+                        revenue = bianpan_env.revenue(actions_table[action])#计算收益
+                    else:#其余时刻
+                        revenue = 0
+                        action = 0
+                else:
+                    action_index = eval_Q.predict(state,capital)#用predict，选择最优行动
+                    action = action_index#否则按着贪心选
                     revenue = bianpan_env.revenue(actions_table[action])#计算收益
-                else:#其余时刻
-                    revenue = 0
-                    action = [0]
                 next_state,next_frametime,done,next_capital = bianpan_env.get_state()#获得下一个状态,终止状态的next_state为0矩阵
                 bisai_steps+=1
                 if (next_capital<= 0) and (end_switch == False):
