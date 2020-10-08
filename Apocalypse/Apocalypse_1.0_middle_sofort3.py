@@ -6,7 +6,7 @@
 #把记忆树的alpha改成1.0，更容易随机到优先级大的样本学习
 #随机探索过程采用delay2的探索方式
 import os
-#os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
+os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
 import tensorflow as tf
 from collections import deque
 import numpy as np
@@ -281,7 +281,7 @@ if __name__ == "__main__":
     opt = tf.keras.optimizers.Adam(learning_rate,amsgrad=True)#设定最优化方法
     gamma = 0.99999
     epsilon = 1.            # 探索起始时的探索率
-    N_random_points = 160 #重复试验，0.75的概率发生，发生次数少于100次（即钱没花光的情况）的概率已经到了万分之3，所以160个时间点，在那之前肯定花完了
+    N_random_points = 120 #如果规定交易次数过多，那还是会出现越靠后的行动花不上钱
     #final_epsilon = 0.01            # 探索终止时的探索率
     batch_size = 500
     resultlist = pd.read_csv('D:\\data\\results_20141130-20160630.csv',index_col = 0)#得到赛果和比赛ID的对应表
@@ -313,13 +313,13 @@ if __name__ == "__main__":
             except Exception:#因为有的比赛结果没有存进去
                 continue
             bianpan_env = Env(filepath,result)#每场比赛做一个环境
+            state,frametime,done,capital =  bianpan_env.get_state()#把第一个状态作为初始化状态
             max_frametime = bianpan_env.max_frametime#得到本场比赛最大的frametime
             if max_frametime > N_random_points:
                 timepoints =np.random.randint(0,max_frametime,N_random_points)#生成N_random_points个随机整数
             else:
                 timepoints =np.random.randint(0,max_frametime,max_frametime)
             timepoints = -np.sort(-timepoints)#把时间点从大到小降序排列，即规定了可选时间点，在可选时间点处进行随机探索
-            state,frametime,done,capital =  bianpan_env.get_state()#把第一个状态作为初始化状态
             end_switch = False
             bisai_steps = 0
             used_steps = 0
@@ -329,7 +329,7 @@ if __name__ == "__main__":
                 if (step_counter % 1000 ==0) and (epsilon > 0) and (step_counter>1000000):
                     epsilon = epsilon-0.001#也就先来100万次纯随机，然后再来100万次渐进随机，最后放开
                 state = jiangwei(state,capital,frametime,bianpan_env.mean_invested)#先降维，并整理形状，把capital放进去
-                if step_counter<2000000:#在200万次转移之前都按照给定时间点选择
+                if (step_counter<2000000) and (timepoints.size>0):#在200万次转移之前都按照给定时间点选择
                     if frametime <= timepoints[0]:#如果frametime到达第一个时间点，则进行随机选择
                         if random.random() < epsilon:#如果落在随机区域
                             qualified_index = tf.squeeze(np.argwhere(np.sum(actions_table,axis=1)<=capital),axis=-1)#找到符合条件的行动的index_list
