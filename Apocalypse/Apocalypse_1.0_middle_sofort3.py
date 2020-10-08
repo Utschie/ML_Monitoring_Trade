@@ -281,7 +281,7 @@ if __name__ == "__main__":
     opt = tf.keras.optimizers.Adam(learning_rate,amsgrad=True)#设定最优化方法
     gamma = 0.99999
     epsilon = 1.            # 探索起始时的探索率
-    N_random_points = 133 #把钱花光所用平均次数是100/0.75=133次
+    N_random_points = 134 #134次操作，花光和没花光刚好一半一半
     #final_epsilon = 0.01            # 探索终止时的探索率
     batch_size = 500
     resultlist = pd.read_csv('D:\\data\\results_20141130-20160630.csv',index_col = 0)#得到赛果和比赛ID的对应表
