@@ -281,7 +281,7 @@ if __name__ == "__main__":
     opt = tf.keras.optimizers.Adam(learning_rate,amsgrad=True)#设定最优化方法
     gamma = 0.99999
     epsilon = 1.            # 探索起始时的探索率
-    N_random_points = 120 #如果规定交易次数过多，那还是会出现越靠后的行动花不上钱
+    N_random_points = 133 #把钱花光所用平均次数是100/0.75=133次
     #final_epsilon = 0.01            # 探索终止时的探索率
     batch_size = 500
     resultlist = pd.read_csv('D:\\data\\results_20141130-20160630.csv',index_col = 0)#得到赛果和比赛ID的对应表
@@ -331,7 +331,7 @@ if __name__ == "__main__":
                 state = jiangwei(state,capital,frametime,bianpan_env.mean_invested)#先降维，并整理形状，把capital放进去
                 if (step_counter<2000000):#在200万次转移之前都按照给定时间点选择
                     if (timepoints.size>0)and(frametime <= timepoints[0]):#如果frametime到达第一个时间点，则进行随机选择
-                        if random.random() < epsilon:#如果落在随机区域
+                        if random.uniform(0.,1.) < epsilon:#如果落在随机区域
                             qualified_index = tf.squeeze(np.argwhere(np.sum(actions_table,axis=1)<=capital),axis=-1)#找到符合条件的行动的index_list
                             action = random.choice(qualified_index)
                         else:
