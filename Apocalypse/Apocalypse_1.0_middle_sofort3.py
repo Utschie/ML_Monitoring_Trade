@@ -329,8 +329,8 @@ if __name__ == "__main__":
                 if (step_counter % 1000 ==0) and (epsilon > 0) and (step_counter>1000000):
                     epsilon = epsilon-0.001#也就先来100万次纯随机，然后再来100万次渐进随机，最后放开
                 state = jiangwei(state,capital,frametime,bianpan_env.mean_invested)#先降维，并整理形状，把capital放进去
-                if (step_counter<2000000) and (timepoints.size>0):#在200万次转移之前都按照给定时间点选择
-                    if frametime <= timepoints[0]:#如果frametime到达第一个时间点，则进行随机选择
+                if (step_counter<2000000):#在200万次转移之前都按照给定时间点选择
+                    if (timepoints.size>0)and(frametime <= timepoints[0]):#如果frametime到达第一个时间点，则进行随机选择
                         if random.random() < epsilon:#如果落在随机区域
                             qualified_index = tf.squeeze(np.argwhere(np.sum(actions_table,axis=1)<=capital),axis=-1)#找到符合条件的行动的index_list
                             action = random.choice(qualified_index)
@@ -365,9 +365,9 @@ if __name__ == "__main__":
                     with summary_writer3.as_default():
                         tf.summary.scalar('times',bianpan_env.max_frametime,step =bisai_counter)
                     with summary_writer4.as_default():
-                        tf.summary.scalar('used_steps',used_steps,step =bisai_counter)
-                    with summary_writer4.as_default():
-                        tf.summary.scalar('used_steps',bisai_steps,step =bisai_counter)
+                        tf.summary.scalar('steps',used_steps,step =bisai_counter)
+                    with summary_writer5.as_default():
+                        tf.summary.scalar('steps',bisai_steps,step =bisai_counter)
                     transition = np.array((state,capital,next_capital,action, revenue,jiangwei(next_state,next_capital,next_frametime,bianpan_env.mean_invested),1))
                     memory.store(transition)
                     state = next_state
