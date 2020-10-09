@@ -7,6 +7,7 @@
 #暂时没有用gamma
 #出于是delay，如果使用暂时使用0.999
 #当前的随机探索策略时纯随机探索，每随机一场比赛只能把used_steps提高到0.1955，那要想used_steps到达2000，即平均每场转移的次数，需要探索超过10000场比赛，即2000万次转移————20201008
+#在当前的随机探索策略下，结束随机后依然是毫无行动————20201010
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
 import tensorflow as tf
