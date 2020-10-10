@@ -4,6 +4,7 @@
 #本模型暂不考虑初期的随机试验
 #为了迁移1.0_sofort2的权重，先不考虑frametime的事情
 #actor的learn的loss函数是参考莫烦的方式改动，需要调试一下————20201009
+#就是看起来actor一点儿收敛的趋势都没有————20201010
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
 import tensorflow as tf
