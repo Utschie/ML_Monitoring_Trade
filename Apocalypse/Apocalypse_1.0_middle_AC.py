@@ -348,11 +348,11 @@ class Actor(object):
             batch_parameters = self.net(tf.squeeze(batch_state))#获得parameters的值  
             acts_prob = tf.nn.softmax(batch_parameters)#把parameters们都softmax化成概率
             one_hot_matrix = tf.one_hot(np.array(batch_action),depth=4,on_value=1.0, off_value=0.0)
-            log_prob = tf.math.log(acts_prob*one_hot_matrix)#将对应行动的概率求log，参考莫烦的AC_CartPole
-            loss = -tf.reduce_mean(log_prob * td_error)#带个负号
+            log_prob = tf.math.log(tf.reduce_sum(acts_prob*one_hot_matrix,axis=1))#将对应行动的概率求log，参考莫烦的AC_CartPole
+            exp_v = tf.reduce_mean(log_prob * td_error)#带个负号，因为是要梯度上升
         with summary_writer6.as_default():
-            tf.summary.scalar('losses',loss,step = bisai_counter)#python里的主程序里的全局变量不用特别声明
-        grads = tape.gradient(loss, self.net.variables)
+            tf.summary.scalar('losses',-exp_v,step = bisai_counter)#python里的主程序里的全局变量不用特别声明
+        grads = tape.gradient(-exp_v, self.net.variables)
         self.opt.apply_gradients(grads_and_vars=zip(grads, self.net.variables))
         return loss
         
