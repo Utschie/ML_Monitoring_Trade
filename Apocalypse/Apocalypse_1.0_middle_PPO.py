@@ -2,6 +2,7 @@
 #PPO模型的r是要经过折现处理的
 #还是采用sofort3的随机探索方法，要不然怕走不到后面
 #之前一直没注意一不小心把v加了relu激活函数，包括sofort3，AC都是，白跑了————20201011
+#出现了刚好最后结束时memory里只有一次转移的batch，这个时候就跳过不学了，暂定如此————20201011
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
 import tensorflow as tf
@@ -355,6 +356,8 @@ if __name__ == "__main__":
                     v = critic.net(jiangwei(next_state,next_capital,next_frametime,bianpan_env.mean_invested))#得到下一状态的状态价值
                     batch_memory = memory.get_memory()
                     batch_state,batch_capital,batch_action,batch_revenue = zip(*batch_memory)#把memory解开
+                    if len(batch_state) == 1:#如果刚好batch_state里只有一次转移，那么直接跳出不学了
+                        break
                     batch_discounted_r = []
                     for r in batch_revenue[::-1]:#折现
                         v = r + gamma * v
