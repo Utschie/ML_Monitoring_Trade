@@ -1,5 +1,6 @@
 #本模型是基于AC修改的PPO模型
 #PPO模型的r是要经过折现处理的
+#还是采用sofort3的随机探索方法，要不然怕走不到后面
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
 import tensorflow as tf
@@ -121,38 +122,23 @@ class Critic_Network(tf.keras.Model):
         v = self.dense6_v(x)
         return v#v是当前的状态价值函数值
 
-    def predict(self,state,capital):#用来对应动作
-        q_values = self.call(state)#先根据jiangwei好的state求q值
-        index = tf.squeeze(np.argwhere(np.sum(actions_table,axis=1)<=capital),axis=-1)#找出所有小于剩余资本的操作的索引
-        new_q_value = []
-        for i in index:
-            new_q_value.append(q_values[0].numpy()[i])#将索引列表所对应的q值依次加入new_q_value里，从而形成了index和q值按顺序对应的两个列表
-        action_index = index[tf.argmax(new_q_value)]#new_q_value的单个元素即index_list中对应位置的动作的q值
-        return action_index#找出最大q值所对应的行动索引
-
-    def filter(self,state,capital):
-        q_values = self.call(state)
-        index = np.argwhere(np.sum(actions_table,axis=1)<=capital)#找出所有小于剩余资本的操作的索引
-        new_q_value = []
-        for i in index:
-            new_q_value.append(q_values[0].numpy()[i])#找出所有满足条件的操作的q值
-        return new_q_value#返回所有满足条件的q值
-
 
 class Critic(object):
     def __init__(self):
         self.net = Critic_Network()
-        self.lr = 0.001
+        self.lr = 0.0001
         self.opt = tf.keras.optimizers.Adam(self.lr,amsgrad=True)#设定最优化方法
     
     def learn(self,batch_state,batch_discounted_r):
-        with tf.GradientTape() as tape:
-            batch_v = self.net(batch_state)#求出这一场比赛所有转移的
-            advantage = batch_discounted_r - batch_v
-            loss = tf.reduce_mean(tf.square(advantage))
-        grads = tape.gradient(loss, self.net.variables)
-        self.opt.apply_gradients(grads_and_vars=zip(grads, self.net.variables))#更新参数
-    
+        for i in range(10):#重复学10次
+            with tf.GradientTape() as tape:
+                batch_v = self.net(batch_state)#求出这一场比赛所有转移的
+                advantage = batch_discounted_r - batch_v
+                loss = tf.reduce_mean(tf.square(advantage))
+            grads = tape.gradient(loss, self.net.variables)
+            self.opt.apply_gradients(grads_and_vars=zip(grads, self.net.variables))#更新参数
+        self.net.save_weights(critic_weights_path, overwrite=True)#保存网络参数
+        return loss
     def get_advantage(self,batch_state,batch_discounted_r):
         batch_v = self.net(batch_state)
         advantage = batch_discounted_r - batch_v
@@ -201,19 +187,12 @@ class Actor_Network(tf.keras.Model):#给actor定义的policy网络
         action_p = zip(index,possibilities)#组成行动索引和对应概率的二元组
         return action_p#返回可选行动及其概率
 
-    def filter(self,state,capital):
-        parameters = self.call(state)
-        index = np.argwhere(np.sum(actions_table,axis=1)<=capital)#找出所有小于剩余资本的操作的索引
-        new_parameters = []
-        for i in index:
-            new_parameters.append(parameters[0].numpy()[i])#找出所有满足条件的操作的参数值
-        return new_parameters#返回所有满足条件的参数值
 
 class Actor(object):
     def __init__(self):
         self.net = Actor_Network()
         self.old_net = Actor_Network()
-        self.lr = 0.001
+        self.lr = 0.0001
         self.opt = tf.keras.optimizers.Adam(self.lr,amsgrad=True)#设定最优化方法
         self.clip_epsilon = 0.2
     
@@ -224,18 +203,25 @@ class Actor(object):
         return action
 
     def learn(self,batch_state,batch_capital,batch_action,batch_discounted_r):
-        with tf.GradientTape() as tape:
-            one_hot_matrix = tf.one_hot(np.array(batch_action),depth=4,on_value=1.0, off_value=0.0)
-            pi = self.net.possibility(batch_state,batch_capital)
-            pi_prob = tf.reduce_sum(pi*one_hot_matrix,axis=1)
-            old_pi = self.net.possibility(batch_state,batch_capital)
-            old_pi_prob = tf.reduce_sum(old_pi*one_hot_matrix,axis=1)
-            advantage = critic.get_advantage(batch_state,batch_discounted_r)
-            ratio = pi_prob/(old_pi_prob+1e-8)
-            surr = ratio*advantage
-            aloss = -tf.reduce_mean(tf.minimum(surr,tf.clip_by_value(ratio, 1.-self.clip_epsilon, 1.+self.clip_epsilon)*advantage))
-        grads = tape.gradient(aloss, self.net.variables)
-        self.opt.apply_gradients(grads_and_vars=zip(grads, self.net.variables))#更新参数
+        for i in range(10):#重复10次
+            with tf.GradientTape() as tape:
+                one_hot_matrix = tf.one_hot(np.array(batch_action),depth=4,on_value=1.0, off_value=0.0)
+                batch_parameters = self.net(tf.squeeze(batch_state))#获得parameters的值  
+                pi = tf.nn.softmax(batch_parameters)#把parameters们都softmax化成概率
+                pi_prob = tf.reduce_sum(pi*one_hot_matrix,axis=1)
+                batch_parameters = self.old_net(tf.squeeze(batch_state))#获得parameters的值  
+                old_pi = tf.nn.softmax(batch_parameters)#把parameters们都softmax化成概率
+                old_pi_prob = tf.reduce_sum(old_pi*one_hot_matrix,axis=1)
+                advantage = critic.get_advantage(batch_state,batch_discounted_r)
+                ratio = pi_prob/(old_pi_prob+1e-8)
+                surr = ratio*advantage
+                aloss = -tf.reduce_mean(tf.minimum(surr,tf.clip_by_value(ratio, 1.-self.clip_epsilon, 1.+self.clip_epsilon)*advantage))
+            grads = tape.gradient(aloss, self.net.variables)
+            self.opt.apply_gradients(grads_and_vars=zip(grads, self.net.variables))#更新参数
+        self.net.save_weights(actor_weights_path, overwrite=True)#保存网络参数
+        self.old_net.load_weights(actor_weights_path)#更新旧网络参数
+        return aloss
+        
             
 
 
@@ -249,26 +235,33 @@ class Memory(object):#建立一个演员的当前回合记忆，不过每一新�
         return self.memory#把记忆还给它
     def clear(self):
         self.memory = deque()
-    def discount(self,gamma):#定义折现函数把比赛的每一步的revenue折现
-        batch_state,batch_capital,batch_action,batch_revenue = zip(*self.memory)
+    def discount(self,gamma,v):#定义折现函数把比赛的每一步的revenue折现
+        batch_state,batch_capital,batch_action,batch_revenue = zip(*self.memory)#把memory解开
         batch_discounted_r = []
+        for r in batch_revenue[::-1]:
+            v = r + gamma * v
+            batch_discounted_r.append(v)
+        batch_discounted_r.reverse()
+        self.memory = zip(batch_state,batch_capital,batch_action,batch_discounted_r)#再把memory封起来
+
     
             
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+def jiangwei(state,capital,frametime,mean_invested):#所有变量都归一化
+    invested = [0.,0.,0.,0.,0.,0.]
+    state=np.delete(state, 0, axis=-1)
+    frametime = frametime/50000.0
+    length = len(state)/410.0#出赔率的公司数归一化
+    invested[0] = mean_invested[0]/25.0
+    invested[1] = mean_invested[1]/500.0
+    invested[2] = mean_invested[2]/25.0
+    invested[3] = mean_invested[3]/500.0
+    invested[4] = mean_invested[4]/25.0
+    invested[5] = mean_invested[5]/500.0
+    percenttilelist = [np.percentile(state,i,axis = 0)[1:4] for i in range(0,105,5)]
+    percentile = np.vstack(percenttilelist)#把当前状态的0%-100%分位数放到一个矩阵里
+    state = tf.concat((percentile.flatten()/25.0,[capital/500.0],[frametime],invested,[length]),-1)#除以25是因为一般来讲赔率最高开到25
+    state = tf.reshape(state,(1,72))#63个分位数数据+8个capital,frametime和mean_invested,length共72个输入
+    return state
 
 
 
@@ -290,7 +283,9 @@ if __name__ == "__main__":
     learn_step_counter = 0
     old_repalce_counter = 0 
     bisai_counter = 1
-    weights_path = 'D:\\data\\eval_Q_weights_1.0_middle_AC.ckpt'
+    N_random_points = 134
+    critic_weights_path = 'D:\\data\\critic_weights_1.0_middle_PPO.ckpt'
+    actor_weights_path = 'D:\\data\\actor_weights_1.0_middle_PPO.ckpt'
     filefolderlist = os.listdir('F:\\cleaned_data_20141130-20160630')
     actor = Actor()#实例化一个actor
     critic = Critic()#实例化一个critic
@@ -308,32 +303,49 @@ if __name__ == "__main__":
             except Exception:#因为有的比赛结果没有存进去
                 continue
             bianpan_env = Env(filepath,result)#每场比赛做一个环境
-            actor.memory.clear()#每场比赛开始前要清空记忆
+            memory.clear()#每场比赛开始前要清空记忆
             state,frametime,done,capital =  bianpan_env.get_state()#把第一个状态作为初始化状态
+            max_frametime = bianpan_env.max_frametime#得到本场比赛最大的frametime
+            if max_frametime > N_random_points:
+                timepoints =np.random.randint(0,max_frametime,N_random_points)#生成N_random_points个随机整数
+            else:
+                timepoints =np.random.randint(0,max_frametime,max_frametime)
+            timepoints = -np.sort(-timepoints)#把时间点从大到小降序排列，即规定了可选时间点，在可选时间点处进行随机探索
             end_switch = False
             bisai_steps = 0
             used_steps = 0
             while True:
-                step_counter+=1#每转移一次，步数+1
+                if (step_counter % 1000 ==0) and (epsilon > 0) and (step_counter>1000000):
+                    epsilon = epsilon-0.001#也就先来100万次纯随机，然后再来100万次渐进随机，最后放开
                 state = jiangwei(state,capital,frametime,bianpan_env.mean_invested)#先降维，并整理形状，把capital放进去
-                action = actor.choose_action(state,capital)
-                revenue = bianpan_env.revenue(actions_table[action])#根据行动和是否终赔计算收益
+                if (step_counter<2000000):#在200万次转移之前都按照给定时间点选择
+                    if (timepoints.size>0)and(frametime <= timepoints[0]):#如果frametime到达第一个时间点，则进行随机选择
+                        if random.uniform(0.,1.) < epsilon:#如果落在随机区域
+                            qualified_index = tf.squeeze(np.argwhere(np.sum(actions_table,axis=1)<=capital),axis=-1)#找到符合条件的行动的index_list
+                            action = random.choice(qualified_index)
+                        else:
+                            action = actor.choose_action(state,capital)
+                        timepoints = np.delete(timepoints,0)#然后去掉第一个元素，于是第二个时间点又变成了最大的
+                        revenue = bianpan_env.revenue(actions_table[action])#计算收益
+                    else:#其余时刻
+                        action = 0
+                        revenue = bianpan_env.revenue(actions_table[action])#计算收益
+                else:
+                    action = actor.choose_action(state,capital)#否则按着贪心选
+                    revenue = bianpan_env.revenue(actions_table[action])#计算收益
                 next_state,next_frametime,done,next_capital = bianpan_env.get_state()#获得下一个状态,终止状态的next_state为0矩阵
                 bisai_steps+=1
                 if (next_capital<= 0) and (end_switch == False):
                     use_out_time = frametime
                     end_switch = True
                 if end_switch == False:#如果没花光
-                    used_steps+=1
-                if(step_counter<=2000):
-                    print('已转移'+str(step_counter)+'步')               
+                    used_steps+=1            
                 if done:#终盘时储存信息，同时更新actor，清除actor内存
+                    final_state = jiangwei(next_state,next_capital,next_frametime,bianpan_env.mean_invested)#得到降维过的final_state
                     with summary_writer.as_default():
                         tf.summary.scalar('Zinsen',bianpan_env.get_zinsen(),step = bisai_counter)
                         tf.summary.scalar('rest_capital',bianpan_env.gesamt_revenue+500,step = bisai_counter)
-                        tf.summary.scalar('wrong_action_rate',bianpan_env.wrong_action_counter/bianpan_env.action_counter,step = bisai_counter)
                         tf.summary.scalar('investion_rate',bianpan_env.gesamt_touzi/500.0,step = bisai_counter)
-                        tf.summary.scalar('no_action_rate',bianpan_env.no_action_counter/bianpan_env.action_counter,step = bisai_counter)
                     with summary_writer2.as_default():
                         tf.summary.scalar('times',use_out_time,step =bisai_counter)
                     with summary_writer3.as_default():
@@ -344,13 +356,16 @@ if __name__ == "__main__":
                         tf.summary.scalar('steps',bisai_steps,step =bisai_counter)
                     transition = np.array((state,capital,action, revenue))
                     memory.store(transition)
-                    memory.discount(gamma)
-                    episode_memory = memory.get_memory()
+                    final_v = critic.net(final_state)#得到终盘的状态价值
+                    memory.discount(gamma,final_v)#通过折现率gamma和final_v得到折现后的revenue
+                    episode_memory = memory.get_memory()#或许memory
                     batch_state,batch_capital,batch_action,batch_discounted_r = zip(*episode_memory)
-                    for i in range(10):#每场比赛学好几遍
-                        actor.learn(batch_state,batch_capital,batch_action,batch_discounted_r)
-                    for i in range(10):
-                        critic.learn(batch_state,batch_discounted_r)                 
+                    actor_loss = actor.learn(np.array(batch_state),np.array(batch_capital),np.array(batch_action),np.array(batch_discounted_r))
+                    critic_loss = critic.learn(np.array(batch_state),np.array(batch_discounted_r)) 
+                    with summary_writer6.as_default():
+                        tf.summary.scalar('losses',actor_loss,step = bisai_counter) 
+                    with summary_writer7.as_default():
+                        tf.summary.scalar('losses',critic_loss,step = bisai_counter)              
                     break
                 else:
                     transition = np.array((state,capital,action, revenue))
@@ -358,6 +373,7 @@ if __name__ == "__main__":
                     state = next_state
                     capital = next_capital
                     frametime = next_frametime
+                step_counter+=1#每转移一次，步数+1
             end=time.time()
             bisai_counter+=1
             print('比赛'+filepath+'已完成'+'\n'+'用时'+str(end-start)+'秒\n')
