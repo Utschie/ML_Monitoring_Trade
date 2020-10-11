@@ -1,6 +1,7 @@
 #本模型是基于AC修改的PPO模型
 #PPO模型的r是要经过折现处理的
 #还是采用sofort3的随机探索方法，要不然怕走不到后面
+#之前一直没注意一不小心把v加了relu激活函数，包括sofort3，AC都是，白跑了————20201011
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
 import tensorflow as tf
@@ -106,7 +107,7 @@ class Critic_Network(tf.keras.Model):
         self.dense4_d = tf.keras.layers.Dropout(0.5)
         self.dense5 = tf.keras.layers.Dense(units=600, activation=tf.nn.relu)
         self.dense5_d = tf.keras.layers.Dropout(0.5)
-        self.dense6_v = tf.keras.layers.Dense(units=1, activation=tf.nn.relu)
+        self.dense6_v = tf.keras.layers.Dense(units=1)
      
 
     def call(self,state): #输入从env那里获得的statematrix
@@ -139,6 +140,7 @@ class Critic(object):
             self.opt.apply_gradients(grads_and_vars=zip(grads, self.net.variables))#更新参数
         self.net.save_weights(critic_weights_path, overwrite=True)#保存网络参数
         return loss
+        
     def get_advantage(self,batch_state,batch_discounted_r):
         batch_v = self.net(batch_state)
         advantage = batch_discounted_r - batch_v
@@ -158,7 +160,7 @@ class Actor_Network(tf.keras.Model):#给actor定义的policy网络
         self.dense4_d = tf.keras.layers.Dropout(0.5)
         self.dense5 = tf.keras.layers.Dense(units=144, activation=tf.nn.relu)
         self.dense5_d = tf.keras.layers.Dropout(0.5)
-        self.dense6_v = tf.keras.layers.Dense(units=1, activation=tf.nn.relu)
+        self.dense6_v = tf.keras.layers.Dense(units=1)
         self.dense6_a = tf.keras.layers.Dense(units=self.n_actions)#输出层代表着在当前最大赔率前，买和不买的六种行动的价值
 
 
@@ -203,6 +205,7 @@ class Actor(object):
         return action
 
     def learn(self,batch_state,batch_capital,batch_action,batch_discounted_r):
+        self.old_net.load_weights(actor_weights_path)#更新旧网络参数
         for i in range(10):#重复10次
             with tf.GradientTape() as tape:
                 one_hot_matrix = tf.one_hot(np.array(batch_action),depth=4,on_value=1.0, off_value=0.0)
@@ -219,7 +222,6 @@ class Actor(object):
             grads = tape.gradient(aloss, self.net.variables)
             self.opt.apply_gradients(grads_and_vars=zip(grads, self.net.variables))#更新参数
         self.net.save_weights(actor_weights_path, overwrite=True)#保存网络参数
-        self.old_net.load_weights(actor_weights_path)#更新旧网络参数
         return aloss
         
             
@@ -265,6 +267,7 @@ if __name__ == "__main__":
     summary_writer5 = tf.summary.create_file_writer('./tensorboard_1.0_middle_PPO/bisai_steps')
     summary_writer6 = tf.summary.create_file_writer('./tensorboard_1.0_middle_PPO/actor_loss')
     summary_writer7 = tf.summary.create_file_writer('./tensorboard_1.0_middle_PPO/critic_loss')
+    summary_writer8 = tf.summary.create_file_writer('./tensorboard_1.0_middle_PPO/mini_critic_loss')
     start0 = time.time()
     epsilon = 1.            # 探索起始时的探索率
     #final_epsilon = 0.01            # 探索终止时的探索率
@@ -273,12 +276,14 @@ if __name__ == "__main__":
     actions_table = [[0,0,0],[5,0,0],[0,5,0],[0,0,5]]#给神经网络输出层对应一个行动表
     step_counter = 0
     learn_step_counter = 0 
+    step_in_critic = 0
     bisai_counter = 1
     N_random_points = 134
     critic_weights_path = 'D:\\data\\critic_weights_1.0_middle_PPO.ckpt'
     actor_weights_path = 'D:\\data\\actor_weights_1.0_middle_PPO.ckpt'
     filefolderlist = os.listdir('F:\\cleaned_data_20141130-20160630')
     actor = Actor()#实例化一个actor
+    actor.net.save_weights(actor_weights_path, overwrite=True)#保存网络参数
     critic = Critic()#实例化一个critic
     memory = Memory()#初始化比赛记忆
 

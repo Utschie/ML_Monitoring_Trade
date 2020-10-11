@@ -218,7 +218,7 @@ class Q_Network(tf.keras.Model):
         self.dense4_d = tf.keras.layers.Dropout(0.5)
         self.dense5 = tf.keras.layers.Dense(units=600, activation=tf.nn.relu)
         self.dense5_d = tf.keras.layers.Dropout(0.5)
-        self.dense6_v = tf.keras.layers.Dense(units=1, activation=tf.nn.relu)
+        self.dense6_v = tf.keras.layers.Dense(units=1)
         self.dense6_a = tf.keras.layers.Dense(units=self.n_actions)#输出层代表着在当前最大赔率前，买和不买的六种行动的价值
 
     def call(self,state): #输入从env那里获得的statematrix
