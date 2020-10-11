@@ -226,7 +226,7 @@ class Actor(object):
 
 
 
-class Memory(object):#建立一个演员的当前回合记忆，不过每一新回合开始都清空
+class Memory(object):#这个memory是没达到一个batch或者到盘末就清空
     def __init__(self):
         self.memory = deque()#建立储存区
     def store(self,transition):#把每次的转移传给它，这个转移里只包含state,capital和action
@@ -235,16 +235,8 @@ class Memory(object):#建立一个演员的当前回合记忆，不过每一新�
         return self.memory#把记忆还给它
     def clear(self):
         self.memory = deque()
-    def discount(self,gamma,v):#定义折现函数把比赛的每一步的revenue折现
-        batch_state,batch_capital,batch_action,batch_revenue = zip(*self.memory)#把memory解开
-        batch_discounted_r = []
-        for r in batch_revenue[::-1]:
-            v = r + gamma * v
-            batch_discounted_r.append(v)
-        batch_discounted_r.reverse()
-        self.memory = zip(batch_state,batch_capital,batch_action,batch_discounted_r)#再把memory封起来
+  
 
-    
             
 def jiangwei(state,capital,frametime,mean_invested):#所有变量都归一化
     invested = [0.,0.,0.,0.,0.,0.]
@@ -280,8 +272,7 @@ if __name__ == "__main__":
     resultlist = pd.read_csv('D:\\data\\results_20141130-20160630.csv',index_col = 0)#得到赛果和比赛ID的对应表
     actions_table = [[0,0,0],[5,0,0],[0,5,0],[0,0,5]]#给神经网络输出层对应一个行动表
     step_counter = 0
-    learn_step_counter = 0
-    old_repalce_counter = 0 
+    learn_step_counter = 0 
     bisai_counter = 1
     N_random_points = 134
     critic_weights_path = 'D:\\data\\critic_weights_1.0_middle_PPO.ckpt'
@@ -339,9 +330,11 @@ if __name__ == "__main__":
                     use_out_time = frametime
                     end_switch = True
                 if end_switch == False:#如果没花光
-                    used_steps+=1            
+                    used_steps+=1
                 if done:#终盘时储存信息，同时更新actor，清除actor内存
-                    final_state = jiangwei(next_state,next_capital,next_frametime,bianpan_env.mean_invested)#得到降维过的final_state
+                    learn_step_counter+=1
+                    transition = np.array((state,capital,action,revenue))#先把当下的存起来
+                    memory.store(transition)
                     with summary_writer.as_default():
                         tf.summary.scalar('Zinsen',bianpan_env.get_zinsen(),step = bisai_counter)
                         tf.summary.scalar('rest_capital',bianpan_env.gesamt_revenue+500,step = bisai_counter)
@@ -354,21 +347,46 @@ if __name__ == "__main__":
                         tf.summary.scalar('steps',used_steps,step =bisai_counter)
                     with summary_writer5.as_default():
                         tf.summary.scalar('steps',bisai_steps,step =bisai_counter)
-                    transition = np.array((state,capital,action, revenue))
-                    memory.store(transition)
-                    final_v = critic.net(final_state)#得到终盘的状态价值
-                    memory.discount(gamma,final_v)#通过折现率gamma和final_v得到折现后的revenue
-                    episode_memory = memory.get_memory()#或许memory
-                    batch_state,batch_capital,batch_action,batch_discounted_r = zip(*episode_memory)
+                    v = critic.net(jiangwei(next_state,next_capital,next_frametime,bianpan_env.mean_invested))#得到下一状态的状态价值
+                    batch_memory = memory.get_memory()
+                    batch_state,batch_capital,batch_action,batch_revenue = zip(*batch_memory)#把memory解开
+                    batch_discounted_r = []
+                    for r in batch_revenue[::-1]:#折现
+                        v = r + gamma * v
+                        batch_discounted_r.append(v)
+                    batch_discounted_r.reverse()
                     actor_loss = actor.learn(np.array(batch_state),np.array(batch_capital),np.array(batch_action),np.array(batch_discounted_r))
-                    critic_loss = critic.learn(np.array(batch_state),np.array(batch_discounted_r)) 
+                    critic_loss = critic.learn(np.array(batch_state),np.array(batch_discounted_r))   
+                    memory.clear()#清空memory            
                     with summary_writer6.as_default():
-                        tf.summary.scalar('losses',actor_loss,step = bisai_counter) 
+                        tf.summary.scalar('losses',actor_loss,step = learn_step_counter)     
                     with summary_writer7.as_default():
-                        tf.summary.scalar('losses',critic_loss,step = bisai_counter)              
+                        tf.summary.scalar('losses',critic_loss,step = learn_step_counter)          
                     break
+                elif bisai_steps % 500 ==0:
+                    learn_step_counter+=1
+                    transition = np.array((state,capital,action,revenue))
+                    memory.store(transition)
+                    v = critic.net(jiangwei(next_state,next_capital,next_frametime,bianpan_env.mean_invested))#得到终盘的状态价值
+                    batch_memory = memory.get_memory()
+                    batch_state,batch_capital,batch_action,batch_revenue = zip(*batch_memory)#把memory解开
+                    batch_discounted_r = []
+                    for r in batch_revenue[::-1]:
+                        v = r + gamma * v
+                        batch_discounted_r.append(v)
+                    batch_discounted_r.reverse()
+                    actor_loss = actor.learn(np.array(batch_state),np.array(batch_capital),np.array(batch_action),np.array(batch_discounted_r))
+                    critic_loss = critic.learn(np.array(batch_state),np.array(batch_discounted_r))   
+                    memory.clear()#清空memory
+                    with summary_writer6.as_default():
+                        tf.summary.scalar('losses',actor_loss,step = learn_step_counter)     
+                    with summary_writer7.as_default():
+                        tf.summary.scalar('losses',critic_loss,step = learn_step_counter) 
+                    state = next_state
+                    capital = next_capital
+                    frametime = next_frametime
                 else:
-                    transition = np.array((state,capital,action, revenue))
+                    transition = np.array((state,capital,action,revenue))
                     memory.store(transition)
                     state = next_state
                     capital = next_capital
