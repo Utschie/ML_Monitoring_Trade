@@ -3,6 +3,7 @@
 #还是采用sofort3的随机探索方法，要不然怕走不到后面
 #之前一直没注意一不小心把v加了relu激活函数，包括sofort3，AC都是，白跑了————20201011
 #出现了刚好最后结束时memory里只有一次转移的batch，这个时候就跳过不学了，暂定如此————20201011
+#每组样本训练十次（也就是epoch=10）可能导致过拟合，所以改成3试一下————20201013
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
 import tensorflow as tf
@@ -132,7 +133,7 @@ class Critic(object):
         self.opt = tf.keras.optimizers.Adam(self.lr,amsgrad=True)#设定最优化方法
     
     def learn(self,batch_state,batch_discounted_r):
-        for i in range(10):#重复学10次
+        for i in range(3):#重复学10次
             with tf.GradientTape() as tape:
                 batch_v = self.net(batch_state)#求出这一场比赛所有转移的
                 advantage = batch_discounted_r - batch_v
@@ -207,7 +208,7 @@ class Actor(object):
 
     def learn(self,batch_state,batch_capital,batch_action,batch_discounted_r):
         self.old_net.load_weights(actor_weights_path)#更新旧网络参数
-        for i in range(10):#重复10次
+        for i in range(3):#重复10次
             with tf.GradientTape() as tape:
                 one_hot_matrix = tf.one_hot(np.array(batch_action),depth=4,on_value=1.0, off_value=0.0)
                 batch_parameters = self.net(tf.squeeze(batch_state))#获得parameters的值  
