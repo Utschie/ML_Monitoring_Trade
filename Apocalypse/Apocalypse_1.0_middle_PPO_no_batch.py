@@ -257,14 +257,14 @@ def jiangwei(state,capital,frametime,mean_invested):#所有变量都归一化
 
 
 if __name__ == "__main__":
-    summary_writer = tf.summary.create_file_writer('/tensorboard_1.0_middle_PPO_nobatch') #在代码所在文件夹同目录下创建tensorboard文件夹（本代码在jupyternotbook里跑，所以在jupyternotebook里可以看到）
-    summary_writer2 = tf.summary.create_file_writer('/tensorboard_1.0_middle_PPO_nobatch/use_out_time')
-    summary_writer3 = tf.summary.create_file_writer('/tensorboard_1.0_middle_PPO_nobatch/max_frametime')
-    summary_writer4 = tf.summary.create_file_writer('/tensorboard_1.0_middle_PPO_nobatch/used_steps')
-    summary_writer5 = tf.summary.create_file_writer('/tensorboard_1.0_middle_PPO_nobatch/bisai_steps')
-    summary_writer6 = tf.summary.create_file_writer('/tensorboard_1.0_middle_PPO_nobatch/actor_loss')
-    summary_writer7 = tf.summary.create_file_writer('/tensorboard_1.0_middle_PPO_nobatch/critic_loss')
-    summary_writer8 = tf.summary.create_file_writer('/tensorboard_1.0_middle_PPO_nobatch/mini_critic_loss')
+    summary_writer = tf.summary.create_file_writer('./tensorboard_1.0_middle_PPO_nobatch') #在代码所在文件夹同目录下创建tensorboard文件夹（本代码在jupyternotbook里跑，所以在jupyternotebook里可以看到）
+    summary_writer2 = tf.summary.create_file_writer('./tensorboard_1.0_middle_PPO_nobatch/use_out_time')
+    summary_writer3 = tf.summary.create_file_writer('./tensorboard_1.0_middle_PPO_nobatch/max_frametime')
+    summary_writer4 = tf.summary.create_file_writer('./tensorboard_1.0_middle_PPO_nobatch/used_steps')
+    summary_writer5 = tf.summary.create_file_writer('./tensorboard_1.0_middle_PPO_nobatch/bisai_steps')
+    summary_writer6 = tf.summary.create_file_writer('./tensorboard_1.0_middle_PPO_nobatch/actor_loss')
+    summary_writer7 = tf.summary.create_file_writer('./tensorboard_1.0_middle_PPO_nobatch/critic_loss')
+    summary_writer8 = tf.summary.create_file_writer('./tensorboard_1.0_middle_PPO_nobatch/mini_critic_loss')
     start0 = time.time()
     epsilon = 1.            # 探索起始时的探索率
     #final_epsilon = 0.01            # 探索终止时的探索率
