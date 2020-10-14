@@ -296,7 +296,7 @@ class Policy_Network(tf.keras.Model):#给actor定义的policy网络
     
 
 class Actor(object):
-    def __init__(self,lr=0.001):
+    def __init__(self,lr=0.0001):
         self.net = Policy_Network()#初始化网络
         self.opt = tf.keras.optimizers.Adam(lr,amsgrad=True)#设定最优化方法
         self.opt_alpha = tf.keras.optimizers.Adam(lr,amsgrad=True)
@@ -306,7 +306,7 @@ class Actor(object):
 
     def choose_action(self,state):
         possibilities = self.net.possibility(state)#获得行动概率二元组并解耦
-        index = np.random.choice(range(len(possibilities)), p=np.array(possibilities).ravel())#根据概率选择索引
+        index = np.random.choice(range(4), p=np.array(possibilities).ravel())#根据概率选择索引
         action = actions_table[index]#根据索引选择行动的索引，即对应action_table里的索引
         return action
 
@@ -328,10 +328,10 @@ class Actor(object):
         
         
 class Critic(object):#只需要做每次学习，以及把相应的td_error传给Actor
-    def __init__(self,lr=0.001):
+    def __init__(self,lr=0.0001):
         self.local_Q = Q_Network()#按论文中写的local_Q
         self.target_Q = Q_Network()#按论文中写的target_Q
-        self.gamma = 0.99
+        self.gamma = 0.99999
         self.memory_size = 1000000#按论文中给的1e6大小
         self.batch_size=500
         self.memory = Critic_Memory(capacity=self.memory_size)
@@ -444,8 +444,7 @@ if __name__ == "__main__":
                 if (step_counter<2000000):#在200万次转移之前都按照给定时间点选择
                     if (timepoints.size>0)and(frametime <= timepoints[0]):#如果frametime到达第一个时间点，则进行随机选择
                         if random.uniform(0.,1.) < epsilon:#如果落在随机区域
-                            qualified_index = tf.squeeze(np.argwhere(np.sum(actions_table,axis=1)<=capital),axis=-1)#找到符合条件的行动的index_list
-                            action = random.choice(qualified_index)
+                            action = random.choice(actions_table)
                         else:
                             action = actor.choose_action(state)
                         timepoints = np.delete(timepoints,0)#然后去掉第一个元素，于是第二个时间点又变成了最大的
