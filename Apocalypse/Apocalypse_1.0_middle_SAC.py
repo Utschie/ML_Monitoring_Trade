@@ -283,7 +283,7 @@ class Policy_Network(tf.keras.Model):#给actor定义的policy网络
         x = self.dense4_d(x)
         x = self.dense5(x)
         x = self.dense5_d(x)
-        parameters = self.dense6_a(x)#Dueling DQN
+        parameters = self.dense6(x)
         return parameters#parameters是一个（1,4）的张量，是决定随机策略分布的参数向量
 
     def possibility(self,state):#用来对应动作
@@ -321,6 +321,7 @@ class Actor(object):
         self.opt.apply_gradients(grads_and_vars=zip(grads, self.net.variables))#更新策略
         self.opt_alpha.apply_gradients(grads_and_vars=zip(grads_alpha, [self.alpha]))#更新alpha
         del tape
+        self.net.save_weights(actor_weights_path, overwrite=True)
         return loss
         
         
@@ -370,6 +371,7 @@ class Critic(object):#只需要做每次学习，以及把相应的td_error传�
         self.opt1.apply_gradients(grads_and_vars=zip(grads1, self.local_Q.variables))#更新参数
         self.opt2.apply_gradients(grads_and_vars=zip(grads2, self.target_Q.variables))#更新参数
         del tape
+        self.target_Q.save_weights(critic_weights_path, overwrite=True)
         return loss2#返回loss好可以记录下来输出
 
     def update_Q(self):#更新Q网络
