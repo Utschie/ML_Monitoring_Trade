@@ -211,14 +211,14 @@ class Q_Network(tf.keras.Model):#给critic定义的q网络
     def __init__(self,n_actions=4):#有默认值的属性必须放在没默认值属性的后面
         self.n_actions = n_actions
         super().__init__()#调用tf.keras.Model的类初始化方法
-        self.dense1 = tf.keras.layers.Dense(units=144, activation=tf.nn.relu)#输入层
-        self.dense2 = tf.keras.layers.Dense(units=144, activation=tf.nn.relu)#一个隐藏层
+        self.dense1 = tf.keras.layers.Dense(units=600, activation=tf.nn.relu)#输入层
+        self.dense2 = tf.keras.layers.Dense(units=600, activation=tf.nn.relu)#一个隐藏层
         self.dense2_d = tf.keras.layers.Dropout(0.5)
-        self.dense3 = tf.keras.layers.Dense(units=144, activation=tf.nn.relu)
+        self.dense3 = tf.keras.layers.Dense(units=600, activation=tf.nn.relu)
         self.dense3_d = tf.keras.layers.Dropout(0.5)
-        self.dense4 = tf.keras.layers.Dense(units=144, activation=tf.nn.relu)
+        self.dense4 = tf.keras.layers.Dense(units=600, activation=tf.nn.relu)
         self.dense4_d = tf.keras.layers.Dropout(0.5)
-        self.dense5 = tf.keras.layers.Dense(units=144, activation=tf.nn.relu)
+        self.dense5 = tf.keras.layers.Dense(units=600, activation=tf.nn.relu)
         self.dense5_d = tf.keras.layers.Dropout(0.5)
         self.dense6_v = tf.keras.layers.Dense(units=1)
         self.dense6_a = tf.keras.layers.Dense(units=self.n_actions)#输出层代表着在当前最大赔率前，买和不买的六种行动的价值
@@ -261,14 +261,14 @@ class Policy_Network(tf.keras.Model):#给actor定义的policy网络
     def __init__(self,n_actions=4):#有默认值的属性必须放在没默认值属性的后面
         self.n_actions = n_actions
         super().__init__()#调用tf.keras.Model的类初始化方法
-        self.dense1 = tf.keras.layers.Dense(units=144, activation=tf.nn.relu)#输入层
-        self.dense2 = tf.keras.layers.Dense(units=144, activation=tf.nn.relu)#一个隐藏层
+        self.dense1 = tf.keras.layers.Dense(units=600, activation=tf.nn.relu)#输入层
+        self.dense2 = tf.keras.layers.Dense(units=600, activation=tf.nn.relu)#一个隐藏层
         self.dense2_d = tf.keras.layers.Dropout(0.5)
-        self.dense3 = tf.keras.layers.Dense(units=144, activation=tf.nn.relu)
+        self.dense3 = tf.keras.layers.Dense(units=600, activation=tf.nn.relu)
         self.dense3_d = tf.keras.layers.Dropout(0.5)
-        self.dense4 = tf.keras.layers.Dense(units=144, activation=tf.nn.relu)
+        self.dense4 = tf.keras.layers.Dense(units=600, activation=tf.nn.relu)
         self.dense4_d = tf.keras.layers.Dropout(0.5)
-        self.dense5 = tf.keras.layers.Dense(units=144, activation=tf.nn.relu)
+        self.dense5 = tf.keras.layers.Dense(units=600, activation=tf.nn.relu)
         self.dense5_d = tf.keras.layers.Dropout(0.5)
         self.dense6_v = tf.keras.layers.Dense(units=1)
         self.dense6_a = tf.keras.layers.Dense(units=self.n_actions)#输出层代表着在当前最大赔率前，买和不买的六种行动的价值
@@ -352,7 +352,7 @@ class Critic(object):#只需要做每次学习，以及把相应的td_error传�
             next_prob1 =tf.nn.softmax(actor.net(tf.squeeze(batch_next_state)))#得到下一个满足条件动作的概率分布
             next_v1 = next_all_q1-actor.alpha*tf.math.log(next_prob1)#得到下一状态各种动作下的v
             expectation_v1 = tf.reduce_sum(next_prob1*next_v1,axis=1)#获得下一个状态的v的期望.
-            y_pred1 = batch_revenue+0.99*expectation_v1*(1-np.array(batch_done))
+            y_pred1 = batch_revenue+self.gamma*expectation_v1*(1-np.array(batch_done))
             loss1 = tf.reduce_mean(ISWeights * tf.math.squared_difference(y_true1, y_pred1))
             #下面算target_Q的
             all_q2 = tf.squeeze(list(map(self.target_Q,batch_state)))#获得此刻状态的所有4个动作的q值
