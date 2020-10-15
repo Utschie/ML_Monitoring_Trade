@@ -293,12 +293,12 @@ class Policy_Network(tf.keras.Model):#给actor定义的policy网络
     
 
 class Actor(object):
-    def __init__(self,lr=0.0001):
+    def __init__(self,lr=0.0003):
         self.net = Policy_Network()#初始化网络
         self.opt = tf.keras.optimizers.Adam(lr,amsgrad=True)#设定最优化方法
-        self.opt_alpha = tf.keras.optimizers.Adam(lr,amsgrad=True)
+        self.opt_alpha = tf.keras.optimizers.Adam(lr,amsgrad=True)#参考论文
         self.memory = Actor_Memory()
-        self.alpha = tf.Variable(initial_value=1.) 
+        self.alpha = tf.Variable(initial_value=0.2)#参考tf2rl 
         self.target_alpha = -np.log((1.0 / 4)) * 0.98
 
     def choose_action(self,state):
@@ -326,7 +326,7 @@ class Actor(object):
         
         
 class Critic(object):#只需要做每次学习，以及把相应的td_error传给Actor
-    def __init__(self,lr=0.0001):
+    def __init__(self,lr=0.0003):
         self.local_Q = Q_Network()#按论文中写的local_Q
         self.target_Q = Q_Network()#按论文中写的target_Q
         self.gamma = 0.99999
