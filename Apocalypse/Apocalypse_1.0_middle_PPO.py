@@ -4,6 +4,8 @@
 #之前一直没注意一不小心把v加了relu激活函数，包括sofort3，AC都是，白跑了————20201011
 #出现了刚好最后结束时memory里只有一次转移的batch，这个时候就跳过不学了，暂定如此————20201011
 #每组样本训练十次（也就是epoch=10）可能导致过拟合，所以改成3试一下————20201013
+#相比sofort确实下限提高，但是仍然有后面方差扩大的情况
+
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
 import tensorflow as tf
