@@ -263,7 +263,10 @@ def jiangwei_mini(state,capital,frametime,mean_invested):
     invested[4] = mean_invested[4]/25.0
     invested[5] = mean_invested[5]/500.0
     state=np.delete(state, 0, axis=-1)
-    state = tsvd.fit_transform(np.transpose(state))#降维成（1,7）的矩阵
+    if state.shape[0] != 1:
+        state = tsvd.fit_transform(np.transpose(state))#降维成（1,7）的矩阵
+    else:
+        pass
     state = tf.concat((state.flatten(),[capital/500.0],[frametime],invested,[length],max),-1)#7+1+1+6+1+3=19
     state = tf.reshape(state,(1,19))
     return state
