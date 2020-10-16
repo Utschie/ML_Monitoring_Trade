@@ -1,4 +1,5 @@
 #本模型是不经过筛选行动，直接将错误行动reward为0的PPO模型
+#本模型用SVD截断
 
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
