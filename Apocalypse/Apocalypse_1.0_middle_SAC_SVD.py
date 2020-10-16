@@ -1,4 +1,4 @@
-#本文件是SAC模型
+#本文件是用奇异值截断降维函数的SAC模型
 #本模型决定取消在网络中过滤不满足条件的行动，而只是将不满足条件的行动的收益赋予0收益
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
@@ -12,7 +12,7 @@ import re
 import time
 import sklearn
 import math
-
+from sklearn.decomposition import TruncatedSVD
 class Env():#定义一个环境用来与网络交互
     def __init__(self,filepath,result):
         self.result = result#获得赛果
@@ -256,6 +256,26 @@ def jiangwei(state,capital,frametime,mean_invested):#所有变量都归一化
     state = tf.reshape(state,(1,72))#63个分位数数据+8个capital,frametime和mean_invested,length共72个输入
     return state
 
+def jiangwei_mini(state,capital,frametime,mean_invested):
+    invested = [0.,0.,0.,0.,0.,0.]
+    max_host = state[tf.argmax(state)[2].numpy()][2]
+    max_fair = state[tf.argmax(state)[3].numpy()][3]
+    max_guest = state[tf.argmax(state)[4].numpy()][4]
+    max = [max_host,max_fair,max_guest]
+    tsvd = TruncatedSVD(1)
+    frametime = frametime/50000.0
+    length = len(state)/410.0#出赔率的公司数归一化
+    invested[0] = mean_invested[0]/25.0
+    invested[1] = mean_invested[1]/500.0
+    invested[2] = mean_invested[2]/25.0
+    invested[3] = mean_invested[3]/500.0
+    invested[4] = mean_invested[4]/25.0
+    invested[5] = mean_invested[5]/500.0
+    state=np.delete(state, 0, axis=-1)
+    state = tsvd.fit_transform(np.transpose(state))#降维成（1,7）的矩阵
+    state = tf.concat((state.flatten(),[capital/500.0],[frametime],invested,[length],max),-1)#7+1+1+6+1+3=19
+    state = tf.reshape(state,(1,19))
+    return state
 
 class Policy_Network(tf.keras.Model):#给actor定义的policy网络
     def __init__(self,n_actions=4):#有默认值的属性必须放在没默认值属性的后面
@@ -386,14 +406,14 @@ class Critic(object):#只需要做每次学习，以及把相应的td_error传�
 
 
 if __name__ == "__main__":
-    summary_writer = tf.summary.create_file_writer('./tensorboard_1.0_middle_SAC')
-    summary_writer2 = tf.summary.create_file_writer('./tensorboard_1.0_middle_SAC/use_out_time')
-    summary_writer3 = tf.summary.create_file_writer('./tensorboard_1.0_middle_SAC/max_frametime')
-    summary_writer4 = tf.summary.create_file_writer('./tensorboard_1.0_middle_SAC/used_steps')
-    summary_writer5 = tf.summary.create_file_writer('./tensorboard_1.0_middle_SAC/bisai_steps')
-    summary_writer6 = tf.summary.create_file_writer('./tensorboard_1.0_middle_SAC/actor_loss')
-    summary_writer7 = tf.summary.create_file_writer('./tensorboard_1.0_middle_SAC/critic_loss')
-    summary_writer8 = tf.summary.create_file_writer('./tensorboard_1.0_middle_SAC/mini_critic_loss')
+    summary_writer = tf.summary.create_file_writer('./tensorboard_1.0_middle_SAC_SVD')
+    summary_writer2 = tf.summary.create_file_writer('./tensorboard_1.0_middle_SAC_SVD/use_out_time')
+    summary_writer3 = tf.summary.create_file_writer('./tensorboard_1.0_middle_SAC_SVD/max_frametime')
+    summary_writer4 = tf.summary.create_file_writer('./tensorboard_1.0_middle_SAC_SVD/used_steps')
+    summary_writer5 = tf.summary.create_file_writer('./tensorboard_1.0_middle_SAC_SVD/bisai_steps')
+    summary_writer6 = tf.summary.create_file_writer('./tensorboard_1.0_middle_SAC_SVD/actor_loss')
+    summary_writer7 = tf.summary.create_file_writer('./tensorboard_1.0_middle_SAC_SVD/critic_loss')
+    summary_writer8 = tf.summary.create_file_writer('./tensorboard_1.0_middle_SAC_SVD/mini_critic_loss')
     start0 = time.time()
     epsilon = 1.            # 探索起始时的探索率
     #final_epsilon = 0.01            # 探索终止时的探索率
@@ -404,8 +424,8 @@ if __name__ == "__main__":
     target_repalce_counter = 0 
     bisai_counter = 1
     N_random_points = 134
-    critic_weights_path = 'D:\\data\\critic_Q_weights_1.0_middle_SAC.ckpt'
-    actor_weights_path = 'D:\\data\\actor_weights_1.0_middle_SAC.ckpt'
+    critic_weights_path = 'D:\\data\\critic_Q_weights_1.0_middle_SAC_SVD.ckpt'
+    actor_weights_path = 'D:\\data\\actor_weights_1.0_middle_SAC_SVD.ckpt'
     filefolderlist = os.listdir('F:\\cleaned_data_20141130-20160630')
     actor = Actor()#实例化一个actor
     #actor.net.load_weights(pre_weights_path)#读入1.0_sofort2的权重

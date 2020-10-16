@@ -158,7 +158,7 @@ def jiangwei(state,capital,mean_invested):
     max = [max_host,max_fair,max_guest]
     frametime = state[0][0]#取出frametime时间
     state=np.delete(state, 0, axis=-1)#把frametime去掉，则state变成了（410,7）的矩阵
-    state = tsvd.fit_transform(np.transpose(state))#降维成（410,1）的矩阵
+    state = tsvd.fit_transform(np.transpose(state))#降维成（1,7）的矩阵
     state = sklearn.preprocessing.scale(state)#数据标准化一下
     state = tf.concat((state.flatten(),[capital],[frametime],mean_invested,max),-1)#把降好维的state和capital与frametime连在一起，此时是412长度的一维张量
     state = tf.reshape(state,(1,18))

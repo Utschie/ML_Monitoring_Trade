@@ -12,6 +12,7 @@ import re
 import time
 import sklearn
 import math
+from sklearn.decomposition import TruncatedSVD
 
 class Env():#定义一个环境用来与网络交互
     def __init__(self,filepath,result):
@@ -245,17 +246,37 @@ def jiangwei(state,capital,frametime,mean_invested):#所有变量都归一化
     state = tf.reshape(state,(1,72))#63个分位数数据+8个capital,frametime和mean_invested,length共72个输入
     return state
 
+def jiangwei_mini(state,capital,frametime,mean_invested):
+    invested = [0.,0.,0.,0.,0.,0.]
+    max_host = state[tf.argmax(state)[2].numpy()][2]
+    max_fair = state[tf.argmax(state)[3].numpy()][3]
+    max_guest = state[tf.argmax(state)[4].numpy()][4]
+    max = [max_host,max_fair,max_guest]
+    tsvd = TruncatedSVD(1)
+    frametime = frametime/50000.0
+    length = len(state)/410.0#出赔率的公司数归一化
+    invested[0] = mean_invested[0]/25.0
+    invested[1] = mean_invested[1]/500.0
+    invested[2] = mean_invested[2]/25.0
+    invested[3] = mean_invested[3]/500.0
+    invested[4] = mean_invested[4]/25.0
+    invested[5] = mean_invested[5]/500.0
+    state=np.delete(state, 0, axis=-1)
+    state = tsvd.fit_transform(np.transpose(state))#降维成（1,7）的矩阵
+    state = tf.concat((state.flatten(),[capital/500.0],[frametime],invested,[length],max),-1)#7+1+1+6+1+3=19
+    state = tf.reshape(state,(1,19))
+    return state
 
 
 if __name__ == "__main__":
-    summary_writer = tf.summary.create_file_writer('./tensorboard_1.0_middle_PPO_nofilter') #在代码所在文件夹同目录下创建tensorboard文件夹（本代码在jupyternotbook里跑，所以在jupyternotebook里可以看到）
-    summary_writer2 = tf.summary.create_file_writer('./tensorboard_1.0_middle_PPO_nofilter/use_out_time')
-    summary_writer3 = tf.summary.create_file_writer('./tensorboard_1.0_middle_PPO_nofilter/max_frametime')
-    summary_writer4 = tf.summary.create_file_writer('./tensorboard_1.0_middle_PPO_nofilter/used_steps')
-    summary_writer5 = tf.summary.create_file_writer('./tensorboard_1.0_middle_PPO_nofilter/bisai_steps')
-    summary_writer6 = tf.summary.create_file_writer('./tensorboard_1.0_middle_PPO_nofilter/actor_loss')
-    summary_writer7 = tf.summary.create_file_writer('./tensorboard_1.0_middle_PPO_nofilter/critic_loss')
-    summary_writer8 = tf.summary.create_file_writer('./tensorboard_1.0_middle_PPO_nofilter/mini_critic_loss')
+    summary_writer = tf.summary.create_file_writer('./tensorboard_1.0_middle_PPO_nofilter_SVD') #在代码所在文件夹同目录下创建tensorboard文件夹（本代码在jupyternotbook里跑，所以在jupyternotebook里可以看到）
+    summary_writer2 = tf.summary.create_file_writer('./tensorboard_1.0_middle_PPO_nofilter_SVD/use_out_time')
+    summary_writer3 = tf.summary.create_file_writer('./tensorboard_1.0_middle_PPO_nofilter_SVD/max_frametime')
+    summary_writer4 = tf.summary.create_file_writer('./tensorboard_1.0_middle_PPO_nofilter_SVD/used_steps')
+    summary_writer5 = tf.summary.create_file_writer('./tensorboard_1.0_middle_PPO_nofilter_SVD/bisai_steps')
+    summary_writer6 = tf.summary.create_file_writer('./tensorboard_1.0_middle_PPO_nofilter_SVD/actor_loss')
+    summary_writer7 = tf.summary.create_file_writer('./tensorboard_1.0_middle_PPO_nofilter_SVD/critic_loss')
+    summary_writer8 = tf.summary.create_file_writer('./tensorboard_1.0_middle_PPO_nofilter_SVD/mini_critic_loss')
     start0 = time.time()
     epsilon = 1.            # 探索起始时的探索率
     #final_epsilon = 0.01            # 探索终止时的探索率
@@ -267,8 +288,8 @@ if __name__ == "__main__":
     step_in_critic = 0
     bisai_counter = 1
     N_random_points = 134
-    critic_weights_path = 'D:\\data\\critic_weights_1.0_middle_PPO_nofilter.ckpt'
-    actor_weights_path = 'D:\\data\\actor_weights_1.0_middle_PPO_nofilter.ckpt'
+    critic_weights_path = 'D:\\data\\critic_weights_1.0_middle_PPO_nofilter_SVD.ckpt'
+    actor_weights_path = 'D:\\data\\actor_weights_1.0_middle_PPO_nofilter_SVD.ckpt'
     filefolderlist = os.listdir('F:\\cleaned_data_20141130-20160630')
     actor = Actor()#实例化一个actor
     actor.net.save_weights(actor_weights_path, overwrite=True)#保存网络参数
@@ -301,7 +322,7 @@ if __name__ == "__main__":
             while True:
                 if (step_counter % 1000 ==0) and (epsilon > 0) and (step_counter>1000000):
                     epsilon = epsilon-0.001#也就先来100万次纯随机，然后再来100万次渐进随机，最后放开
-                state = jiangwei(state,capital,frametime,bianpan_env.mean_invested)#先降维，并整理形状，把capital放进去
+                state = jiangwei_mini(state,capital,frametime,bianpan_env.mean_invested)#先降维，并整理形状，把capital放进去
                 if (step_counter<2000000):#在200万次转移之前都按照给定时间点选择
                     if (timepoints.size>0)and(frametime <= timepoints[0]):#如果frametime到达第一个时间点，则进行随机选择
                         if random.uniform(0.,1.) < epsilon:#如果落在随机区域
@@ -339,7 +360,7 @@ if __name__ == "__main__":
                         tf.summary.scalar('steps',used_steps,step =bisai_counter)
                     with summary_writer5.as_default():
                         tf.summary.scalar('steps',bisai_steps,step =bisai_counter)
-                    v = critic.net(jiangwei(next_state,next_capital,next_frametime,bianpan_env.mean_invested))#得到下一状态的状态价值
+                    v = critic.net(jiangwei_mini(next_state,next_capital,next_frametime,bianpan_env.mean_invested))#得到下一状态的状态价值
                     batch_memory = memory.get_memory()
                     batch_state,batch_capital,batch_action,batch_revenue = zip(*batch_memory)#把memory解开
                     if len(batch_state) == 1:#如果刚好batch_state里只有一次转移，那么直接跳出不学了
@@ -361,7 +382,7 @@ if __name__ == "__main__":
                     learn_step_counter+=1
                     transition = np.array((state,capital,action,revenue))
                     memory.store(transition)
-                    v = critic.net(jiangwei(next_state,next_capital,next_frametime,bianpan_env.mean_invested))#得到终盘的状态价值
+                    v = critic.net(jiangwei_mini(next_state,next_capital,next_frametime,bianpan_env.mean_invested))#得到终盘的状态价值
                     batch_memory = memory.get_memory()
                     batch_state,batch_capital,batch_action,batch_revenue = zip(*batch_memory)#把memory解开
                     batch_discounted_r = []
