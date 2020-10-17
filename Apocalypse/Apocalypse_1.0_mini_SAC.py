@@ -1,6 +1,7 @@
-#本文件是用奇异值截断降维函数的SAC模型
+#本文件是用奇异值截断降维函数的SAC的mini模型,输入单元少
 #本模型决定取消在网络中过滤不满足条件的行动，而只是将不满足条件的行动的收益赋予0收益
-#去掉了用epsilon的渐进过程
+#去掉了用epsilon的渐进过程，改为直接200万次纯随机后贪心
+#200万次后critic_memory的beta增长到1.0，则beta_increment_per_sampling = 0.000025————20201017
 
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
