@@ -239,22 +239,6 @@ class Q_Network(tf.keras.Model):#给critic定义的q网络
         return q_values#q_value是一个（1,4）的张量
 
 
-def jiangwei(state,capital,frametime,mean_invested):#所有变量都归一化
-    invested = [0.,0.,0.,0.,0.,0.]
-    state=np.delete(state, 0, axis=-1)
-    frametime = frametime/50000.0
-    length = len(state)/410.0#出赔率的公司数归一化
-    invested[0] = mean_invested[0]/25.0
-    invested[1] = mean_invested[1]/500.0
-    invested[2] = mean_invested[2]/25.0
-    invested[3] = mean_invested[3]/500.0
-    invested[4] = mean_invested[4]/25.0
-    invested[5] = mean_invested[5]/500.0
-    percenttilelist = [np.percentile(state,i,axis = 0)[1:4] for i in range(0,105,5)]
-    percentile = np.vstack(percenttilelist)#把当前状态的0%-100%分位数放到一个矩阵里
-    state = tf.concat((percentile.flatten()/25.0,[capital/500.0],[frametime],invested,[length]),-1)#除以25是因为一般来讲赔率最高开到25
-    state = tf.reshape(state,(1,72))#63个分位数数据+8个capital,frametime和mean_invested,length共72个输入
-    return state
 
 def jiangwei_mini(state,capital,frametime,mean_invested):
     invested = [0.,0.,0.,0.,0.,0.]
@@ -272,7 +256,10 @@ def jiangwei_mini(state,capital,frametime,mean_invested):
     invested[4] = mean_invested[4]/25.0
     invested[5] = mean_invested[5]/500.0
     state=np.delete(state, 0, axis=-1)
-    state = tsvd.fit_transform(np.transpose(state))#降维成（1,7）的矩阵
+    if state.shape[0] != 1:
+        state = tsvd.fit_transform(np.transpose(state))#降维成（1,7）的矩阵
+    else:
+        pass
     state = tf.concat((state.flatten(),[capital/500.0],[frametime],invested,[length],max),-1)#7+1+1+6+1+3=19
     state = tf.reshape(state,(1,19))
     return state
@@ -458,7 +445,7 @@ if __name__ == "__main__":
                 step_counter+=1#每转移一次，步数+1
                 if (step_counter % 1000 ==0) and (epsilon > 0) and (step_counter>1000000):
                         epsilon = epsilon-0.001#也就先来100万次纯随机，然后再来100万次渐进随机，最后放开
-                state = jiangwei(state,capital,frametime,bianpan_env.mean_invested)#先降维，并整理形状，把capital放进去
+                state = jiangwei_mini(state,capital,frametime,bianpan_env.mean_invested)#先降维，并整理形状，把capital放进去
                 if (step_counter<2000000):#在200万次转移之前都按照给定时间点选择
                     if (timepoints.size>0)and(frametime <= timepoints[0]):#如果frametime到达第一个时间点，则进行随机选择
                         if random.uniform(0.,1.) < epsilon:#如果落在随机区域
@@ -483,7 +470,7 @@ if __name__ == "__main__":
                 if(step_counter<=2000):
                     print('已转移'+str(step_counter)+'步')               
                 if done:#终盘时储存信息，同时更新actor，清除actor内存
-                    transition = np.array((state,capital,next_capital,action, revenue,jiangwei(next_state,next_capital,next_frametime,bianpan_env.mean_invested),1))
+                    transition = np.array((state,capital,next_capital,action, revenue,jiangwei_mini(next_state,next_capital,next_frametime,bianpan_env.mean_invested),1))
                     actor.memory.store(transition)
                     critic.memory.store(transition)
                     with summary_writer.as_default():
@@ -515,7 +502,7 @@ if __name__ == "__main__":
                         tf.summary.scalar('losses',actor_loss,step = learn_step_counter)
                     break
                 else:
-                    transition = np.array((state,capital,next_capital,action, revenue,jiangwei(next_state,next_capital,next_frametime,bianpan_env.mean_invested),0))
+                    transition = np.array((state,capital,next_capital,action, revenue,jiangwei_mini(next_state,next_capital,next_frametime,bianpan_env.mean_invested),0))
                     actor.memory.store(transition)
                     critic.memory.store(transition)
                     state = next_state
