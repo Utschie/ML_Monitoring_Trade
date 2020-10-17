@@ -157,7 +157,7 @@ class Critic_Memory(object):  # stored as ( s, a, r, s_ ) in SumTree，一个记
     epsilon = 1e-8  # small amount to avoid zero priority
     alpha = 0.6  # [0~1] convert the importance of TD error to priority
     beta = 0.4  # importance-sampling, from initial value increasing to 1
-    beta_increment_per_sampling = 1e-8
+    beta_increment_per_sampling = 1e-5
     abs_err_upper = 1.  # clipped abs error
 
     def __init__(self, capacity):#记忆回放区就是一棵树，存储着记忆数据和其对应的p以及整个树上的p，(p/total_p)即为某个样本被抽中的概率
@@ -335,9 +335,9 @@ class Critic(object):#只需要做每次学习，以及把相应的td_error传�
     def __init__(self,lr=0.0003):
         self.local_Q = Q_Network()#按论文中写的local_Q
         self.target_Q = Q_Network()#按论文中写的target_Q
-        self.gamma = 0.99
+        self.gamma = 0.99999
         self.memory_size = 1000000#按论文中给的1e6大小
-        self.batch_size=64
+        self.batch_size=500
         self.memory = Critic_Memory(capacity=self.memory_size)
         self.opt1 = tf.keras.optimizers.Adam(lr,amsgrad=True)#设定最优化方法
         self.opt2= tf.keras.optimizers.Adam(lr,amsgrad=True)
@@ -503,7 +503,7 @@ if __name__ == "__main__":
                     state = next_state
                     capital = next_capital
                     frametime = next_frametime
-                if (step_counter >2000) and (step_counter%4 == 0) :
+                if (step_counter >2000) and (step_counter%50 == 0) :
                     critic_loss = critic.learn()
                     critic.update_Q(critic.tau)
                     with summary_writer7.as_default():
