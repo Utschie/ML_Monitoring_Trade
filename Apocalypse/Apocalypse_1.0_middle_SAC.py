@@ -156,7 +156,7 @@ class Critic_Memory(object):  # stored as ( s, a, r, s_ ) in SumTree，一个记
     epsilon = 0.01  # small amount to avoid zero priority
     alpha = 0.6  # [0~1] convert the importance of TD error to priority
     beta = 0.4  # importance-sampling, from initial value increasing to 1
-    beta_increment_per_sampling = 0.001
+    beta_increment_per_sampling = 0.000025
     abs_err_upper = 1.  # clipped abs error
 
     def __init__(self, capacity):#记忆回放区就是一棵树，存储着记忆数据和其对应的p以及整个树上的p，(p/total_p)即为某个样本被抽中的概率

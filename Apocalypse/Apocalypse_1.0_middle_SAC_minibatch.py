@@ -1,6 +1,7 @@
 #本文件是用奇异值截断降维函数的SAC模型
 #本模型决定取消在网络中过滤不满足条件的行动，而只是将不满足条件的行动的收益赋予0收益
 #去掉了用epsilon的渐进过程
+
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
 import tensorflow as tf
@@ -157,7 +158,7 @@ class Critic_Memory(object):  # stored as ( s, a, r, s_ ) in SumTree，一个记
     epsilon = 1e-8  # small amount to avoid zero priority
     alpha = 0.6  # [0~1] convert the importance of TD error to priority
     beta = 0.4  # importance-sampling, from initial value increasing to 1
-    beta_increment_per_sampling = 1e-5
+    beta_increment_per_sampling = 0.000025
     abs_err_upper = 1.  # clipped abs error
 
     def __init__(self, capacity):#记忆回放区就是一棵树，存储着记忆数据和其对应的p以及整个树上的p，(p/total_p)即为某个样本被抽中的概率
@@ -393,14 +394,14 @@ class Critic(object):#只需要做每次学习，以及把相应的td_error传�
 
 
 if __name__ == "__main__":
-    summary_writer = tf.summary.create_file_writer('./tensorboard_1.0_middle_SAC_minibatch')
-    summary_writer2 = tf.summary.create_file_writer('./tensorboard_1.0_middle_SAC_minibatch/use_out_time')
-    summary_writer3 = tf.summary.create_file_writer('./tensorboard_1.0_middle_SAC_minibatch/max_frametime')
-    summary_writer4 = tf.summary.create_file_writer('./tensorboard_1.0_middle_SAC_minibatch/used_steps')
-    summary_writer5 = tf.summary.create_file_writer('./tensorboard_1.0_middle_SAC_minibatch/bisai_steps')
-    summary_writer6 = tf.summary.create_file_writer('./tensorboard_1.0_middle_SAC_minibatch/actor_loss')
-    summary_writer7 = tf.summary.create_file_writer('./tensorboard_1.0_middle_SAC_minibatch/critic_loss')
-    summary_writer8 = tf.summary.create_file_writer('./tensorboard_1.0_middle_SAC_minibatch/mini_critic_loss')
+    summary_writer = tf.summary.create_file_writer('./tensorboard_1.0_mini_SAC')
+    summary_writer2 = tf.summary.create_file_writer('./tensorboard_1.0_mini_SAC/use_out_time')
+    summary_writer3 = tf.summary.create_file_writer('./tensorboard_1.0_mini_SAC/max_frametime')
+    summary_writer4 = tf.summary.create_file_writer('./tensorboard_1.0_mini_SAC/used_steps')
+    summary_writer5 = tf.summary.create_file_writer('./tensorboard_1.0_mini_SAC/bisai_steps')
+    summary_writer6 = tf.summary.create_file_writer('./tensorboard_1.0_mini_SAC/actor_loss')
+    summary_writer7 = tf.summary.create_file_writer('./tensorboard_1.0_mini_SAC/critic_loss')
+    summary_writer8 = tf.summary.create_file_writer('./tensorboard_1.0_mini_SAC/mini_critic_loss')
     start0 = time.time()
     epsilon = 1.            # 探索起始时的探索率
     #final_epsilon = 0.01            # 探索终止时的探索率
@@ -411,8 +412,8 @@ if __name__ == "__main__":
     target_repalce_counter = 0 
     bisai_counter = 1
     N_random_points = 134
-    critic_weights_path = 'D:\\data\\critic_Q_weights_1.0_middle_SAC_minibatch.ckpt'
-    actor_weights_path = 'D:\\data\\actor_weights_1.0_middle_SAC_minibatch.ckpt'
+    critic_weights_path = 'D:\\data\\critic_Q_weights_1.0_mini_SAC_minibatch.ckpt'
+    actor_weights_path = 'D:\\data\\actor_weights_1.0_mini_SAC_minibatch.ckpt'
     filefolderlist = os.listdir('F:\\cleaned_data_20141130-20160630')
     actor = Actor()#实例化一个actor
     #actor.net.load_weights(pre_weights_path)#读入1.0_sofort2的权重
