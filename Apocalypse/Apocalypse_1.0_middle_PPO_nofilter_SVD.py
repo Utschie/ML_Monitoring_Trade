@@ -1,5 +1,6 @@
 #本模型是不经过筛选行动，直接将错误行动reward为0的PPO模型
 #本模型用SVD截断
+#去掉了了epsilong的渐进减小，200万次纯随机后转绝对贪心
 
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
@@ -308,15 +309,10 @@ if __name__ == "__main__":
             bisai_steps = 0
             used_steps = 0
             while True:
-                if (step_counter % 1000 ==0) and (epsilon > 0) and (step_counter>1000000):
-                    epsilon = epsilon-0.001#也就先来100万次纯随机，然后再来100万次渐进随机，最后放开
                 state = jiangwei_mini(state,capital,frametime,bianpan_env.mean_invested)#先降维，并整理形状，把capital放进去
                 if (step_counter<2000000):#在200万次转移之前都按照给定时间点选择
                     if (timepoints.size>0)and(frametime <= timepoints[0]):#如果frametime到达第一个时间点，则进行随机选择
-                        if random.uniform(0.,1.) < epsilon:#如果落在随机区域
-                            action  = random.randint(0,3)
-                        else:
-                            action = actor.choose_action(state)
+                        action  = random.randint(0,3)#纯随机挑选动作
                         timepoints = np.delete(timepoints,0)#然后去掉第一个元素，于是第二个时间点又变成了最大的
                         revenue = bianpan_env.revenue(actions_table[action])#计算收益
                     else:#其余时刻

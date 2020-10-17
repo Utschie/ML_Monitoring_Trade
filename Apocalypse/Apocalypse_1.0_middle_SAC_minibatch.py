@@ -1,5 +1,6 @@
 #本文件是用奇异值截断降维函数的SAC模型
 #本模型决定取消在网络中过滤不满足条件的行动，而只是将不满足条件的行动的收益赋予0收益
+#去掉了用epsilon的渐进过程
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
 import tensorflow as tf
@@ -153,10 +154,10 @@ class SumTree(object):
 
 
 class Critic_Memory(object):  # stored as ( s, a, r, s_ ) in SumTree，一个记忆回放区的类，里面就是一棵书，以及和环境交互的抽样和p值计算方法
-    epsilon = 0.01  # small amount to avoid zero priority
+    epsilon = 1e-8  # small amount to avoid zero priority
     alpha = 0.6  # [0~1] convert the importance of TD error to priority
     beta = 0.4  # importance-sampling, from initial value increasing to 1
-    beta_increment_per_sampling = 0.001
+    beta_increment_per_sampling = 1e-8
     abs_err_upper = 1.  # clipped abs error
 
     def __init__(self, capacity):#记忆回放区就是一棵树，存储着记忆数据和其对应的p以及整个树上的p，(p/total_p)即为某个样本被抽中的概率
@@ -357,6 +358,7 @@ class Critic(object):#只需要做每次学习，以及把相应的td_error传�
             expectation_v1 = tf.reduce_sum(next_prob1*next_v1,axis=1)#获得下一个状态的v的期望.
             y_pred1 = batch_revenue+self.gamma*expectation_v1*(1-np.array(batch_done))
             loss1 = tf.reduce_mean(ISWeights * tf.math.squared_difference(y_true1, y_pred1))
+            abs_errors = tf.abs(y_true1 - y_pred1)
             #下面算target_Q的
             all_q2 = tf.squeeze(list(map(self.target_Q,batch_state)))#获得此刻状态的所有4个动作的q值
             one_hot_matrix = tf.one_hot(np.array(batch_action),depth=4,on_value=1.0,off_value=0.0)#有batch_size行，4列
@@ -369,7 +371,6 @@ class Critic(object):#只需要做每次学习，以及把相应的td_error传�
             y_pred2 = batch_revenue+self.gamma*expectation_v2*(1-np.array(batch_done))#终止状态的v为0
             y_true2 = q2
             loss2 = tf.reduce_mean(ISWeights * tf.math.squared_difference(y_true2, y_pred2))
-            abs_errors = tf.abs(y_true2 - y_pred2)
         grads1 = tape.gradient(loss1, self.local_Q.variables)
         grads2 = tape.gradient(loss2, self.target_Q.variables)
         self.memory.batch_update(tree_idx, abs_errors)#用target_Q的td_error更新tree
@@ -442,15 +443,10 @@ if __name__ == "__main__":
             used_steps = 0
             while True:
                 step_counter+=1#每转移一次，步数+1
-                if (step_counter % 1000 ==0) and (epsilon > 0) and (step_counter>1000000):
-                        epsilon = epsilon-0.001#也就先来100万次纯随机，然后再来100万次渐进随机，最后放开
                 state = jiangwei_mini(state,capital,frametime,bianpan_env.mean_invested)#先降维，并整理形状，把capital放进去
                 if (step_counter<2000000):#在200万次转移之前都按照给定时间点选择
                     if (timepoints.size>0)and(frametime <= timepoints[0]):#如果frametime到达第一个时间点，则进行随机选择
-                        if random.uniform(0.,1.) < epsilon:#如果落在随机区域
-                            action = random.randint(0,3)
-                        else:
-                            action = actor.choose_action(state)
+                        action = random.randint(0,3)
                         timepoints = np.delete(timepoints,0)#然后去掉第一个元素，于是第二个时间点又变成了最大的
                         revenue = bianpan_env.revenue(actions_table[action])#计算收益
                     else:#其余时刻
