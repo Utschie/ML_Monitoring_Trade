@@ -1,4 +1,6 @@
 #本模型是不经过筛选行动，直接将错误行动reward为0的PPO模型
+#不过这里也有些问题，首先就是gamma选多少
+#还有一个就是由于梯度截断截断到多少，还是用kn散度比较好————20201019
 
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu

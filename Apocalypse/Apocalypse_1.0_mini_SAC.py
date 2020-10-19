@@ -379,14 +379,8 @@ class Critic(object):#只需要做每次学习，以及把相应的td_error传�
         self.opt1.apply_gradients(grads_and_vars=zip(grads1, self.local_Q.variables))#更新参数
         self.opt2.apply_gradients(grads_and_vars=zip(grads2, self.target_Q.variables))#更新参数
         del tape
+        self.target_Q.set_weights(self.local_Q.get_weights()*self.tau+self.target_Q.get_weights()*(1-self.tau))
         return loss2#返回loss好可以记录下来输出
-
-    def update_Q(self,tau):#更新Q网络
-        for target_param, param in zip(self.target_Q.trainable_weights, self.local_Q.trainable_weights):
-            target_param.assign(  # copy weight value into target parameters
-                target_param * (1.0 - tau) + param * tau
-            )
-
 
 
 
@@ -506,11 +500,10 @@ if __name__ == "__main__":
                     frametime = next_frametime
                 if (step_counter >2000) and (step_counter%50 == 0) :
                     critic_loss = critic.learn()
-                    critic.update_Q(critic.tau)
                     with summary_writer7.as_default():
                         tf.summary.scalar('losses',critic_loss,step = learn_step_counter)
                     if learn_step_counter%2000 ==0:
-                        critic.update_Q(tau=1.0)
+                        critic.target_Q.set_weights(critic.local_Q.get_weights())
                     learn_step_counter+=1#每学习一次，学习步数+1
                     print('critic已学习'+str(learn_step_counter)+'次')
             end=time.time()
