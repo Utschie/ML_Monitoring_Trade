@@ -1,6 +1,10 @@
 #本模型是不经过筛选行动，直接将错误行动reward为0的PPO模型
 #本模型用SVD截断
 #去掉了了epsilong的渐进减小，200万次纯随机后转绝对贪心
+#每次学习都保存权重总是意外地会出编码错误，非常讨厌————20201019
+#在200万次纯随机后直接转贪心，出现投资率总是100%，还是总是在前面花钱
+#更重要的是在前面花钱后的loss还很小，或许因为500步一次学习，所以前面花光了后面全都是0行动0收益，那当然loss小————20201019
+#于是改成一场比赛学习一回，而不是500步————20201019
 
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
@@ -139,7 +143,6 @@ class Critic(object):
                 loss = tf.reduce_mean(tf.square(advantage))
             grads = tape.gradient(loss, self.net.variables)
             self.opt.apply_gradients(grads_and_vars=zip(grads, self.net.variables))#更新参数
-        self.net.save_weights(critic_weights_path, overwrite=True)#保存网络参数
         return loss
         
     def get_advantage(self,batch_state,batch_discounted_r):
@@ -196,8 +199,8 @@ class Actor(object):
         return index
 
     def learn(self,batch_state,batch_capital,batch_action,batch_discounted_r):
-        self.old_net.load_weights(actor_weights_path)#更新旧网络参数
-        for i in range(3):#重复10次
+        self.update_old()#更新旧网络参数
+        for i in range(3):#重复学10次
             with tf.GradientTape() as tape:
                 one_hot_matrix = tf.one_hot(np.array(batch_action),depth=4,on_value=1.0, off_value=0.0)
                 batch_parameters = self.net(tf.squeeze(batch_state))#获得parameters的值  
@@ -212,8 +215,11 @@ class Actor(object):
                 aloss = -tf.reduce_mean(tf.minimum(surr,tf.clip_by_value(ratio, 1.-self.clip_epsilon, 1.+self.clip_epsilon)*advantage))
             grads = tape.gradient(aloss, self.net.variables)
             self.opt.apply_gradients(grads_and_vars=zip(grads, self.net.variables))#更新参数
-        self.net.save_weights(actor_weights_path, overwrite=True)#保存网络参数
         return aloss
+    
+    def update_old(self):
+        for old_param, param in zip(self.old_net.trainable_weights, self.net.trainable_weights):
+            old_param.assign(param)
         
             
 
@@ -269,7 +275,7 @@ if __name__ == "__main__":
     start0 = time.time()
     epsilon = 1.            # 探索起始时的探索率
     #final_epsilon = 0.01            # 探索终止时的探索率
-    gamma = 0.999#平均每场比赛2000步来算的话，0.999差不多了
+    gamma = 0.999999#平均每场比赛2000步来算的话，0.999差不多了
     resultlist = pd.read_csv('D:\\data\\results_20141130-20160630.csv',index_col = 0)#得到赛果和比赛ID的对应表
     actions_table = [[0,0,0],[5,0,0],[0,5,0],[0,0,5]]#给神经网络输出层对应一个行动表
     step_counter = 0
@@ -362,28 +368,6 @@ if __name__ == "__main__":
                     with summary_writer7.as_default():
                         tf.summary.scalar('losses',critic_loss,step = learn_step_counter)          
                     break
-                elif bisai_steps % 500 ==0:
-                    learn_step_counter+=1
-                    transition = np.array((state,capital,action,revenue))
-                    memory.store(transition)
-                    v = critic.net(jiangwei_mini(next_state,next_capital,next_frametime,bianpan_env.mean_invested))#得到终盘的状态价值
-                    batch_memory = memory.get_memory()
-                    batch_state,batch_capital,batch_action,batch_revenue = zip(*batch_memory)#把memory解开
-                    batch_discounted_r = []
-                    for r in batch_revenue[::-1]:
-                        v = r + gamma * v
-                        batch_discounted_r.append(v)
-                    batch_discounted_r.reverse()
-                    actor_loss = actor.learn(np.array(batch_state),np.array(batch_capital),np.array(batch_action),np.array(batch_discounted_r))
-                    critic_loss = critic.learn(np.array(batch_state),np.array(batch_discounted_r))   
-                    memory.clear()#清空memory
-                    with summary_writer6.as_default():
-                        tf.summary.scalar('losses',actor_loss,step = learn_step_counter)     
-                    with summary_writer7.as_default():
-                        tf.summary.scalar('losses',critic_loss,step = learn_step_counter) 
-                    state = next_state
-                    capital = next_capital
-                    frametime = next_frametime
                 else:
                     transition = np.array((state,capital,action,revenue))
                     memory.store(transition)
