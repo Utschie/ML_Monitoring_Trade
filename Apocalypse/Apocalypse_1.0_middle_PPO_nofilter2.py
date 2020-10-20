@@ -1,11 +1,5 @@
 #本模型是不经过筛选行动，直接将错误行动reward为0的PPO模型
-#本模型用SVD截断
-#去掉了了epsilong的渐进减小，200万次纯随机后转绝对贪心
-#每次学习都保存权重总是意外地会出编码错误，非常讨厌————20201019
-#在200万次纯随机后直接转贪心，出现投资率总是100%，还是总是在前面花钱
-#更重要的是在前面花钱后的loss还很小，或许因为500步一次学习，所以前面花光了后面全都是0行动0收益，那当然loss小————20201019
-#于是改成一场比赛学习一回，而不是500步————20201019
-#用svd后的数据做输入跑出去100多场场loss就飘了————20201019
+#本模型是nofilter2模型，与原版区别在于永远保留随机时间点交易，只在随机时间点内部进行贪心或随机————20201020
 
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
@@ -19,7 +13,6 @@ import re
 import time
 import sklearn
 import math
-from sklearn.decomposition import TruncatedSVD
 
 class Env():#定义一个环境用来与网络交互
     def __init__(self,filepath,result):
@@ -201,7 +194,7 @@ class Actor(object):
 
     def learn(self,batch_state,batch_capital,batch_action,batch_discounted_r):
         self.update_old()#更新旧网络参数
-        for i in range(3):#重复学10次
+        for i in range(3):#重复10次
             with tf.GradientTape() as tape:
                 one_hot_matrix = tf.one_hot(np.array(batch_action),depth=4,on_value=1.0, off_value=0.0)
                 batch_parameters = self.net(tf.squeeze(batch_state))#获得parameters的值  
@@ -238,14 +231,9 @@ class Memory(object):#这个memory是没达到一个batch或者到盘末就清�
   
 
             
-
-def jiangwei_mini(state,capital,frametime,mean_invested):
+def jiangwei(state,capital,frametime,mean_invested):#所有变量都归一化
     invested = [0.,0.,0.,0.,0.,0.]
-    max_host = state[tf.argmax(state)[2].numpy()][2]
-    max_fair = state[tf.argmax(state)[3].numpy()][3]
-    max_guest = state[tf.argmax(state)[4].numpy()][4]
-    max = [max_host,max_fair,max_guest]
-    tsvd = TruncatedSVD(1)
+    state=np.delete(state, 0, axis=-1)
     frametime = frametime/50000.0
     length = len(state)/410.0#出赔率的公司数归一化
     invested[0] = mean_invested[0]/25.0
@@ -254,25 +242,22 @@ def jiangwei_mini(state,capital,frametime,mean_invested):
     invested[3] = mean_invested[3]/500.0
     invested[4] = mean_invested[4]/25.0
     invested[5] = mean_invested[5]/500.0
-    state=np.delete(state, 0, axis=-1)
-    if state.shape[0] != 1:
-        state = tsvd.fit_transform(np.transpose(state))#降维成（1,7）的矩阵
-    else:
-        pass
-    state = tf.concat((state.flatten(),[capital/500.0],[frametime],invested,[length],max),-1)#7+1+1+6+1+3=19
-    state = tf.reshape(state,(1,19))
+    percenttilelist = [np.percentile(state,i,axis = 0)[1:4] for i in range(0,105,5)]
+    percentile = np.vstack(percenttilelist)#把当前状态的0%-100%分位数放到一个矩阵里
+    state = tf.concat((percentile.flatten()/25.0,[capital/500.0],[frametime],invested,[length]),-1)#除以25是因为一般来讲赔率最高开到25
+    state = tf.reshape(state,(1,72))#63个分位数数据+8个capital,frametime和mean_invested,length共72个输入
     return state
 
 
+
 if __name__ == "__main__":
-    summary_writer = tf.summary.create_file_writer('./tensorboard_1.0_middle_PPO_nofilter_SVD') #在代码所在文件夹同目录下创建tensorboard文件夹（本代码在jupyternotbook里跑，所以在jupyternotebook里可以看到）
-    summary_writer2 = tf.summary.create_file_writer('./tensorboard_1.0_middle_PPO_nofilter_SVD/use_out_time')
-    summary_writer3 = tf.summary.create_file_writer('./tensorboard_1.0_middle_PPO_nofilter_SVD/max_frametime')
-    summary_writer4 = tf.summary.create_file_writer('./tensorboard_1.0_middle_PPO_nofilter_SVD/used_steps')
-    summary_writer5 = tf.summary.create_file_writer('./tensorboard_1.0_middle_PPO_nofilter_SVD/bisai_steps')
-    summary_writer6 = tf.summary.create_file_writer('./tensorboard_1.0_middle_PPO_nofilter_SVD/actor_loss')
-    summary_writer7 = tf.summary.create_file_writer('./tensorboard_1.0_middle_PPO_nofilter_SVD/critic_loss')
-    summary_writer8 = tf.summary.create_file_writer('./tensorboard_1.0_middle_PPO_nofilter_SVD/mini_critic_loss')
+    summary_writer = tf.summary.create_file_writer('./tensorboard_1.0_middle_PPO_nofilter2') #在代码所在文件夹同目录下创建tensorboard文件夹（本代码在jupyternotbook里跑，所以在jupyternotebook里可以看到）
+    summary_writer2 = tf.summary.create_file_writer('./tensorboard_1.0_middle_PPO_nofilter2/use_out_time')
+    summary_writer3 = tf.summary.create_file_writer('./tensorboard_1.0_middle_PPO_nofilter2/max_frametime')
+    summary_writer4 = tf.summary.create_file_writer('./tensorboard_1.0_middle_PPO_nofilter2/used_steps')
+    summary_writer5 = tf.summary.create_file_writer('./tensorboard_1.0_middle_PPO_nofilter2/bisai_steps')
+    summary_writer6 = tf.summary.create_file_writer('./tensorboard_1.0_middle_PPO_nofilter2/actor_loss')
+    summary_writer7 = tf.summary.create_file_writer('./tensorboard_1.0_middle_PPO_nofilter2/critic_loss')
     start0 = time.time()
     epsilon = 1.            # 探索起始时的探索率
     #final_epsilon = 0.01            # 探索终止时的探索率
@@ -284,8 +269,8 @@ if __name__ == "__main__":
     step_in_critic = 0
     bisai_counter = 1
     N_random_points = 134
-    critic_weights_path = 'D:\\data\\critic_weights_1.0_middle_PPO_nofilter_SVD.ckpt'
-    actor_weights_path = 'D:\\data\\actor_weights_1.0_middle_PPO_nofilter_SVD.ckpt'
+    critic_weights_path = 'D:\\data\\critic_weights_1.0_middle_PPO_nofilter2.ckpt'
+    actor_weights_path = 'D:\\data\\actor_weights_1.0_middle_PPO_nofilter2.ckpt'
     filefolderlist = os.listdir('F:\\cleaned_data_20141130-20160630')
     actor = Actor()#实例化一个actor
     actor.net.save_weights(actor_weights_path, overwrite=True)#保存网络参数
@@ -316,17 +301,18 @@ if __name__ == "__main__":
             bisai_steps = 0
             used_steps = 0
             while True:
-                state = jiangwei_mini(state,capital,frametime,bianpan_env.mean_invested)#先降维，并整理形状，把capital放进去
-                if (step_counter<2000000):#在200万次转移之前都按照给定时间点选择
-                    if (timepoints.size>0)and(frametime <= timepoints[0]):#如果frametime到达第一个时间点，则进行随机选择
-                        action  = random.randint(0,3)#纯随机挑选动作
-                        timepoints = np.delete(timepoints,0)#然后去掉第一个元素，于是第二个时间点又变成了最大的
-                        revenue = bianpan_env.revenue(actions_table[action])#计算收益
-                    else:#其余时刻
-                        action =0
-                        revenue = bianpan_env.revenue(actions_table[action])#计算收益
-                else:
-                    action = actor.choose_action(state)#否则按着贪心选
+                if step_counter >= 2000000:
+                    epsilon = 0.0#如果超过200万次转移，转贪心 
+                state = jiangwei(state,capital,frametime,bianpan_env.mean_invested)#先降维，并整理形状，把capital放进去
+                if (timepoints.size>0)and(frametime <= timepoints[0]):#如果frametime到达第一个时间点，则进行随机选择
+                    if epsilon == 1.:#如果落在随机区域
+                        action  = random.randint(0,3)
+                    else:
+                        action = actor.choose_action(state)
+                    timepoints = np.delete(timepoints,0)#然后去掉第一个元素，于是第二个时间点又变成了最大的
+                    revenue = bianpan_env.revenue(actions_table[action])#计算收益
+                else:#其余时刻
+                    action =0
                     revenue = bianpan_env.revenue(actions_table[action])#计算收益
                 next_state,next_frametime,done,next_capital = bianpan_env.get_state()#获得下一个状态,终止状态的next_state为0矩阵
                 bisai_steps+=1
@@ -351,7 +337,7 @@ if __name__ == "__main__":
                         tf.summary.scalar('steps',used_steps,step =bisai_counter)
                     with summary_writer5.as_default():
                         tf.summary.scalar('steps',bisai_steps,step =bisai_counter)
-                    v = critic.net(jiangwei_mini(next_state,next_capital,next_frametime,bianpan_env.mean_invested))#得到下一状态的状态价值
+                    v = critic.net(jiangwei(next_state,next_capital,next_frametime,bianpan_env.mean_invested))#得到下一状态的状态价值
                     batch_memory = memory.get_memory()
                     batch_state,batch_capital,batch_action,batch_revenue = zip(*batch_memory)#把memory解开
                     if len(batch_state) == 1:#如果刚好batch_state里只有一次转移，那么直接跳出不学了
