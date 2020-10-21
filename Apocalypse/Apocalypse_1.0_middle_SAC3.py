@@ -438,7 +438,7 @@ if __name__ == "__main__":
                 revenue = bianpan_env.revenue(actions_table[action])#计算收益
                 next_state,next_frametime,done,next_capital = bianpan_env.get_state()#获得下一个状态,终止状态的next_state为0矩阵
                 bisai_steps+=1
-                if (next_capital<= 0) and (end_switch == False):
+                if (next_capital<= 0.) and (end_switch == False):
                     use_out_time = frametime
                     end_switch = True
                 if end_switch == False:#如果没花光
