@@ -292,6 +292,7 @@ if __name__ == "__main__":
             memory.clear()#每场比赛开始前要清空记忆
             state,frametime,done,capital =  bianpan_env.get_state()#把第一个状态作为初始化状态
             max_frametime = bianpan_env.max_frametime#得到本场比赛最大的frametime
+            use_out_time = 1
             end_switch = False
             bisai_steps = 0
             used_steps = 0
