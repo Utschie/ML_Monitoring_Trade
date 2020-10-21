@@ -1,6 +1,7 @@
 #本模型是不经过筛选行动，直接将错误行动reward为0的PPO模型
 #本模型是nofilter3模型，与第2版的区别在于行动变成单位变成0.2————20201020
 #此外，取消时间点的限制
+#同时恢复每500步一学习的方式
 
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
@@ -346,6 +347,28 @@ if __name__ == "__main__":
                     with summary_writer7.as_default():
                         tf.summary.scalar('losses',critic_loss,step = learn_step_counter)          
                     break
+                elif bisai_steps % 500 ==0:
+                    learn_step_counter+=1
+                    transition = np.array((state,capital,action,revenue))
+                    memory.store(transition)
+                    v = critic.net(jiangwei(next_state,next_capital,next_frametime,bianpan_env.mean_invested))#得到终盘的状态价值
+                    batch_memory = memory.get_memory()
+                    batch_state,batch_capital,batch_action,batch_revenue = zip(*batch_memory)#把memory解开
+                    batch_discounted_r = []
+                    for r in batch_revenue[::-1]:
+                        v = r + gamma * v
+                        batch_discounted_r.append(v)
+                    batch_discounted_r.reverse()
+                    actor_loss = actor.learn(np.array(batch_state),np.array(batch_capital),np.array(batch_action),np.array(batch_discounted_r))
+                    critic_loss = critic.learn(np.array(batch_state),np.array(batch_discounted_r))   
+                    memory.clear()#清空memory
+                    with summary_writer6.as_default():
+                        tf.summary.scalar('losses',actor_loss,step = learn_step_counter)     
+                    with summary_writer7.as_default():
+                        tf.summary.scalar('losses',critic_loss,step = learn_step_counter) 
+                    state = next_state
+                    capital = next_capital
+                    frametime = next_frametime
                 else:
                     transition = np.array((state,capital,action,revenue))
                     memory.store(transition)
