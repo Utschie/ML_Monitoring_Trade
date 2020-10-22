@@ -307,12 +307,12 @@ if __name__ == "__main__":
                 revenue = bianpan_env.revenue(actions_table[action])#计算收益
                 next_state,next_frametime,done,next_capital = bianpan_env.get_state()#获得下一个状态,终止状态的next_state为0矩阵
                 bisai_steps+=1
-                if (next_capital<= 0) and (end_switch == False):
-                    use_out_time = frametime
-                    end_switch = True
                 if end_switch == False:#如果没花光
                     use_out_time = 1#没花光就当做1
                     used_steps+=1
+                if (next_capital<= 0) and (end_switch == False):
+                    use_out_time = frametime
+                    end_switch = True
                 if done:#终盘时储存信息，同时更新actor，清除actor内存
                     learn_step_counter+=1
                     transition = np.array((state,capital,action,revenue))#先把当下的存起来
