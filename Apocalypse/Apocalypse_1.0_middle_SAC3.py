@@ -1,8 +1,9 @@
 #本文件是SAC3模型
 #本模型决定取消在网络中过滤不满足条件的行动，而只是将不满足条件的行动的收益赋予0收益
 #本模型是SAC3模型，与第2版的区别在于行动变成单位变成0.2————20201020
-#然后更新频率，让actor和critic保持一致，也就是二者共享同一个memory
 #此外，取消时间点的限制
+#然后更新频率，让actor和critic保持一致，也就是二者共享同一个memory————20201022
+
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
 import tensorflow as tf
