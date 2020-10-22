@@ -4,6 +4,7 @@
 #此外，取消时间点的限制
 #然后更新频率，让actor和critic保持一致，也就是二者共享同一个memory，学习时共享一个batch————20201022
 #所以除了学习的代码要改，critic和actor类的内部也要稍作改动————20201022
+#critic和actor的网络都选择HE初始化————20201022
 
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
@@ -214,19 +215,20 @@ class Actor_Memory(object):#建立一个演员的当前回合记忆，不过每�
 
 class Q_Network(tf.keras.Model):#给critic定义的q网络
     def __init__(self,n_actions=4):#有默认值的属性必须放在没默认值属性的后面
+        self.initializer = tf.keras.initializers.HeNormal()
         self.n_actions = n_actions
         super().__init__()#调用tf.keras.Model的类初始化方法
-        self.dense1 = tf.keras.layers.Dense(units=600, activation=tf.nn.relu)#输入层
-        self.dense2 = tf.keras.layers.Dense(units=600, activation=tf.nn.relu)#一个隐藏层
+        self.dense1 = tf.keras.layers.Dense(units=600, activation=tf.nn.relu,kernel_initializer=self.initializer)#输入层
+        self.dense2 = tf.keras.layers.Dense(units=600, activation=tf.nn.relu,kernel_initializer=self.initializer)#一个隐藏层
         self.dense2_d = tf.keras.layers.Dropout(0.5)
-        self.dense3 = tf.keras.layers.Dense(units=600, activation=tf.nn.relu)
+        self.dense3 = tf.keras.layers.Dense(units=600, activation=tf.nn.relu,kernel_initializer=self.initializer)
         self.dense3_d = tf.keras.layers.Dropout(0.5)
-        self.dense4 = tf.keras.layers.Dense(units=600, activation=tf.nn.relu)
+        self.dense4 = tf.keras.layers.Dense(units=600, activation=tf.nn.relu,kernel_initializer=self.initializer)
         self.dense4_d = tf.keras.layers.Dropout(0.5)
-        self.dense5 = tf.keras.layers.Dense(units=600, activation=tf.nn.relu)
+        self.dense5 = tf.keras.layers.Dense(units=600, activation=tf.nn.relu,kernel_initializer=self.initializer)
         self.dense5_d = tf.keras.layers.Dropout(0.5)
         self.dense6_v = tf.keras.layers.Dense(units=1)
-        self.dense6_a = tf.keras.layers.Dense(units=self.n_actions)#输出层代表着在当前最大赔率前，买和不买的六种行动的价值
+        self.dense6_a = tf.keras.layers.Dense(units=self.n_actions,kernel_initializer=self.initializer)#输出层代表着在当前最大赔率前，买和不买的六种行动的价值
 
     def call(self,state): #输入从env那里获得的statematrix
         x = self.dense1(state)#输出神经网络
@@ -264,18 +266,19 @@ def jiangwei(state,capital,frametime,mean_invested):#所有变量都归一化
 
 class Policy_Network(tf.keras.Model):#给actor定义的policy网络
     def __init__(self,n_actions=4):#有默认值的属性必须放在没默认值属性的后面
+        self.initializer = tf.keras.initializers.HeNormal()
         self.n_actions = n_actions
         super().__init__()#调用tf.keras.Model的类初始化方法
-        self.dense1 = tf.keras.layers.Dense(units=600, activation=tf.nn.relu)#输入层
-        self.dense2 = tf.keras.layers.Dense(units=600, activation=tf.nn.relu)#一个隐藏层
+        self.dense1 = tf.keras.layers.Dense(units=600, activation=tf.nn.relu,kernel_initializer=self.initializer)#输入层
+        self.dense2 = tf.keras.layers.Dense(units=600, activation=tf.nn.relu,kernel_initializer=self.initializer)#一个隐藏层
         self.dense2_d = tf.keras.layers.Dropout(0.5)
-        self.dense3 = tf.keras.layers.Dense(units=600, activation=tf.nn.relu)
+        self.dense3 = tf.keras.layers.Dense(units=600, activation=tf.nn.relu,kernel_initializer=self.initializer)
         self.dense3_d = tf.keras.layers.Dropout(0.5)
-        self.dense4 = tf.keras.layers.Dense(units=600, activation=tf.nn.relu)
+        self.dense4 = tf.keras.layers.Dense(units=600, activation=tf.nn.relu,kernel_initializer=self.initializer)
         self.dense4_d = tf.keras.layers.Dropout(0.5)
-        self.dense5 = tf.keras.layers.Dense(units=600, activation=tf.nn.relu)
+        self.dense5 = tf.keras.layers.Dense(units=600, activation=tf.nn.relu,kernel_initializer=self.initializer)
         self.dense5_d = tf.keras.layers.Dropout(0.5)
-        self.dense6 = tf.keras.layers.Dense(units=self.n_actions)#输出层代表着在当前最大赔率前，买和不买的六种行动的价值
+        self.dense6 = tf.keras.layers.Dense(units=self.n_actions,kernel_initializer=self.initializer)#输出层代表着在当前最大赔率前，买和不买的六种行动的价值
 
 
     def call(self,state): #输入从env那里获得的statematrix
