@@ -320,6 +320,7 @@ if __name__ == "__main__":
                     use_out_time = frametime
                     end_switch = True
                 if end_switch == False:#如果没花光
+                    use_out_time = 1#没花光就当做1
                     used_steps+=1
                 if done:#终盘时储存信息，同时更新actor，清除actor内存
                     learn_step_counter+=1
