@@ -1,6 +1,7 @@
 #本文件是SAC3模型
 #本模型决定取消在网络中过滤不满足条件的行动，而只是将不满足条件的行动的收益赋予0收益
 #本模型是SAC3模型，与第2版的区别在于行动变成单位变成0.2————20201020
+#然后更新频率，让actor和critic保持一致，也就是二者共享同一个memory
 #此外，取消时间点的限制
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
@@ -324,6 +325,7 @@ class Actor(object):
         del tape
         self.net.save_weights(actor_weights_path, overwrite=True)
         return loss
+
         
         
 class Critic(object):#只需要做每次学习，以及把相应的td_error传给Actor
@@ -419,7 +421,7 @@ if __name__ == "__main__":
             except Exception:#因为有的比赛结果没有存进去
                 continue
             bianpan_env = Env(filepath,result)#每场比赛做一个环境
-            actor.memory.clear()#每场比赛开始前要清空记忆
+            #actor.memory.clear()#每场比赛开始前要清空记忆————在SAC3中取消了
             state,frametime,done,capital =  bianpan_env.get_state()#把第一个状态作为初始化状态
             max_frametime = bianpan_env.max_frametime#得到本场比赛最大的frametime
             end_switch = False
@@ -447,7 +449,7 @@ if __name__ == "__main__":
                     print('已转移'+str(step_counter)+'步')               
                 if done:#终盘时储存信息，同时更新actor，清除actor内存
                     transition = np.array((state,capital,next_capital,action, revenue,jiangwei(next_state,next_capital,next_frametime,bianpan_env.mean_invested),1))
-                    actor.memory.store(transition)
+                    #actor.memory.store(transition)#actor和critic共享同一记忆
                     critic.memory.store(transition)
                     with summary_writer.as_default():
                         tf.summary.scalar('Zinsen',bianpan_env.get_zinsen(),step = bisai_counter)
@@ -473,9 +475,6 @@ if __name__ == "__main__":
                     state = next_state
                     capital = next_capital
                     frametime = next_frametime
-                    actor_loss = actor.learn()#actor学习
-                    with summary_writer6.as_default():
-                        tf.summary.scalar('losses',actor_loss,step = learn_step_counter)
                     break
                 else:
                     transition = np.array((state,capital,next_capital,action, revenue,jiangwei(next_state,next_capital,next_frametime,bianpan_env.mean_invested),0))
@@ -485,7 +484,10 @@ if __name__ == "__main__":
                     capital = next_capital
                     frametime = next_frametime
                 if (step_counter >2000) and (step_counter%50 == 0) :
-                    critic_loss = critic.learn()
+                    critic_loss = critic.learn()#先critic学习
+                    actor_loss = actor.learn()#再actor学习
+                    with summary_writer6.as_default():
+                        tf.summary.scalar('losses',actor_loss,step = learn_step_counter)
                     with summary_writer7.as_default():
                         tf.summary.scalar('losses',critic_loss,step = learn_step_counter)
                     if learn_step_counter%2000 ==0:
