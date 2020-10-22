@@ -2,7 +2,8 @@
 #本模型决定取消在网络中过滤不满足条件的行动，而只是将不满足条件的行动的收益赋予0收益
 #本模型是SAC3模型，与第2版的区别在于行动变成单位变成0.2————20201020
 #此外，取消时间点的限制
-#然后更新频率，让actor和critic保持一致，也就是二者共享同一个memory————20201022
+#然后更新频率，让actor和critic保持一致，也就是二者共享同一个memory，学习时共享一个batch————20201022
+#所以除了学习的代码要改，critic和actor类的内部也要稍作改动————20201022
 
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
@@ -310,9 +311,8 @@ class Actor(object):
         index = np.random.choice(range(4), p=np.array(possibilities).ravel())#根据概率选择索引
         return index
 
-    def learn(self):#把当前回合的记忆和critic算出的td_error传给它
-        memory = self.memory.get_memory()
-        batch_state, batch_capital,batch_next_capital,batch_action, batch_revenue, batch_next_state ,batch_done = zip(*memory)#把本回合的转移拆成两个batch
+    def learn(self,batch_memory):#把当前回合的记忆和critic算出的td_error传给它
+        batch_state, batch_capital,batch_next_capital,batch_action, batch_revenue, batch_next_state ,batch_done = zip(*batch_memory)#把本回合的转移拆成两个batch
         with tf.GradientTape(persistent=True) as tape: 
             q = np.array(list(map(critic.target_Q,batch_state)))#所有4个动作的Q值
             prob = tf.nn.softmax(self.net(tf.squeeze(batch_state)))#所有动作的概率
@@ -342,8 +342,7 @@ class Critic(object):#只需要做每次学习，以及把相应的td_error传�
         self.target_repalce_counter = 0
         self.tau = 5e-3#tf2rl用的这个数
     
-    def learn(self):
-        tree_idx, batch_memory, ISWeights = self.memory.sample(self.batch_size)
+    def learn(self,tree_idx, batch_memory, ISWeights):
         batch_state, batch_capital,batch_next_capital,batch_action, batch_revenue, batch_next_state ,batch_done = zip(*batch_memory)
         with tf.GradientTape(persistent=True) as tape:
             #因为用了两个网络，所以y_true要分别求，先求local_Q的
@@ -479,14 +478,15 @@ if __name__ == "__main__":
                     break
                 else:
                     transition = np.array((state,capital,next_capital,action, revenue,jiangwei(next_state,next_capital,next_frametime,bianpan_env.mean_invested),0))
-                    actor.memory.store(transition)
+                    #actor.memory.store(transition)
                     critic.memory.store(transition)
                     state = next_state
                     capital = next_capital
                     frametime = next_frametime
                 if (step_counter >2000) and (step_counter%50 == 0) :
-                    critic_loss = critic.learn()#先critic学习
-                    actor_loss = actor.learn()#再actor学习
+                    tree_idx, batch_memory, ISWeights = critic.memory.sample(critic.batch_size)
+                    critic_loss = critic.learn(tree_idx, batch_memory, ISWeights)#先critic学习
+                    actor_loss = actor.learn(batch_memory)#再actor学习
                     with summary_writer6.as_default():
                         tf.summary.scalar('losses',actor_loss,step = learn_step_counter)
                     with summary_writer7.as_default():
