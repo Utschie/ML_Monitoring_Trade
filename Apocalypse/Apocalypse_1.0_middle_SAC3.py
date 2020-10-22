@@ -85,7 +85,7 @@ class Env():#定义一个环境用来与网络交互
     def get_state(self):
         next_state=self.episode.__next__()
         done = False
-        if self.frametime ==0.0:
+        if self.frametime ==0:
             done = True
         return next_state,self.frametime,done,self.capital#网络从此取出下一幕
     
