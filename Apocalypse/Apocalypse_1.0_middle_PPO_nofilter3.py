@@ -2,6 +2,7 @@
 #本模型是nofilter3模型，与第2版的区别在于行动变成单位变成0.2————20201020
 #此外，取消时间点的限制
 #同时恢复每500步一学习的方式
+#结果还是一样，也是解除随机后方差变得很大，然后critic的loss还变大了，就感觉不太好————20201023
 
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
