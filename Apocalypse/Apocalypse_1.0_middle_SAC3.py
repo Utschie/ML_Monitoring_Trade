@@ -159,7 +159,7 @@ class SumTree(object):
 
 
 class Critic_Memory(object):  # stored as ( s, a, r, s_ ) in SumTree，一个记忆回放区的类，里面就是一棵书，以及和环境交互的抽样和p值计算方法
-    epsilon = 0.01  # small amount to avoid zero priority
+    epsilon = 1e-8  # small amount to avoid zero priority
     alpha = 0.6  # [0~1] convert the importance of TD error to priority
     beta = 0.4  # importance-sampling, from initial value increasing to 1
     beta_increment_per_sampling = 0.000025
