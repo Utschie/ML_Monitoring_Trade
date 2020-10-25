@@ -4,6 +4,7 @@
 #200万次后critic_memory的beta增长到1.0，则beta_increment_per_sampling = 0.000025————20201017
 #每次学习都保存权重总是意外地会出编码错误，非常讨厌，所以把每次学习都保存的那行去掉了————20201019
 #可能由于优先回放里的beta=0.000025，critic的loss非常漂亮————20201023
+#不过解除随机后，依然是方差非常大，应该是actor的loss不下降的问题————20201025
 
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
