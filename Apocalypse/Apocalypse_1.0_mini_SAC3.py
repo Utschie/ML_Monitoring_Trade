@@ -1,11 +1,5 @@
-#本文件是SAC3模型
-#本模型决定取消在网络中过滤不满足条件的行动，而只是将不满足条件的行动的收益赋予0收益
-#本模型是SAC3模型，与第2版的区别在于行动变成单位变成0.2————20201020
-#此外，取消时间点的限制
-#然后更新频率，让actor和critic保持一致，也就是二者共享同一个memory，学习时共享一个batch————20201022
-#所以除了学习的代码要改，critic和actor类的内部也要稍作改动————20201022
-#critic和actor的网络都选择HE初始化————20201022
-#出现了loss为NAN，然后树的权重出现正无穷的情况,原因是神经网络参数出现nan，暂时还没找到出现nan的原因————20201025
+#本模型只是对mini_SAC的一个小修改，即改成critic和actor同步更新，以增加actor的更新次数————20201025
+#不过由于同步更新，所以主程序和critic和actor的learn函数体等都有些修改
 
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
@@ -19,7 +13,7 @@ import re
 import time
 import sklearn
 import math
-
+from sklearn.decomposition import TruncatedSVD
 class Env():#定义一个环境用来与网络交互
     def __init__(self,filepath,result):
         self.result = result#获得赛果
@@ -80,8 +74,8 @@ class Env():#定义一个环境用来与网络交互
         else:#如果不够执行行动
             self.action_counter+=1
             self.wrong_action_counter+=1
-            revenue = 0.#此处设为0
-        if action ==[0.,0.,0.]:
+            revenue = 0#此处设为0
+        if action ==[0,0,0]:
             revenue = 0
             self.no_action_counter+=1#计算无行动率
         #计算本次行动的收益
@@ -90,7 +84,7 @@ class Env():#定义一个环境用来与网络交互
     def get_state(self):
         next_state=self.episode.__next__()
         done = False
-        if self.frametime ==0:
+        if self.frametime ==0.0:
             done = True
         return next_state,self.frametime,done,self.capital#网络从此取出下一幕
     
@@ -216,20 +210,19 @@ class Actor_Memory(object):#建立一个演员的当前回合记忆，不过每�
 
 class Q_Network(tf.keras.Model):#给critic定义的q网络
     def __init__(self,n_actions=4):#有默认值的属性必须放在没默认值属性的后面
-        self.initializer = tf.keras.initializers.HeNormal()
         self.n_actions = n_actions
         super().__init__()#调用tf.keras.Model的类初始化方法
-        self.dense1 = tf.keras.layers.Dense(units=600, activation=tf.nn.relu,kernel_initializer=self.initializer)#输入层
-        self.dense2 = tf.keras.layers.Dense(units=600, activation=tf.nn.relu,kernel_initializer=self.initializer)#一个隐藏层
+        self.dense1 = tf.keras.layers.Dense(units=300, activation=tf.nn.relu)#输入层
+        self.dense2 = tf.keras.layers.Dense(units=300, activation=tf.nn.relu)#一个隐藏层
         self.dense2_d = tf.keras.layers.Dropout(0.5)
-        self.dense3 = tf.keras.layers.Dense(units=600, activation=tf.nn.relu,kernel_initializer=self.initializer)
+        self.dense3 = tf.keras.layers.Dense(units=300, activation=tf.nn.relu)
         self.dense3_d = tf.keras.layers.Dropout(0.5)
-        self.dense4 = tf.keras.layers.Dense(units=600, activation=tf.nn.relu,kernel_initializer=self.initializer)
+        self.dense4 = tf.keras.layers.Dense(units=300, activation=tf.nn.relu)
         self.dense4_d = tf.keras.layers.Dropout(0.5)
-        self.dense5 = tf.keras.layers.Dense(units=600, activation=tf.nn.relu,kernel_initializer=self.initializer)
+        self.dense5 = tf.keras.layers.Dense(units=300, activation=tf.nn.relu)
         self.dense5_d = tf.keras.layers.Dropout(0.5)
         self.dense6_v = tf.keras.layers.Dense(units=1)
-        self.dense6_a = tf.keras.layers.Dense(units=self.n_actions,kernel_initializer=self.initializer)#输出层代表着在当前最大赔率前，买和不买的六种行动的价值
+        self.dense6_a = tf.keras.layers.Dense(units=self.n_actions)#输出层代表着在当前最大赔率前，买和不买的六种行动的价值
 
     def call(self,state): #输入从env那里获得的statematrix
         x = self.dense1(state)#输出神经网络
@@ -247,9 +240,13 @@ class Q_Network(tf.keras.Model):#给critic定义的q网络
         return q_values#q_value是一个（1,4）的张量
 
 
-def jiangwei(state,capital,frametime,mean_invested):#所有变量都归一化
+def jiangwei_mini(state,capital,frametime,mean_invested):
     invested = [0.,0.,0.,0.,0.,0.]
-    state=np.delete(state, 0, axis=-1)
+    max_host = state[tf.argmax(state)[2].numpy()][2]
+    max_fair = state[tf.argmax(state)[3].numpy()][3]
+    max_guest = state[tf.argmax(state)[4].numpy()][4]
+    max = [max_host,max_fair,max_guest]
+    tsvd = TruncatedSVD(1)
     frametime = frametime/50000.0
     length = len(state)/410.0#出赔率的公司数归一化
     invested[0] = mean_invested[0]/25.0
@@ -258,28 +255,29 @@ def jiangwei(state,capital,frametime,mean_invested):#所有变量都归一化
     invested[3] = mean_invested[3]/500.0
     invested[4] = mean_invested[4]/25.0
     invested[5] = mean_invested[5]/500.0
-    percenttilelist = [np.percentile(state,i,axis = 0)[1:4] for i in range(0,105,5)]
-    percentile = np.vstack(percenttilelist)#把当前状态的0%-100%分位数放到一个矩阵里
-    state = tf.concat((percentile.flatten()/25.0,[capital/500.0],[frametime],invested,[length]),-1)#除以25是因为一般来讲赔率最高开到25
-    state = tf.reshape(state,(1,72))#63个分位数数据+8个capital,frametime和mean_invested,length共72个输入
+    state=np.delete(state, 0, axis=-1)
+    if state.shape[0] != 1:
+        state = tsvd.fit_transform(np.transpose(state))#降维成（1,7）的矩阵
+    else:
+        pass
+    state = tf.concat((state.flatten(),[capital/500.0],[frametime],invested,[length],max),-1)#7+1+1+6+1+3=19
+    state = tf.reshape(state,(1,19))
     return state
-
 
 class Policy_Network(tf.keras.Model):#给actor定义的policy网络
     def __init__(self,n_actions=4):#有默认值的属性必须放在没默认值属性的后面
-        self.initializer = tf.keras.initializers.HeNormal()
         self.n_actions = n_actions
         super().__init__()#调用tf.keras.Model的类初始化方法
-        self.dense1 = tf.keras.layers.Dense(units=600, activation=tf.nn.relu,kernel_initializer=self.initializer)#输入层
-        self.dense2 = tf.keras.layers.Dense(units=600, activation=tf.nn.relu,kernel_initializer=self.initializer)#一个隐藏层
+        self.dense1 = tf.keras.layers.Dense(units=200, activation=tf.nn.relu)#输入层
+        self.dense2 = tf.keras.layers.Dense(units=200, activation=tf.nn.relu)#一个隐藏层
         self.dense2_d = tf.keras.layers.Dropout(0.5)
-        self.dense3 = tf.keras.layers.Dense(units=600, activation=tf.nn.relu,kernel_initializer=self.initializer)
+        self.dense3 = tf.keras.layers.Dense(units=200, activation=tf.nn.relu)
         self.dense3_d = tf.keras.layers.Dropout(0.5)
-        self.dense4 = tf.keras.layers.Dense(units=600, activation=tf.nn.relu,kernel_initializer=self.initializer)
+        self.dense4 = tf.keras.layers.Dense(units=200, activation=tf.nn.relu)
         self.dense4_d = tf.keras.layers.Dropout(0.5)
-        self.dense5 = tf.keras.layers.Dense(units=600, activation=tf.nn.relu,kernel_initializer=self.initializer)
+        self.dense5 = tf.keras.layers.Dense(units=200, activation=tf.nn.relu)
         self.dense5_d = tf.keras.layers.Dropout(0.5)
-        self.dense6 = tf.keras.layers.Dense(units=self.n_actions,kernel_initializer=self.initializer)#输出层代表着在当前最大赔率前，买和不买的六种行动的价值
+        self.dense6 = tf.keras.layers.Dense(units=self.n_actions)#输出层代表着在当前最大赔率前，买和不买的六种行动的价值
 
 
     def call(self,state): #输入从env那里获得的statematrix
@@ -328,9 +326,7 @@ class Actor(object):
         self.opt.apply_gradients(grads_and_vars=zip(grads, self.net.variables))#更新策略
         self.opt_alpha.apply_gradients(grads_and_vars=zip(grads_alpha, [self.alpha]))#更新alpha
         del tape
-        self.net.save_weights(actor_weights_path, overwrite=True)
         return loss
-
         
         
 class Critic(object):#只需要做每次学习，以及把相应的td_error传给Actor
@@ -359,18 +355,19 @@ class Critic(object):#只需要做每次学习，以及把相应的td_error传�
             expectation_v1 = tf.reduce_sum(next_prob1*next_v1,axis=1)#获得下一个状态的v的期望.
             y_pred1 = batch_revenue+self.gamma*expectation_v1*(1-np.array(batch_done))
             loss1 = tf.reduce_mean(ISWeights * tf.math.squared_difference(y_true1, y_pred1))
+            abs_errors = tf.abs(y_true1 - y_pred1)
             #下面算target_Q的
             all_q2 = tf.squeeze(list(map(self.target_Q,batch_state)))#获得此刻状态的所有4个动作的q值
             one_hot_matrix = tf.one_hot(np.array(batch_action),depth=4,on_value=1.0,off_value=0.0)#有batch_size行，4列
-            y_true2 = tf.reduce_sum(all_q2*one_hot_matrix,axis=1)#获得此刻状态的对应动作的q值
+            q2 = tf.reduce_sum(all_q2*one_hot_matrix,axis=1)#获得此刻状态的对应动作的q值
             next_all_q2 = tf.squeeze(list(map(self.target_Q,batch_next_state)))#获得下一时刻所有动作的q值
             next_prob2 =tf.nn.softmax(actor.net(tf.squeeze(batch_next_state)))#得到下一个满足条件动作的概率分布
             log_next_prob2 = tf.math.log(next_prob2)
             next_v2 = next_all_q2-actor.alpha*log_next_prob2#得到下一状态各种动作下的v
             expectation_v2 = tf.reduce_sum(next_prob2*next_v2,axis=1)#获得下一个状态的v的期望.
             y_pred2 = batch_revenue+self.gamma*expectation_v2*(1-np.array(batch_done))#终止状态的v为0
+            y_true2 = q2
             loss2 = tf.reduce_mean(ISWeights * tf.math.squared_difference(y_true2, y_pred2))
-            abs_errors = tf.abs(y_true2 - y_pred2)
         grads1 = tape.gradient(loss1, self.local_Q.variables)
         grads2 = tape.gradient(loss2, self.target_Q.variables)
         self.memory.batch_update(tree_idx, abs_errors)#用target_Q的td_error更新tree
@@ -391,28 +388,26 @@ class Critic(object):#只需要做每次学习，以及把相应的td_error传�
 
 
 
-
-
 if __name__ == "__main__":
-    summary_writer = tf.summary.create_file_writer('./tensorboard_1.0_middle_SAC3')
-    summary_writer2 = tf.summary.create_file_writer('./tensorboard_1.0_middle_SAC3/use_out_time')
-    summary_writer3 = tf.summary.create_file_writer('./tensorboard_1.0_middle_SAC3/max_frametime')
-    summary_writer4 = tf.summary.create_file_writer('./tensorboard_1.0_middle_SAC3/used_steps')
-    summary_writer5 = tf.summary.create_file_writer('./tensorboard_1.0_middle_SAC3/bisai_steps')
-    summary_writer6 = tf.summary.create_file_writer('./tensorboard_1.0_middle_SAC3/actor_loss')
-    summary_writer7 = tf.summary.create_file_writer('./tensorboard_1.0_middle_SAC3/critic_loss')
-    summary_writer8 = tf.summary.create_file_writer('./tensorboard_1.0_middle_SAC3/mini_critic_loss')
+    summary_writer = tf.summary.create_file_writer('./tensorboard_1.0_mini_SAC3')
+    summary_writer2 = tf.summary.create_file_writer('./tensorboard_1.0_mini_SAC3/use_out_time')
+    summary_writer3 = tf.summary.create_file_writer('./tensorboard_1.0_mini_SAC3/max_frametime')
+    summary_writer4 = tf.summary.create_file_writer('./tensorboard_1.0_mini_SAC3/used_steps')
+    summary_writer5 = tf.summary.create_file_writer('./tensorboard_1.0_mini_SAC3/bisai_steps')
+    summary_writer6 = tf.summary.create_file_writer('./tensorboard_1.0_mini_SAC3/actor_loss')
+    summary_writer7 = tf.summary.create_file_writer('./tensorboard_1.0_mini_SAC3/critic_loss')
     start0 = time.time()
     epsilon = 1.            # 探索起始时的探索率
     #final_epsilon = 0.01            # 探索终止时的探索率
     resultlist = pd.read_csv('D:\\data\\results_20141130-20160630.csv',index_col = 0)#得到赛果和比赛ID的对应表
-    actions_table = [[0.,0.,0.],[0.2,0.,0.],[0.,0.2,0.],[0.,0.,0.2]]#给神经网络输出层对应一个行动表
+    actions_table = [[0,0,0],[5,0,0],[0,5,0],[0,0,5]]#给神经网络输出层对应一个行动表
     step_counter = 0
     learn_step_counter = 0
     target_repalce_counter = 0 
     bisai_counter = 1
-    critic_weights_path = 'D:\\data\\critic_Q_weights_1.0_middle_SAC3.ckpt'
-    actor_weights_path = 'D:\\data\\actor_weights_1.0_middle_SAC3.ckpt'
+    N_random_points = 134
+    critic_weights_path = 'D:\\data\\critic_Q_weights_1.0_mini_SAC3_minibatch.ckpt'
+    actor_weights_path = 'D:\\data\\actor_weights_1.0_mini_SAC3_minibatch.ckpt'
     filefolderlist = os.listdir('F:\\cleaned_data_20141130-20160630')
     actor = Actor()#实例化一个actor
     #actor.net.load_weights(pre_weights_path)#读入1.0_sofort2的权重
@@ -430,22 +425,31 @@ if __name__ == "__main__":
             except Exception:#因为有的比赛结果没有存进去
                 continue
             bianpan_env = Env(filepath,result)#每场比赛做一个环境
-            #actor.memory.clear()#每场比赛开始前要清空记忆————在SAC3中取消了
+            actor.memory.clear()#每场比赛开始前要清空记忆
             state,frametime,done,capital =  bianpan_env.get_state()#把第一个状态作为初始化状态
             max_frametime = bianpan_env.max_frametime#得到本场比赛最大的frametime
+            if max_frametime > N_random_points:
+                timepoints =np.random.randint(0,max_frametime,N_random_points)#生成N_random_points个随机整数
+            else:
+                timepoints =np.random.randint(0,max_frametime,max_frametime)
+            timepoints = -np.sort(-timepoints)#把时间点从大到小降序排列，即规定了可选时间点，在可选时间点处进行随机探索
             end_switch = False
             bisai_steps = 0
             used_steps = 0
             while True:
                 step_counter+=1#每转移一次，步数+1
-                if step_counter>=2000000:
-                    epsilon = 0.#如果超过200万次转移，转贪心
-                state = jiangwei(state,capital,frametime,bianpan_env.mean_invested)#先降维，并整理形状，把capital放进去
-                if epsilon == 1.:#如果落在随机区域
-                    action = random.randint(0,3)
+                state = jiangwei_mini(state,capital,frametime,bianpan_env.mean_invested)#先降维，并整理形状，把capital放进去
+                if (step_counter<2000000):#在200万次转移之前都按照给定时间点选择
+                    if (timepoints.size>0)and(frametime <= timepoints[0]):#如果frametime到达第一个时间点，则进行随机选择
+                        action = random.randint(0,3)
+                        timepoints = np.delete(timepoints,0)#然后去掉第一个元素，于是第二个时间点又变成了最大的
+                        revenue = bianpan_env.revenue(actions_table[action])#计算收益
+                    else:#其余时刻
+                        action = 0
+                        revenue = bianpan_env.revenue(actions_table[action])#计算收益
                 else:
-                    action = actor.choose_action(state)
-                revenue = bianpan_env.revenue(actions_table[action])#计算收益
+                    action = actor.choose_action(state)#否则按着贪心选
+                    revenue = bianpan_env.revenue(actions_table[action])#计算收益
                 next_state,next_frametime,done,next_capital = bianpan_env.get_state()#获得下一个状态,终止状态的next_state为0矩阵
                 bisai_steps+=1
                 if end_switch == False:#如果没花光
@@ -457,12 +461,12 @@ if __name__ == "__main__":
                 if(step_counter<=2000):
                     print('已转移'+str(step_counter)+'步')               
                 if done:#终盘时储存信息，同时更新actor，清除actor内存
-                    transition = np.array((state,capital,next_capital,action, revenue,jiangwei(next_state,next_capital,next_frametime,bianpan_env.mean_invested),1))
-                    #actor.memory.store(transition)#actor和critic共享同一记忆
+                    transition = np.array((state,capital,next_capital,action, revenue,jiangwei_mini(next_state,next_capital,next_frametime,bianpan_env.mean_invested),1))
+                    #actor.memory.store(transition)
                     critic.memory.store(transition)
                     with summary_writer.as_default():
                         tf.summary.scalar('Zinsen',bianpan_env.get_zinsen(),step = bisai_counter)
-                        tf.summary.scalar('rest_capital',bianpan_env.gesamt_revenue+500.,step = bisai_counter)
+                        tf.summary.scalar('rest_capital',bianpan_env.gesamt_revenue+500,step = bisai_counter)
                         tf.summary.scalar('wrong_action_rate',bianpan_env.wrong_action_counter/bianpan_env.action_counter,step = bisai_counter)
                         tf.summary.scalar('investion_rate',bianpan_env.gesamt_touzi/500.0,step = bisai_counter)
                     with summary_writer2.as_default():
@@ -486,7 +490,7 @@ if __name__ == "__main__":
                     frametime = next_frametime
                     break
                 else:
-                    transition = np.array((state,capital,next_capital,action, revenue,jiangwei(next_state,next_capital,next_frametime,bianpan_env.mean_invested),0))
+                    transition = np.array((state,capital,next_capital,action, revenue,jiangwei_mini(next_state,next_capital,next_frametime,bianpan_env.mean_invested),0))
                     #actor.memory.store(transition)
                     critic.memory.store(transition)
                     state = next_state
