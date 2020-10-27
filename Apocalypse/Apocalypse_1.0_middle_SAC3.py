@@ -19,6 +19,7 @@ import re
 import time
 import sklearn
 import math
+import copy
 
 class Env():#定义一个环境用来与网络交互
     def __init__(self,filepath,result):
@@ -315,8 +316,7 @@ class Actor(object):
         index = np.random.choice(range(4), p=np.array(possibilities).ravel())#根据概率选择索引
         return index
 
-    def learn(self,batch_memory):#把当前回合的记忆和critic算出的td_error传给它
-        batch_state, batch_capital,batch_next_capital,batch_action, batch_revenue, batch_next_state ,batch_done = zip(*batch_memory)#把本回合的转移拆成两个batch
+    def learn(self,batch_state):#把当前回合的记忆和critic算出的td_error传给它
         with tf.GradientTape(persistent=True) as tape: 
             q = np.array(list(map(critic.target_Q,batch_state)))#所有4个动作的Q值
             prob = tf.nn.softmax(self.net(tf.squeeze(batch_state)))#所有动作的概率
@@ -346,14 +346,16 @@ class Critic(object):#只需要做每次学习，以及把相应的td_error传�
         self.target_repalce_counter = 0
         self.tau = 5e-3#tf2rl用的这个数
     
-    def learn(self,tree_idx, batch_memory, ISWeights):
-        batch_state, batch_capital,batch_next_capital,batch_action, batch_revenue, batch_next_state ,batch_done = zip(*batch_memory)
+    def learn(self):
+        tree_idx, batch_memory, ISWeights = self.memory.sample(self.batch_size)
+        batch_state,batch_action, batch_revenue, batch_next_state ,batch_done = zip(*batch_memory)
+        to_actor_state = copy.copy(batch_state)
         with tf.GradientTape(persistent=True) as tape:
             #因为用了两个网络，所以y_true要分别求，先求local_Q的
-            all_q1 = tf.squeeze(list(map(critic.local_Q,batch_state)))#获得此刻状态的所有4个动作的q值
+            all_q1 = tf.squeeze(list(map(self.local_Q,batch_state)))#获得此刻状态的所有4个动作的q值
             one_hot_matrix = tf.one_hot(np.array(batch_action),depth=4,on_value=1.0,off_value=0.0)#有batch_size行，4列
             y_true1 = tf.reduce_sum(all_q1*one_hot_matrix,axis=1)#获得此刻状态的对应动作的q值
-            next_all_q1 = tf.squeeze(list(map(critic.local_Q,batch_next_state)))#获得下一时刻所有动作的q值
+            next_all_q1 = tf.squeeze(list(map(self.local_Q,batch_next_state)))#获得下一时刻所有动作的q值
             next_prob1 =tf.nn.softmax(actor.net(tf.squeeze(batch_next_state)))#得到下一个满足条件动作的概率分布
             next_v1 = next_all_q1-actor.alpha*tf.math.log(next_prob1)#得到下一状态各种动作下的v
             expectation_v1 = tf.reduce_sum(next_prob1*next_v1,axis=1)#获得下一个状态的v的期望.
@@ -378,7 +380,7 @@ class Critic(object):#只需要做每次学习，以及把相应的td_error传�
         self.opt2.apply_gradients(grads_and_vars=zip(grads2, self.target_Q.variables))#更新参数
         del tape
         self.target_Q.save_weights(critic_weights_path, overwrite=True)
-        return loss2#返回loss好可以记录下来输出
+        return loss2, to_actor_state#返回loss好可以记录下来输出
     
     def update_Q(self,tau):#更新Q网络
         for target_param, param in zip(self.target_Q.trainable_weights, self.local_Q.trainable_weights):
@@ -457,7 +459,7 @@ if __name__ == "__main__":
                 if(step_counter<=2000):
                     print('已转移'+str(step_counter)+'步')               
                 if done:#终盘时储存信息，同时更新actor，清除actor内存
-                    transition = np.array((state,capital,next_capital,action, revenue,jiangwei(next_state,next_capital,next_frametime,bianpan_env.mean_invested),1))
+                    transition = np.array((state,action, revenue,jiangwei(next_state,next_capital,next_frametime,bianpan_env.mean_invested),1))
                     #actor.memory.store(transition)#actor和critic共享同一记忆
                     critic.memory.store(transition)
                     with summary_writer.as_default():
@@ -486,7 +488,7 @@ if __name__ == "__main__":
                     frametime = next_frametime
                     break
                 else:
-                    transition = np.array((state,capital,next_capital,action, revenue,jiangwei(next_state,next_capital,next_frametime,bianpan_env.mean_invested),0))
+                    transition = np.array((state,action, revenue,jiangwei(next_state,next_capital,next_frametime,bianpan_env.mean_invested),0))
                     #actor.memory.store(transition)
                     critic.memory.store(transition)
                     state = next_state
@@ -494,9 +496,9 @@ if __name__ == "__main__":
                     frametime = next_frametime
                 if (step_counter >2000) and (step_counter%50 == 0) :
                     tree_idx, batch_memory, ISWeights = critic.memory.sample(critic.batch_size)
-                    critic_loss = critic.learn(tree_idx, batch_memory, ISWeights)#先critic学习
+                    critic_loss,to_actor_state = critic.learn()#先critic学习
                     critic.update_Q(critic.tau)
-                    actor_loss = actor.learn(batch_memory)#再actor学习
+                    actor_loss = actor.learn(to_actor_state)#再actor学习
                     with summary_writer6.as_default():
                         tf.summary.scalar('losses',actor_loss,step = learn_step_counter)
                     with summary_writer7.as_default():

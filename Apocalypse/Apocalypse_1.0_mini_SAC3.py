@@ -1,6 +1,13 @@
 #本模型只是对mini_SAC的一个小修改，即改成critic和actor同步更新，以增加actor的更新次数————20201025
 #不过由于同步更新，所以主程序和critic和actor的learn函数体等都有些修改
-
+#也遇到了NAN的问题
+#跟debug程序一对比，只要actor不学习，那么就不会有这样的事情，那么就不应该用actor去直接调用critic的memory，而是应该copy一个batch_memory给它————20201026
+#即便是把batch_state复制给它，一样是到了410多步出问题，虽然target_Q不为nan，但是local_Q变成nan了
+#现在换成copy.deepcopy()函数进行深拷贝试试看————20201027
+#即便用了deepcopy()也还是出问题，但是只要actor不学习，它就变好，所以现在分不清是哪里出了问题，到底是拷贝出了问题，还是学习出了问题
+#现在把actor的学习的梯度改成分步求而不是persistent的了，试试看————20201027
+#原来的batch_state是一个元组对象，这次转成tensor再拷贝试试看
+#转成tensor拷贝还是如此，让debug跑一宿看看是不是真的能跑一宿
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
 import tensorflow as tf
@@ -14,6 +21,7 @@ import time
 import sklearn
 import math
 from sklearn.decomposition import TruncatedSVD
+import copy
 class Env():#定义一个环境用来与网络交互
     def __init__(self,filepath,result):
         self.result = result#获得赛果
@@ -157,7 +165,7 @@ class Critic_Memory(object):  # stored as ( s, a, r, s_ ) in SumTree，一个记
     epsilon = 1e-8  # small amount to avoid zero priority
     alpha = 0.6  # [0~1] convert the importance of TD error to priority
     beta = 0.4  # importance-sampling, from initial value increasing to 1
-    beta_increment_per_sampling = 0.000025
+    beta_increment_per_sampling = 0.0000125#本来是。0.000025，但是每次学习，local_Q抽一次，target_Q抽一次，每次学习抽了2次所以25/2=12.5
     abs_err_upper = 1.  # clipped abs error
 
     def __init__(self, capacity):#记忆回放区就是一棵树，存储着记忆数据和其对应的p以及整个树上的p，(p/total_p)即为某个样本被抽中的概率
@@ -197,7 +205,7 @@ class Critic_Memory(object):  # stored as ( s, a, r, s_ ) in SumTree，一个记
         ps = np.power(clipped_errors, self.alpha)#根据训练后的td-error和alpha计算出batch中各样本新的p
         for ti, p in zip(tree_idx, ps):#按着样本在书中的位置
             self.tree.update(ti, p)#更新对应的整个树的p
-
+'''
 class Actor_Memory(object):#建立一个演员的当前回合记忆，不过每一新回合开始都清空
     def __init__(self):
         self.memory = deque()#建立储存区
@@ -207,7 +215,7 @@ class Actor_Memory(object):#建立一个演员的当前回合记忆，不过每�
         return self.memory#把记忆还给它
     def clear(self):
         self.memory = deque()
-
+'''
 class Q_Network(tf.keras.Model):#给critic定义的q网络
     def __init__(self,n_actions=4):#有默认值的属性必须放在没默认值属性的后面
         self.n_actions = n_actions
@@ -300,11 +308,12 @@ class Policy_Network(tf.keras.Model):#给actor定义的policy网络
     
 
 class Actor(object):
-    def __init__(self,lr=0.0003):
+    def __init__(self):
+        self.lr=0.0001
         self.net = Policy_Network()#初始化网络
-        self.opt = tf.keras.optimizers.Adam(lr,amsgrad=True)#设定最优化方法
-        self.opt_alpha = tf.keras.optimizers.Adam(lr,amsgrad=True)#参考论文
-        self.memory = Actor_Memory()
+        self.opt = tf.keras.optimizers.Adam(self.lr,amsgrad=True)#设定最优化方法
+        self.opt_alpha = tf.keras.optimizers.Adam(self.lr,amsgrad=True)#参考论文
+        #self.memory = Actor_Memory()
         self.alpha = tf.Variable(initial_value=0.2)#参考tf2rl 
         self.target_alpha = -np.log((1.0 / 4)) * 0.98
 
@@ -313,8 +322,7 @@ class Actor(object):
         index = np.random.choice(range(4), p=np.array(possibilities).ravel())#根据概率选择索引
         return index
 
-    def learn(self,batch_memory):#把当前回合的记忆和critic算出的td_error传给它
-        batch_state, batch_capital,batch_next_capital,batch_action, batch_revenue, batch_next_state ,batch_done = zip(*batch_memory)#把本回合的转移拆成两个batch
+    def learn(self,batch_state):#把当前回合的记忆和critic算出的td_error传给它
         with tf.GradientTape(persistent=True) as tape: 
             q = np.array(list(map(critic.target_Q,batch_state)))#所有4个动作的Q值
             prob = tf.nn.softmax(self.net(tf.squeeze(batch_state)))#所有动作的概率
@@ -330,32 +338,43 @@ class Actor(object):
         
         
 class Critic(object):#只需要做每次学习，以及把相应的td_error传给Actor
-    def __init__(self,lr=0.0003):
+    def __init__(self):
+        self.lr = 0.0001
         self.local_Q = Q_Network()#按论文中写的local_Q
         self.target_Q = Q_Network()#按论文中写的target_Q
         self.gamma = 0.99999
         self.memory_size = 1000000#按论文中给的1e6大小
         self.batch_size=500
         self.memory = Critic_Memory(capacity=self.memory_size)
-        self.opt1 = tf.keras.optimizers.Adam(lr,amsgrad=True)#设定最优化方法
-        self.opt2= tf.keras.optimizers.Adam(lr,amsgrad=True)
+        self.opt1 = tf.keras.optimizers.Adam(self.lr,amsgrad=True)#设定最优化方法
+        self.opt2= tf.keras.optimizers.Adam(self.lr,amsgrad=True)
         self.target_repalce_counter = 0
         self.tau = 5e-3#tf2rl用的这个数
     
-    def learn(self,tree_idx, batch_memory, ISWeights):
-        batch_state, batch_capital,batch_next_capital,batch_action, batch_revenue, batch_next_state ,batch_done = zip(*batch_memory)
-        with tf.GradientTape(persistent=True) as tape:
+    def learn(self):
+        tree_idx, batch_memory, ISWeights = self.memory.sample(self.batch_size)
+        batch_state,batch_action, batch_revenue, batch_next_state ,batch_done = zip(*batch_memory)
+        with tf.GradientTape() as tape:
             #因为用了两个网络，所以y_true要分别求，先求local_Q的
-            all_q1 = tf.squeeze(list(map(critic.local_Q,batch_state)))#获得此刻状态的所有4个动作的q值
+            all_q1 = tf.squeeze(list(map(self.local_Q,batch_state)))#获得此刻状态的所有4个动作的q值
             one_hot_matrix = tf.one_hot(np.array(batch_action),depth=4,on_value=1.0,off_value=0.0)#有batch_size行，4列
-            y_true1 = tf.reduce_sum(all_q1*one_hot_matrix,axis=1)#获得此刻状态的对应动作的q值
-            next_all_q1 = tf.squeeze(list(map(critic.local_Q,batch_next_state)))#获得下一时刻所有动作的q值
+            q1 = tf.reduce_sum(all_q1*one_hot_matrix,axis=1)#获得此刻状态的对应动作的q值
+            next_all_q1 = tf.squeeze(list(map(self.local_Q,batch_next_state)))#获得下一时刻所有动作的q值
             next_prob1 =tf.nn.softmax(actor.net(tf.squeeze(batch_next_state)))#得到下一个满足条件动作的概率分布
             next_v1 = next_all_q1-actor.alpha*tf.math.log(next_prob1)#得到下一状态各种动作下的v
             expectation_v1 = tf.reduce_sum(next_prob1*next_v1,axis=1)#获得下一个状态的v的期望.
             y_pred1 = batch_revenue+self.gamma*expectation_v1*(1-np.array(batch_done))
+            y_true1 = q1
             loss1 = tf.reduce_mean(ISWeights * tf.math.squared_difference(y_true1, y_pred1))
             abs_errors = tf.abs(y_true1 - y_pred1)
+        grads1 = tape.gradient(loss1, self.local_Q.variables)
+        self.memory.batch_update(tree_idx, abs_errors)#用target_Q的td_error更新tree
+        self.opt1.apply_gradients(grads_and_vars=zip(grads1, self.local_Q.variables))#更新参数
+        #下面再抽一次样来进行target_Q的学习
+        tree_idx, batch_memory, ISWeights = self.memory.sample(self.batch_size)
+        batch_state, batch_action, batch_revenue, batch_next_state ,batch_done = zip(*batch_memory)
+        converted_state = tf.convert_to_tensor(batch_state)
+        with tf.GradientTape() as tape:
             #下面算target_Q的
             all_q2 = tf.squeeze(list(map(self.target_Q,batch_state)))#获得此刻状态的所有4个动作的q值
             one_hot_matrix = tf.one_hot(np.array(batch_action),depth=4,on_value=1.0,off_value=0.0)#有batch_size行，4列
@@ -368,14 +387,12 @@ class Critic(object):#只需要做每次学习，以及把相应的td_error传�
             y_pred2 = batch_revenue+self.gamma*expectation_v2*(1-np.array(batch_done))#终止状态的v为0
             y_true2 = q2
             loss2 = tf.reduce_mean(ISWeights * tf.math.squared_difference(y_true2, y_pred2))
-        grads1 = tape.gradient(loss1, self.local_Q.variables)
+            abs_errors = tf.abs(y_true2 - y_pred2)
         grads2 = tape.gradient(loss2, self.target_Q.variables)
         self.memory.batch_update(tree_idx, abs_errors)#用target_Q的td_error更新tree
-        self.opt1.apply_gradients(grads_and_vars=zip(grads1, self.local_Q.variables))#更新参数
         self.opt2.apply_gradients(grads_and_vars=zip(grads2, self.target_Q.variables))#更新参数
-        del tape
         self.target_Q.save_weights(critic_weights_path, overwrite=True)
-        return loss2#返回loss好可以记录下来输出
+        return loss2, converted_state#返回loss好可以记录下来输出,以及给actor用的memory
     
     def update_Q(self,tau):#更新Q网络
         for target_param, param in zip(self.target_Q.trainable_weights, self.local_Q.trainable_weights):
@@ -406,8 +423,8 @@ if __name__ == "__main__":
     target_repalce_counter = 0 
     bisai_counter = 1
     N_random_points = 134
-    critic_weights_path = 'D:\\data\\critic_Q_weights_1.0_mini_SAC3_minibatch.ckpt'
-    actor_weights_path = 'D:\\data\\actor_weights_1.0_mini_SAC3_minibatch.ckpt'
+    critic_weights_path = 'D:\\data\\critic_Q_weights_1.0_mini_SAC3.ckpt'
+    actor_weights_path = 'D:\\data\\actor_weights_1.0_mini_SAC3.ckpt'
     filefolderlist = os.listdir('F:\\cleaned_data_20141130-20160630')
     actor = Actor()#实例化一个actor
     #actor.net.load_weights(pre_weights_path)#读入1.0_sofort2的权重
@@ -425,7 +442,7 @@ if __name__ == "__main__":
             except Exception:#因为有的比赛结果没有存进去
                 continue
             bianpan_env = Env(filepath,result)#每场比赛做一个环境
-            actor.memory.clear()#每场比赛开始前要清空记忆
+            #actor.memory.clear()#每场比赛开始前要清空记忆
             state,frametime,done,capital =  bianpan_env.get_state()#把第一个状态作为初始化状态
             max_frametime = bianpan_env.max_frametime#得到本场比赛最大的frametime
             if max_frametime > N_random_points:
@@ -461,7 +478,7 @@ if __name__ == "__main__":
                 if(step_counter<=2000):
                     print('已转移'+str(step_counter)+'步')               
                 if done:#终盘时储存信息，同时更新actor，清除actor内存
-                    transition = np.array((state,capital,next_capital,action, revenue,jiangwei_mini(next_state,next_capital,next_frametime,bianpan_env.mean_invested),1))
+                    transition = np.array([state,action, revenue,jiangwei_mini(next_state,next_capital,next_frametime,bianpan_env.mean_invested),1])
                     #actor.memory.store(transition)
                     critic.memory.store(transition)
                     with summary_writer.as_default():
@@ -485,28 +502,24 @@ if __name__ == "__main__":
                         tf.summary.scalar('steps',used_steps,step =bisai_counter)
                     with summary_writer5.as_default():
                         tf.summary.scalar('steps',bisai_steps,step =bisai_counter)
-                    state = next_state
-                    capital = next_capital
-                    frametime = next_frametime
                     break
                 else:
-                    transition = np.array((state,capital,next_capital,action, revenue,jiangwei_mini(next_state,next_capital,next_frametime,bianpan_env.mean_invested),0))
+                    transition = np.array((state,action, revenue,jiangwei_mini(next_state,next_capital,next_frametime,bianpan_env.mean_invested),0))
                     #actor.memory.store(transition)
                     critic.memory.store(transition)
                     state = next_state
                     capital = next_capital
                     frametime = next_frametime
-                if (step_counter >2000) and (step_counter%50 == 0) :
-                    tree_idx, batch_memory, ISWeights = critic.memory.sample(critic.batch_size)
-                    critic_loss = critic.learn(tree_idx, batch_memory, ISWeights)#先critic学习
+                if (step_counter >2000) and (step_counter%50 == 0):
+                    critic_loss , to_actor_state= critic.learn()#先critic学习
                     critic.update_Q(critic.tau)
-                    actor_loss = actor.learn(batch_memory)#再actor学习
+                    actor_loss= actor.learn(to_actor_state)#再actor学习
                     with summary_writer6.as_default():
                         tf.summary.scalar('losses',actor_loss,step = learn_step_counter)
                     with summary_writer7.as_default():
                         tf.summary.scalar('losses',critic_loss,step = learn_step_counter)
-                    if learn_step_counter%2000 ==0:
-                        critic.target_Q.set_weights(critic.local_Q.get_weights())
+                    if learn_step_counter%2000 ==0 and learn_step_counter != 0:
+                        critic.update_Q(tau=1.0)
                     learn_step_counter+=1#每学习一次，学习步数+1
                     print('critic已学习'+str(learn_step_counter)+'次')
             end=time.time()
