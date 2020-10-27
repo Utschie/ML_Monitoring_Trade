@@ -8,6 +8,7 @@
 #现在把actor的学习的梯度改成分步求而不是persistent的了，试试看————20201027
 #原来的batch_state是一个元组对象，这次转成tensor再拷贝试试看
 #转成tensor拷贝还是如此，让debug跑一宿看看是不是真的能跑一宿
+#也或许是由于重名了，由于在函数中实现没有变量batch_memory或者to_actor_state，于是python以为它是全局的变量，反正先试试看————20201027
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
 import tensorflow as tf
