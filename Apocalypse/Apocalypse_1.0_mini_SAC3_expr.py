@@ -10,10 +10,7 @@
 #转成tensor拷贝还是如此，让debug跑一宿看看是不是真的能跑一宿
 #也或许是由于重名了，由于在函数中实现没有变量batch_memory或者to_actor_state，于是python以为它是全局的变量，反正先试试看————20201027
 #即便换了名字也没用，降低学习率也没用，只有actor不学习，它才能一直跑
-#这次把actor的学习步骤分开试试，然后打印出记忆回放区的所有p
-#critic学习会用到actor，actor学习也会用到critic，之所以debug可以一直跑是因为actor没学习，所以critic用到的actor的net和alpha一直没有变
-#这次用了stop_gradient以及求log的都加了1e-8
-#最后确定在于求log时没有加1e-8
+#换成了独立记忆也没用，甚至更糟糕
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
 import tensorflow as tf
@@ -313,34 +310,7 @@ class Policy_Network(tf.keras.Model):#给actor定义的policy网络
         return possibilities#返回可选行动及其概率
     
 
-class Actor(object):
-    def __init__(self):
-        self.lr=0.0003
-        self.net = Policy_Network()#初始化网络
-        self.opt = tf.keras.optimizers.Adam(self.lr,amsgrad=True)#设定最优化方法
-        self.opt_alpha = tf.keras.optimizers.Adam(self.lr,amsgrad=True)#参考论文
-        #self.memory = Actor_Memory()
-        self.alpha = tf.Variable(initial_value=0.2)#参考tf2rl 
-        self.target_alpha = -np.log((1.0 / 4)) * 0.98
 
-    def choose_action(self,state):
-        possibilities = self.net.possibility(state)#获得行动概率二元组并解耦
-        index = np.random.choice(range(4), p=np.array(possibilities).ravel())#根据概率选择索引
-        return index
-
-    def learn(self,critic,batch_state):#把当前回合的记忆和critic算出的td_error传给它
-        with tf.GradientTape(persistent=True) as tape: 
-            q = tf.stop_gradient(np.array(list(map(critic.target_Q,batch_state))))#所有4个动作的Q值
-            prob = tf.nn.softmax(self.net(tf.squeeze(batch_state)))#所有动作的概率
-            log_prob = tf.math.log(prob+1e-8)
-            loss = tf.reduce_mean(tf.reduce_sum(prob*(self.alpha*log_prob-tf.squeeze(q)),axis = 1))
-            loss_alpha = tf.reduce_mean(tf.reduce_sum(prob*(-self.alpha*log_prob+self.target_alpha),axis = 1))
-        grads = tape.gradient(loss, self.net.variables)
-        grads_alpha = tape.gradient(loss_alpha, [self.alpha])
-        self.opt.apply_gradients(grads_and_vars=zip(grads, self.net.variables))#更新策略
-        self.opt_alpha.apply_gradients(grads_and_vars=zip(grads_alpha, [self.alpha]))#更新alpha
-        del tape
-        return loss
         
 class Critic(object):#只需要做每次学习，以及把相应的td_error传给Actor
     def __init__(self):
@@ -356,7 +326,7 @@ class Critic(object):#只需要做每次学习，以及把相应的td_error传�
         self.target_repalce_counter = 0
         self.tau = 5e-3#tf2rl用的这个数
     
-    def learn(self,actor):
+    def learn(self):
         tree_idx, batch_memory, ISWeights = self.memory.sample(self.batch_size)
         batch_state,batch_action, batch_revenue, batch_next_state ,batch_done = zip(*batch_memory)
         with tf.GradientTape() as tape:
@@ -366,19 +336,18 @@ class Critic(object):#只需要做每次学习，以及把相应的td_error传�
             q1 = tf.reduce_sum(all_q1*one_hot_matrix,axis=1)#获得此刻状态的对应动作的q值
             next_all_q1 = tf.squeeze(list(map(self.local_Q,batch_next_state)))#获得下一时刻所有动作的q值
             next_prob1 =tf.nn.softmax(actor.net(tf.squeeze(batch_next_state)))#得到下一个满足条件动作的概率分布
-            next_v1 = next_all_q1-tf.stop_gradient(actor.alpha*tf.math.log(next_prob1+1e-8))#得到下一状态各种动作下的v
+            next_v1 = next_all_q1-actor.alpha*tf.math.log(next_prob1)#得到下一状态各种动作下的v
             expectation_v1 = tf.reduce_sum(next_prob1*next_v1,axis=1)#获得下一个状态的v的期望.
             y_pred1 = batch_revenue+self.gamma*expectation_v1*(1-np.array(batch_done))
             y_true1 = q1
             loss1 = tf.reduce_mean(ISWeights * tf.math.squared_difference(y_true1, y_pred1))
-            abs_errors1 = tf.abs(y_true1 - y_pred1)
+            abs_errors = tf.abs(y_true1 - y_pred1)
         grads1 = tape.gradient(loss1, self.local_Q.variables)
-        self.memory.batch_update(tree_idx, abs_errors1)#用target_Q的td_error更新tree
+        self.memory.batch_update(tree_idx, abs_errors)#用target_Q的td_error更新tree
         self.opt1.apply_gradients(grads_and_vars=zip(grads1, self.local_Q.variables))#更新参数
         #下面再抽一次样来进行target_Q的学习
         tree_idx, batch_memory, ISWeights = self.memory.sample(self.batch_size)
         batch_state, batch_action, batch_revenue, batch_next_state ,batch_done = zip(*batch_memory)
-        converted_state = copy.deepcopy(tf.convert_to_tensor(batch_state))
         with tf.GradientTape() as tape:
             #下面算target_Q的
             all_q2 = tf.squeeze(list(map(self.target_Q,batch_state)))#获得此刻状态的所有4个动作的q值
@@ -386,18 +355,18 @@ class Critic(object):#只需要做每次学习，以及把相应的td_error传�
             q2 = tf.reduce_sum(all_q2*one_hot_matrix,axis=1)#获得此刻状态的对应动作的q值
             next_all_q2 = tf.squeeze(list(map(self.target_Q,batch_next_state)))#获得下一时刻所有动作的q值
             next_prob2 =tf.nn.softmax(actor.net(tf.squeeze(batch_next_state)))#得到下一个满足条件动作的概率分布
-            log_next_prob2 = tf.math.log(next_prob2+1e-8)
-            next_v2 = next_all_q2-tf.stop_gradient(actor.alpha*log_next_prob2)#得到下一状态各种动作下的v
+            log_next_prob2 = tf.math.log(next_prob2)
+            next_v2 = next_all_q2-actor.alpha*log_next_prob2#得到下一状态各种动作下的v
             expectation_v2 = tf.reduce_sum(next_prob2*next_v2,axis=1)#获得下一个状态的v的期望.
             y_pred2 = batch_revenue+self.gamma*expectation_v2*(1-np.array(batch_done))#终止状态的v为0
             y_true2 = q2
             loss2 = tf.reduce_mean(ISWeights * tf.math.squared_difference(y_true2, y_pred2))
-            abs_errors2 = tf.abs(y_true2 - y_pred2)
+            abs_errors = tf.abs(y_true2 - y_pred2)
         grads2 = tape.gradient(loss2, self.target_Q.variables)
-        self.memory.batch_update(tree_idx, abs_errors2)#用target_Q的td_error更新tree
+        self.memory.batch_update(tree_idx, abs_errors)#用target_Q的td_error更新tree
         self.opt2.apply_gradients(grads_and_vars=zip(grads2, self.target_Q.variables))#更新参数
-        self.target_Q.save_weights(critic_target_weights_path, overwrite=True)
-        return loss2, converted_state#返回loss好可以记录下来输出,以及给actor用的memory
+        self.target_Q.save_weights(critic_weights_path, overwrite=True)
+        return loss2, batch_state
     
     def update_Q(self,tau):#更新Q网络
         for target_param, param in zip(self.target_Q.trainable_weights, self.local_Q.trainable_weights):
@@ -406,18 +375,53 @@ class Critic(object):#只需要做每次学习，以及把相应的td_error传�
             )
 
 
+class Actor(object):
+    def __init__(self):
+        self.critic = Critic()#在actor内部定义一个critic
+        self.lr=0.0003
+        self.net = Policy_Network()#初始化网络
+        self.opt = tf.keras.optimizers.Adam(self.lr,amsgrad=True)#设定最优化方法
+        self.opt_alpha = tf.keras.optimizers.Adam(self.lr,amsgrad=True)#参考论文
+        #self.memory = Actor_Memory()
+        self.alpha = tf.Variable(initial_value=0.2)#参考tf2rl 
+        self.target_alpha = -np.log((1.0 / 4)) * 0.98
+        self.tau = 5e-3
 
+    def choose_action(self,state):
+        possibilities = self.net.possibility(state)#获得行动概率二元组并解耦
+        index = np.random.choice(range(4), p=np.array(possibilities).ravel())#根据概率选择索引
+        return index
+
+    def learn(self):#把当前回合的记忆和critic算出的td_error传给它
+        critic_loss, batch_state = self.critic.learn()#critic先学习
+        self.critic.update_Q(self.tau)
+        with tf.GradientTape(persistent=True) as tape: 
+            q = np.array(list(map(self.critic.target_Q,batch_state)))#所有4个动作的Q值
+            prob = tf.nn.softmax(self.net(tf.squeeze(batch_state)))#所有动作的概率
+            log_prob = tf.math.log(prob)
+            loss = tf.reduce_mean(tf.reduce_sum(prob*(self.alpha*log_prob-tf.squeeze(q)),axis = 1))
+            loss_alpha = tf.reduce_mean(tf.reduce_sum(prob*(-self.alpha*log_prob+self.target_alpha),axis = 1))
+        grads = tape.gradient(loss, self.net.variables)
+        grads_alpha = tape.gradient(loss_alpha, [self.alpha])
+        self.opt.apply_gradients(grads_and_vars=zip(grads, self.net.variables))#更新策略
+        self.opt_alpha.apply_gradients(grads_and_vars=zip(grads_alpha, [self.alpha]))#更新alpha
+        del tape
+        return critic_loss, loss
+    
+    def replace_Q(self):
+        self.critic.update_Q(1.0)
+        
 
 
 
 if __name__ == "__main__":
-    summary_writer = tf.summary.create_file_writer('./tensorboard_1.0_mini_SAC3')
-    summary_writer2 = tf.summary.create_file_writer('./tensorboard_1.0_mini_SAC3/use_out_time')
-    summary_writer3 = tf.summary.create_file_writer('./tensorboard_1.0_mini_SAC3/max_frametime')
-    summary_writer4 = tf.summary.create_file_writer('./tensorboard_1.0_mini_SAC3/used_steps')
-    summary_writer5 = tf.summary.create_file_writer('./tensorboard_1.0_mini_SAC3/bisai_steps')
-    summary_writer6 = tf.summary.create_file_writer('./tensorboard_1.0_mini_SAC3/actor_loss')
-    summary_writer7 = tf.summary.create_file_writer('./tensorboard_1.0_mini_SAC3/critic_loss')
+    summary_writer = tf.summary.create_file_writer('./tensorboard_1.0_mini_SAC3_expr')
+    summary_writer2 = tf.summary.create_file_writer('./tensorboard_1.0_mini_SAC3_expr/use_out_time')
+    summary_writer3 = tf.summary.create_file_writer('./tensorboard_1.0_mini_SAC3_expr/max_frametime')
+    summary_writer4 = tf.summary.create_file_writer('./tensorboard_1.0_mini_SAC3_expr/used_steps')
+    summary_writer5 = tf.summary.create_file_writer('./tensorboard_1.0_mini_SAC3_expr/bisai_steps')
+    summary_writer6 = tf.summary.create_file_writer('./tensorboard_1.0_mini_SAC3_expr/actor_loss')
+    summary_writer7 = tf.summary.create_file_writer('./tensorboard_1.0_mini_SAC3_expr/critic_loss')
     start0 = time.time()
     epsilon = 1.            # 探索起始时的探索率
     #final_epsilon = 0.01            # 探索终止时的探索率
@@ -428,13 +432,11 @@ if __name__ == "__main__":
     target_repalce_counter = 0 
     bisai_counter = 1
     N_random_points = 134
-    critic_local_weights_path = 'D:\\data\\local_Q_weights_1.0_mini_SAC3.ckpt'
-    critic_target_weights_path = 'D:\\data\\target_Q_weights_1.0_mini_SAC3.ckpt'
-    actor_weights_path = 'D:\\data\\actor_weights_1.0_mini_SAC3.ckpt'
+    critic_weights_path = 'D:\\data\\critic_Q_weights_1.0_mini_SAC3_expr.ckpt'
+    actor_weights_path = 'D:\\data\\actor_weights_1.0_mini_SAC3_expr.ckpt'
     filefolderlist = os.listdir('F:\\cleaned_data_20141130-20160630')
     actor = Actor()#实例化一个actor
     #actor.net.load_weights(pre_weights_path)#读入1.0_sofort2的权重
-    critic = Critic()#实例化一个critic
     #critic.eval_Q.load_weights(pre_weights_path)#读入1.0_sofort2的权重
     #critic.target_Q.load_weights(pre_weights_path)#读入1.0_sofort2的权重
     for i in filefolderlist:#挨个文件夹训练
@@ -484,9 +486,9 @@ if __name__ == "__main__":
                 if(step_counter<=2000):
                     print('已转移'+str(step_counter)+'步')               
                 if done:#终盘时储存信息，同时更新actor，清除actor内存
-                    transition = np.array([state,action, revenue,jiangwei_mini(next_state,next_capital,next_frametime,bianpan_env.mean_invested),1])
+                    transition = np.array((state,action, revenue,jiangwei_mini(next_state,next_capital,next_frametime,bianpan_env.mean_invested),1))
                     #actor.memory.store(transition)
-                    critic.memory.store(transition)
+                    actor.critic.memory.store(transition)
                     with summary_writer.as_default():
                         tf.summary.scalar('Zinsen',bianpan_env.get_zinsen(),step = bisai_counter)
                         tf.summary.scalar('rest_capital',bianpan_env.gesamt_revenue+500,step = bisai_counter)
@@ -512,20 +514,18 @@ if __name__ == "__main__":
                 else:
                     transition = np.array((state,action, revenue,jiangwei_mini(next_state,next_capital,next_frametime,bianpan_env.mean_invested),0))
                     #actor.memory.store(transition)
-                    critic.memory.store(transition)
+                    actor.critic.memory.store(transition)
                     state = next_state
                     capital = next_capital
                     frametime = next_frametime
                 if (step_counter >2000) and (step_counter%50 == 0):
-                    critic_loss , to_actor_state= critic.learn(actor)#先critic学习
-                    critic.update_Q(critic.tau)
-                    actor_loss= actor.learn(critic,to_actor_state)#再actor学习
+                    critic_loss,actor_loss= actor.learn()#再actor学习
                     with summary_writer6.as_default():
                         tf.summary.scalar('losses',actor_loss,step = learn_step_counter)
                     with summary_writer7.as_default():
                         tf.summary.scalar('losses',critic_loss,step = learn_step_counter)
-                    if learn_step_counter%2000 ==0 and learn_step_counter != 0:
-                        critic.target_Q.set_weights(critic.local_Q.get_weights())
+                    if (learn_step_counter%2000 ==0) and (learn_step_counter != 0):
+                        actor.replace_Q()
                     learn_step_counter+=1#每学习一次，学习步数+1
                     print('critic已学习'+str(learn_step_counter)+'次')
             end=time.time()
