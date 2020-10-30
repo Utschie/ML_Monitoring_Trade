@@ -14,6 +14,7 @@
 #critic学习会用到actor，actor学习也会用到critic，之所以debug可以一直跑是因为actor没学习，所以critic用到的actor的net和alpha一直没有变
 #这次用了stop_gradient以及求log的都加了1e-8
 #最后确定在于求log时没有加1e-8
+#记忆回放的beta为0.0000125意味着120万次转移之后beta=1————20201030
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
 import tensorflow as tf

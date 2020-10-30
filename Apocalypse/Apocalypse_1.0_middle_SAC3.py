@@ -6,6 +6,7 @@
 #所以除了学习的代码要改，critic和actor类的内部也要稍作改动————20201022
 #critic和actor的网络都选择HE初始化————20201022
 #出现了loss为NAN，然后树的权重出现正无穷的情况,原因是神经网络参数出现nan，暂时还没找到出现nan的原因————20201025
+#记忆回放的beta为0.0000125意味着120万次转移之后beta=1————20201030
 
 import os
 os.environ["CUDA_VISIBLE_DEVICES"]="-1"#这个是使在tensorflow-gpu环境下只使用cpu
