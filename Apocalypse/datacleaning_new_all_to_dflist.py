@@ -1,0 +1,2 @@
+#本文件是datacleaning_new_all_to_csv后，把所有比赛的csv文件转化成按帧排布的矩阵列表的csv形式
+#本文件可直接用numpy读取成矩阵列表,同时还需要以对应的frametime作为位置编码
