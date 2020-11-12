@@ -1,4 +1,9 @@
 #本模型是利用textCNN来做的一个特征提取模型，用的anaconda的tensorflow环境下的pytorch1.5
+#不确定是直接把状态作为conv的输入还是先经过一层embedding再进行conv
+#不过如果需要embedding的话那可能需要graphembedding
+#其实由于原始数据是一帧一帧dataframe连在一起，然后长短不一，所以其实可以看做一个视频分类的问题—————20201112
+#可能会用到conv3D以及CRNN
+#中间空白的帧（即有的时候不变盘）或许可以用之前最近的那一次变盘填充，作为当前帧————20201112
 import os
 import torch
 from torch import nn

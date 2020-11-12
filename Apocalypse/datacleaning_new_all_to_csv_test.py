@@ -1,9 +1,5 @@
-#本文件是为了textCNN等模型准备把数据重新洗一次的datacleaning程序
-#把从20141130-20160630年的比赛全部放到一个文件夹中，共近38000场比赛，并且保留所有指标————20201107
-#然后再把之后2016-2018年的比赛做成验证集————20201107
-#一年有大约24000场比赛————20201107
-#先把所有的数据都洗一遍保留除timestamp以外的全部维度，放入'F:\\data_csv_new\\' 里
-#然后再把新的csv按着urlnum分天分比赛放在'F:\\cleaned_data_new\\'里
+#本文件是datacleaning_new_all_to_csv的试验集，先试几个个文件
+#一来测试，二来防止占用过多内存，三来可以直接用这几个文件进行下面datacleaning_new_all_to_dflist的开发
 from gevent import monkey;monkey.patch_all()
 import gevent
 import re
@@ -16,7 +12,7 @@ import os#用与建立文件夹
 '''先转成csv'''
 #进入文件夹，生成文件名序列
 def txt2csv(date):#把原始的按天分的txt文件转成按天分的csv文件
-    filepath='G:\\okooofile\\'+date+'.txt'#讲日期转成文件名
+    filepath='G:\\okooofile_test\\'+date+'.txt'#讲日期转成文件名
     f=open(filepath,'r')
     line=f.readline()
     f.close()#要关闭数据集
@@ -28,11 +24,11 @@ def txt2csv(date):#把原始的按天分的txt文件转成按天分的csv文件
     'kailizhishu_host', 'kailizhishu_fair', 'kailizhishu_guest']
     df=pd.DataFrame(columns=keys)#先列好字段,一个空的dataframe，然后等下面从csv中读取是再
     dictlist=list(map(str2dict,datalist))#把datalist变成了字典形式的dictlist，即每个元素都是字典
-    with open('F:\\data_csv_new\\'+date+'.csv','w',newline='') as f:#
+    with open('F:\\data_csv_new_test\\'+date+'.csv','w',newline='') as f:#
         w=csv.DictWriter(f,keys)
         w.writeheader()
         w.writerows(dictlist)
-    df=pd.read_csv('F:\\data_csv_new\\'+date+'.csv',encoding='GBK')#在移动硬盘内写入同名的csv文件并读取
+    df=pd.read_csv('F:\\data_csv_new_test\\'+date+'.csv',encoding='GBK')#在移动硬盘内写入同名的csv文件并读取
     return df
 
 #把列表中各个元素转成字典,并且把peilv，gailv和kailizhishu分拆成三列，否则无法正确读入pandas
@@ -74,7 +70,7 @@ def bisai2csv(bisai):#把单场比赛转换成csv文件
         dfdict.append(df.drop_duplicates('cid',keep='last'))
     newdict=pd.concat(dfdict)#一个新的
     newdict=newdict.drop(columns=['resttime','urlnum','date'])
-    outputpath='F:\\cleaned_data_new\\'+date+'\\'+urlnum+'.csv'
+    outputpath='F:\\cleaned_data_new_test\\'+date+'\\'+urlnum+'.csv'
     newdict.to_csv(outputpath)
 
     
@@ -89,7 +85,7 @@ def coprocess(bisailist):#用协程的方式并发写入
 def proc(datelist):
     for i in datelist:
         start=time.time()
-        outputpath='F:\\cleaned_data_new\\'+i#为这一天建立一个文件夹
+        outputpath='F:\\cleaned_data_new_test\\'+i#为这一天建立一个文件夹
         os.makedirs(outputpath)#建立文件夹
         df=txt2csv(i)#将txt文件导出csv后读入dataframe
         urlnumlist=list(df['urlnum'].value_counts().index)#获得当天比赛列表
@@ -109,9 +105,9 @@ def listdivision(listTemp, n):
     
 
 if __name__ == '__main__':
-    filelist = os.listdir('G:\\okooofile')#读出这一年半的数据文件名
+    filelist = os.listdir('G:\\okooofile_test')#读出这一年半的数据文件名
     datelist=[i[0:-4] for i in filelist]
-    datelist_list=listdivision(datelist,146)
+    datelist_list=listdivision(datelist,2)
     process_list = []
     for i in datelist_list:
         p = Process(target=proc,args=(i,))
