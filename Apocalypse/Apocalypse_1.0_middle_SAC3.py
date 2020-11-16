@@ -343,6 +343,7 @@ class Actor(object):
         self.opt.apply_gradients(grads_and_vars=zip(grads, self.net.variables))#更新策略
         self.opt_alpha.apply_gradients(grads_and_vars=zip(grads_alpha, [self.alpha]))#更新alpha
         del tape
+        self.net.save_weights(actor_weights_path, overwrite=True)
         return loss
 
         
