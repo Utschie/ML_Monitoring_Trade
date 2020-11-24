@@ -13,10 +13,18 @@ import time
 import csv
 from multiprocessing import Process
 import os#用与建立文件夹
+import numpy as np
+'''先转成csv'''
+#进入文件夹，生成文件名序列
+with open('D:\\data\\cidlist.csv') as f:
+    reader = csv.reader(f)
+    cidlist = [row[1] for row in reader]#得到cid对应表
+
+cidlist = list(map(float,cidlist))#把各个元素字符串类型转成浮点数类型
 '''先转成csv'''
 #进入文件夹，生成文件名序列
 def txt2csv(date):#把原始的按天分的txt文件转成按天分的csv文件
-    filepath='G:\\okooofile\\'+date+'.txt'#讲日期转成文件名
+    filepath='G:\\okooofile_20141130-20160630\\'+date+'.txt'#讲日期转成文件名
     f=open(filepath,'r')
     line=f.readline()
     f.close()#要关闭数据集
@@ -28,11 +36,11 @@ def txt2csv(date):#把原始的按天分的txt文件转成按天分的csv文件
     'kailizhishu_host', 'kailizhishu_fair', 'kailizhishu_guest']
     df=pd.DataFrame(columns=keys)#先列好字段,一个空的dataframe，然后等下面从csv中读取是再
     dictlist=list(map(str2dict,datalist))#把datalist变成了字典形式的dictlist，即每个元素都是字典
-    with open('F:\\data_csv_new\\'+date+'.csv','w',newline='') as f:#
+    with open('F:\\data_csv_new_20141130-20160630\\'+date+'.csv','w',newline='') as f:#
         w=csv.DictWriter(f,keys)
         w.writeheader()
         w.writerows(dictlist)
-    df=pd.read_csv('F:\\data_csv_new\\'+date+'.csv',encoding='GBK')#在移动硬盘内写入同名的csv文件并读取
+    df=pd.read_csv('F:\\data_csv_new_20141130-20160630\\'+date+'.csv',encoding='GBK')#在移动硬盘内写入同名的csv文件并读取
     return df
 
 #把列表中各个元素转成字典,并且把peilv，gailv和kailizhishu分拆成三列，否则无法正确读入pandas
@@ -63,6 +71,7 @@ def bisaiquery(df):#因为后面的map函数只能接受一个参数的列表，
     
 
 def bisai2csv(bisai):#把单场比赛转换成csv文件
+    #############准备好csv文件内容###########
     urlnum=str(bisai.urlnum.values[0])
     date=str(bisai.date.values[0])
     resttimelist=list(bisai.resttime.value_counts().sort_index(ascending=False).index)#获得该场比赛的变盘列表并排序
@@ -74,10 +83,29 @@ def bisai2csv(bisai):#把单场比赛转换成csv文件
         dfdict.append(df.drop_duplicates('cid',keep='last'))
     newdict=pd.concat(dfdict)#一个新的
     newdict=newdict.drop(columns=['resttime','urlnum','date'])
-    outputpath='F:\\cleaned_data_new\\'+date+'\\'+urlnum+'.csv'
-    newdict.to_csv(outputpath)
-
-    
+    outputpath1='F:\\cleaned_data_new_20141130-20160630\\'+date+'\\'+urlnum+'.csv'
+    outputpath2 = 'F:\\cleaned_data_new_dflist_20141130-20160630\\'+date+'\\'+urlnum+'.npz'
+    newdict.to_csv(outputpath1)#输出csv文件
+    ##################准备好npz文件内容###########
+    data = pd.read_csv(outputpath1)#读取文件
+    data = data.drop(columns=['league','zhudui','kedui','companyname'])#去除非数字的列
+    frametimelist=data.frametime.value_counts().sort_index(ascending=False).index#将frametime的值读取成列表
+    framelist = list()#framelist为一个空列表
+    for i in frametimelist:#其中frametimelist里的数据是整型
+        state = data.groupby('frametime').get_group(i)#从第一次变盘开始得到当次转移
+        state = np.array(state)#转成numpy多维数组
+        #在填充成矩阵之前需要知道所有数据中到底有多少个cid
+        statematrix=np.zeros((410,12))#
+        for j in state:
+            cid = j[1]#得到浮点数类型的cid
+            index = cidlist.index(cid)
+            statematrix[index] = j#把对应矩阵那一行给它
+        statematrix=np.delete(statematrix,(0,1), axis=-1)#去掉frametime和cid列
+        framelist.append(statematrix)
+    framelist = np.array(framelist)#转成numpy数组
+    frametimelist = np.array(frametimelist)
+    np.savez(outputpath2,framelist=framelist,frametimelist=frametimelist)#framelist和frametimelist分别是自定义的key，将来读取用这两个key来引用
+   
     
 def coprocess(bisailist):#用协程的方式并发写入
     ge = list()
@@ -89,8 +117,8 @@ def coprocess(bisailist):#用协程的方式并发写入
 def proc(datelist):
     for i in datelist:
         start=time.time()
-        outputpath1='F:\\cleaned_data_new\\'+i#为这一天建立一个文件夹
-        outputpath2='F:\\cleaned_data_new_dflist\\'+i
+        outputpath1='F:\\cleaned_data_new_20141130-20160630\\'+i#为这一天建立一个文件夹
+        outputpath2='F:\\cleaned_data_new_dflist_20141130-20160630\\'+i
         os.makedirs(outputpath1)#建立保存csv的文件夹
         os.makedirs(outputpath2)#建立保存npz的文件夹
         df=txt2csv(i)#将txt文件导出csv后读入dataframe
@@ -111,9 +139,9 @@ def listdivision(listTemp, n):
     
 
 if __name__ == '__main__':
-    filelist = os.listdir('G:\\okooofile')#读出这一年半的数据文件名
+    filelist = os.listdir('G:\\okooofile_20141130-20160630')#读出这一年半的数据文件名
     datelist=[i[0:-4] for i in filelist]
-    datelist_list=listdivision(datelist,146)
+    datelist_list=listdivision(datelist,145)
     process_list = []
     for i in datelist_list:
         p = Process(target=proc,args=(i,))
