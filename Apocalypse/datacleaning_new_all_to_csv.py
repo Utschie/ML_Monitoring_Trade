@@ -4,6 +4,9 @@
 #一年有大约24000场比赛————20201107
 #先把所有的数据都洗一遍保留除timestamp以外的全部维度，放入'F:\\data_csv_new\\' 里
 #然后再把新的csv按着urlnum分天分比赛放在'F:\\cleaned_data_new\\'里
+#可能有点儿数据量溢出了，即便是只有20141130-20160630的数据，该程序洗出来的数据也高达3.6T,其中csv有1.35T，npz有2.25T————20201126
+#所以不能把所有数据都洗成现成的，而是应该只洗出csv来，然后再在模型中用dataloader函数把数据准备出来————20201126
+#仅仅把全部csv文件洗出来差不多就需要一个4TB的硬盘————20201126
 from gevent import monkey;monkey.patch_all()
 import gevent
 import re
@@ -84,9 +87,10 @@ def bisai2csv(bisai):#把单场比赛转换成csv文件
     newdict=pd.concat(dfdict)#一个新的
     newdict=newdict.drop(columns=['resttime','urlnum','date'])
     outputpath1='F:\\cleaned_data_new_20141130-20160630\\'+date+'\\'+urlnum+'.csv'
-    outputpath2 = 'F:\\cleaned_data_new_dflist_20141130-20160630\\'+date+'\\'+urlnum+'.npz'
+    #outputpath2 = 'F:\\cleaned_data_new_dflist_20141130-20160630\\'+date+'\\'+urlnum+'.npz'
     newdict.to_csv(outputpath1)#输出csv文件
     ##################准备好npz文件内容###########
+    '''
     data = pd.read_csv(outputpath1)#读取文件
     data = data.drop(columns=['league','zhudui','kedui','companyname'])#去除非数字的列
     frametimelist=data.frametime.value_counts().sort_index(ascending=False).index#将frametime的值读取成列表
@@ -105,6 +109,7 @@ def bisai2csv(bisai):#把单场比赛转换成csv文件
     framelist = np.array(framelist)#转成numpy数组
     frametimelist = np.array(frametimelist)
     np.savez(outputpath2,framelist=framelist,frametimelist=frametimelist)#framelist和frametimelist分别是自定义的key，将来读取用这两个key来引用
+    '''
    
     
 def coprocess(bisailist):#用协程的方式并发写入
@@ -118,9 +123,9 @@ def proc(datelist):
     for i in datelist:
         start=time.time()
         outputpath1='F:\\cleaned_data_new_20141130-20160630\\'+i#为这一天建立一个文件夹
-        outputpath2='F:\\cleaned_data_new_dflist_20141130-20160630\\'+i
+        #outputpath2='F:\\cleaned_data_new_dflist_20141130-20160630\\'+i
         os.makedirs(outputpath1)#建立保存csv的文件夹
-        os.makedirs(outputpath2)#建立保存npz的文件夹
+        #os.makedirs(outputpath2)#建立保存npz的文件夹
         df=txt2csv(i)#将txt文件导出csv后读入dataframe
         urlnumlist=list(df['urlnum'].value_counts().index)#获得当天比赛列表
         bisailist=list(map(bisaiquery(df),urlnumlist))#获得由各个比赛的dataframe组成的表

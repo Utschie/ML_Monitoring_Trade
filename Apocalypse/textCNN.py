@@ -13,24 +13,35 @@ import sys
 import pandas as pd
 import numpy as np
 
-
+with open('D:\\data\\cidlist.csv') as f:
+    reader = csv.reader(f)
+    cidlist = [row[1] for row in reader]#得到cid对应表
+cidlist = list(map(float,cidlist))#把各个元素字符串类型转成浮点数类型
 class Data_loader(object):#数据预处理器，把每一场比赛的固定时间点之前的数据转化成张量序列
     def __init__(self,big_filepath,result,timepoint):
         self.filepath = big_filepath#这里的filepath是总的最大的那个filepath
         self.result = result
         self.batch_list = self.shuffler()
 
-    def episode_generator(self,filepath):#这里的filepath是大filepath下单场比赛的filepath
+    def loader(self,filepath):#给出单场比赛的csv文件路径，并转化成帧列表和对应变帧时间列表
         data = pd.read_csv(filepath)#读取文件
+        data = data.drop(columns=['league','zhudui','kedui','companyname'])#去除非数字的列
         frametimelist=data.frametime.value_counts().sort_index(ascending=False).index#将frametime的值读取成列表
-        self.max_frametime = frametimelist[0]
+        framelist = list()#framelist为一个空列表
         for i in frametimelist:#其中frametimelist里的数据是整型
             state = data.groupby('frametime').get_group(i)#从第一次变盘开始得到当次转移
-            statematrix = np.array(state)#转成numpy多维数组
+            state = np.array(state)#转成numpy多维数组
             #在填充成矩阵之前需要知道所有数据中到底有多少个cid
-            self.statematrix=np.delete(statematrix, 1, axis=-1)#去掉cid后，最后得到一个1*410*8的张量，这里axis是2或者-1（代表最后一个）都行
-            self.frametime = i
-            yield self.statematrix
+            statematrix=np.zeros((410,12))#
+            for j in state:
+                cid = j[1]#得到浮点数类型的cid
+                index = cidlist.index(cid)
+                statematrix[index] = j#把对应矩阵那一行给它
+            statematrix=np.delete(statematrix,(0,1), axis=-1)#去掉frametime和cid列
+            framelist.append(statematrix)
+        framelist = np.array(framelist)#转成numpy数组
+        frametimelist = np.array(frametimelist)
+        return framelist,frametimelist
 
     def shuffler(self):#在完成一个epoch的学习后，对数据进行shuffle重新分组，得到一个mini_batch的列表
 
