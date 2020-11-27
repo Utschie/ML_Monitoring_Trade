@@ -13,6 +13,7 @@ import  torch.nn.functional as F
 import sys
 import pandas as pd
 import numpy as np
+import csv
 
 with open('D:\\data\\cidlist.csv') as f:
     reader = csv.reader(f)
