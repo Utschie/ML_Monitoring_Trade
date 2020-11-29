@@ -12,15 +12,15 @@ for i in filelist:
         cid = data.cid.drop_duplicates().values.tolist()
         cidlist = list(set(cidlist+cid))
 
-filelist = os.listdir('G:\\cleaned_data_new_20160701-20190224')
+filelist = os.listdir('H:\\cleaned_data_new_20160701-20190224')
 for i in filelist:
-    bisailist = os.listdir('G:\\cleaned_data_20160701-20190224\\'+i)
+    bisailist = os.listdir('H:\\cleaned_data_20160701-20190224\\'+i)
     for j in bisailist:
-        filepath = 'G:\\cleaned_data_20160701-20190224\\'+i+'\\'+j
+        filepath = 'H:\\cleaned_data_20160701-20190224\\'+i+'\\'+j
         data = pd.read_csv(filepath)
         cid = data.cid.drop_duplicates().values.tolist()
         cidlist = list(set(cidlist+cid))
 
-filepath = 'G:\\cidlist_new.csv'
+filepath = 'H:\\cidlist_new.csv'
 ser=pd.Series(cidlist)#转成series
 ser.to_csv(filepath)#写入csv

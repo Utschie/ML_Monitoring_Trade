@@ -32,11 +32,11 @@ def txt2csv(date):#把原始的按天分的txt文件转成按天分的csv文件
     'kailizhishu_host', 'kailizhishu_fair', 'kailizhishu_guest']
     df=pd.DataFrame(columns=keys)#先列好字段,一个空的dataframe，然后等下面从csv中读取是再
     dictlist=list(map(str2dict,datalist))#把datalist变成了字典形式的dictlist，即每个元素都是字典
-    with open('F:\\data_csv_new_20160701-20190224\\'+date+'.csv','w',newline='') as f:#
+    with open('H:\\data_csv_new_20160701-20190224\\'+date+'.csv','w',newline='') as f:#
         w=csv.DictWriter(f,keys)
         w.writeheader()
         w.writerows(dictlist)
-    df=pd.read_csv('F:\\data_csv_new_20160701-20190224\\'+date+'.csv',encoding='GBK')#在移动硬盘内写入同名的csv文件并读取
+    df=pd.read_csv('H:\\data_csv_new_20160701-20190224\\'+date+'.csv',encoding='GBK')#在移动硬盘内写入同名的csv文件并读取
     return df
 
 #把列表中各个元素转成字典,并且把peilv，gailv和kailizhishu分拆成三列，否则无法正确读入pandas
@@ -79,7 +79,7 @@ def bisai2csv(bisai):#把单场比赛转换成csv文件
         dfdict.append(df.drop_duplicates('cid',keep='last'))
     newdict=pd.concat(dfdict)#一个新的
     newdict=newdict.drop(columns=['resttime','urlnum','date'])
-    outputpath1='F:\\cleaned_data_new_20160701-20190224\\'+date+'\\'+urlnum+'.csv'
+    outputpath1='H:\\cleaned_data_new_20160701-20190224\\'+date+'\\'+urlnum+'.csv'
     #outputpath2 = 'F:\\cleaned_data_new_dflist_20141130-20160630\\'+date+'\\'+urlnum+'.npz'
     newdict.to_csv(outputpath1)#输出csv文件
     ##################准备好npz文件内容###########
@@ -115,7 +115,7 @@ def coprocess(bisailist):#用协程的方式并发写入
 def proc(datelist):
     for i in datelist:
         start=time.time()
-        outputpath1='F:\\cleaned_data_new_20160701-20190224\\'+i#为这一天建立一个文件夹
+        outputpath1='H:\\cleaned_data_new_20160701-20190224\\'+i#为这一天建立一个文件夹
         #outputpath2='F:\\cleaned_data_new_dflist_20141130-20160630\\'+i
         os.makedirs(outputpath1)#建立保存csv的文件夹
         #os.makedirs(outputpath2)#建立保存npz的文件夹
