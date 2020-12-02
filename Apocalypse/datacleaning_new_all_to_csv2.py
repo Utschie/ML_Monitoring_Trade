@@ -1,5 +1,6 @@
 #本文件用来洗20160701-20190224的数据，装在4TB的盘里
 #首先手动在4TB盘内建立一个名为data_csv_new_20160701-20190224的文件夹————20201128
+#应该改成日期池，然后进程在日期里抽日期而不是固定的分成多少天，这样能充分利用电脑性能————20201202
 from gevent import monkey;monkey.patch_all()
 import gevent
 import re
