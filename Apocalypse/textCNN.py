@@ -7,7 +7,7 @@
 #Data_loader里准备数据部分里的循环部分或许可以用map方法提高一下效率，否则一个样本就几万次循环太慢了————20201127
 #20160701-20190224总共有66709场比赛，20141130-20160630共有37897场比赛，总共104606场比赛————20201203
 #本程序用的是20141130-20160630的37897场比赛做训练集，用20160701-20190224做验证集和测试集————20201203
-#由于cidlist里有一些奇怪的3000开头的cid，还没想好要不要去掉————20201204
+#最新的cidlist共有600个cid，其中有一些奇怪的3000开头的cid，还没想好要不要去掉————20201204
 import os
 import torch
 from torch import nn
@@ -18,7 +18,7 @@ import pandas as pd
 import numpy as np
 import csv
 
-with open('D:\\data\\cidlist.csv') as f:
+with open('D:\\data\\cidlist_complete.csv') as f:
     reader = csv.reader(f)
     cidlist = [row[1] for row in reader]#得到cid对应表
 cidlist = list(map(float,cidlist))#把各个元素字符串类型转成浮点数类型
