@@ -8,6 +8,7 @@
 #20160701-20190224总共有66709场比赛，20141130-20160630共有37897场比赛，总共104606场比赛————20201203
 #本程序用的是20141130-20160630的37897场比赛做训练集，用20160701-20190224做验证集和测试集————20201203
 #最新的cidlist共有600个cid，其中有一些奇怪的3000开头的cid，还没想好要不要去掉————20201204
+#cidlist_complete是全部的cid文件，cid_publice是前后半段时间都共有的cid共有306个————20201204
 import os
 import torch
 from torch import nn
@@ -18,7 +19,7 @@ import pandas as pd
 import numpy as np
 import csv
 
-with open('D:\\data\\cidlist_complete.csv') as f:
+with open('D:\\data\\cidlist_public.csv') as f:#从cidlist_complete文件里读出306个cid来
     reader = csv.reader(f)
     cidlist = [row[1] for row in reader]#得到cid对应表
 cidlist = list(map(float,cidlist))#把各个元素字符串类型转成浮点数类型
