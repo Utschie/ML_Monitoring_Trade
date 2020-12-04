@@ -10,6 +10,7 @@
 #最新的cidlist共有600个cid，其中有一些奇怪的3000开头的cid，还没想好要不要去掉————20201204
 #cidlist_complete是全部的cid文件，cid_publice是前后半段时间都共有的cid共有306个————20201204
 #暂时用public的公共cid，因为如果用全部cid可能需要打乱全部10万个训练集的次序，就很麻烦，倒不如用大家都有的一直活着的公司数据————20201204
+#本程序的开发暂时使用D盘data文件夹下的developing中的数据，即几天的数据，用于开发时使用————20201204
 import os
 import torch
 from torch import nn
