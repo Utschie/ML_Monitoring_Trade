@@ -29,4 +29,4 @@ for i in filelist:
 
 filepath = 'H:\\cidlist_complete.csv'
 ser=pd.Series(cidlist)#转成series
-ser.to_csv(filepath)#写入csv
+ser.to_csv(filepath,header=None)#写入csv
