@@ -11,28 +11,65 @@
 #cidlist_complete是全部的cid文件，cid_publice是前后半段时间都共有的cid共有306个————20201204
 #暂时用public的公共cid，因为如果用全部cid可能需要打乱全部10万个训练集的次序，就很麻烦，倒不如用大家都有的一直活着的公司数据————20201204
 #本程序的开发暂时使用D盘data文件夹下的developing中的数据，即几天的数据，用于开发时使用————20201204
+#可能需要给developing文件夹下的文件专门做一个lablelist————20201205
 import os
 import torch
 from torch import nn
-import torch.utils.data as Data
+from torch.utils.data import Dataset, DataLoader
 import torch.nn.functional as F
 import sys
 import pandas as pd
 import numpy as np
 import csv
 import random
+import re
 
 with open('D:\\data\\cidlist_public.csv') as f:
     reader = csv.reader(f)
     cidlist = [row[1] for row in reader]#得到cid对应表
 cidlist = list(map(float,cidlist))#把各个元素字符串类型转成浮点数类型
-class Data_loader(object):#数据预处理器，把每一场比赛的固定时间点之前的数据转化成张量序列
-    def __init__(self,filepath,result,timepoint):
-        self.result = result
+class BisaiDataset(Dataset):#数据预处理器
+    def __init__(self,filepath):
+        self.lablelist = pd.read_csv('D:\\data\\lablelist_developing.csv',index_col = 0)#比赛id及其对应赛果的列表
         self.filelist = [i+'\\'+k for i,j,k in os.walk(filepath) for k in k]#得到所有csv文件的路径列表
-        self.shuffle()#打乱顺序并初始化batch_list
+    
+    def __getitem__(self, index):
+        # TODO
+        # 1. Read one data from file (e.g. using numpy.fromfile, PIL.Image.open).
+        #这里需要注意的是，第一步：read one data，是一个dat
+        data_path = self.filelist[index]
+        bisai_id = int(re.findall(r'\\(\d*?).csv',data_path)[0])
+        # 2. Preprocess the data (e.g. torchvision.Transform).
+        data = self.csv2frame(data_path)
+        # 3. Return a data pair (e.g. image and label).
+        try:
+            lable = self.lablelist.loc[bisai_id].result
+            return data,lable
+        except Exception:
+            pass
 
-    def csv2frame(self,filepath):#给出单场比赛的csv文件路径，并转化成帧列表和对应变帧时间列表
+        
+       
+    def __len__(self):
+        # You should change 0 to the total size of your dataset.
+        return len(self.filelist)
+
+
+    def csv2frame(self,filepath):#给出单场比赛的csv文件路径，并转化成帧列表和对应变帧时间列表，以及比赛结果
+        '''
+        bisai_id = int(re.findall(r'\\(\d*?).csv',filepath)[0])#获得比赛id
+        try:
+            result = self.resultlist.loc[bisai_id]
+            if result.host > result.guest:
+                result = 1
+            elif result.host == result.guest:
+                result = 2
+            else:
+                result = 3
+        except Exception:#因为有的比赛结果没有存进去
+            self.filelist.remove(filepath)
+            return#如果那场比赛没有赛果，返回空值
+        '''
         data = pd.read_csv(filepath)#读取文件
         data = data.drop(columns=['league','zhudui','kedui','companyname'])#去除非数字的列
         frametimelist=data.frametime.value_counts().sort_index(ascending=False).index#将frametime的值读取成列表
@@ -50,8 +87,8 @@ class Data_loader(object):#数据预处理器，把每一场比赛的固定时�
             framelist.append(statematrix)
         framelist = np.array(framelist)#转成numpy数组
         frametimelist = np.array(frametimelist)
-        return (framelist,frametimelist)#传出一个单帧和对应位置的元组
-
+        return (framelist,frametimelist)#传出一个单帧和对应位置的元组,以及拥有三个值的分类变量result
+    '''
     def shuffle(self,batch_size = 32):#在完成一个epoch的学习后，对数据进行shuffle重新分组，得到一个mini_batch的列表
         random.shuffle(self.filelist)#首先对文件列表重新排序
         self.batch_list = [self.filelist[i:i+batch_size] for i in range(0,len(self.filelist),batch_size)]#按batch_size大小每batch_size个分一份
@@ -62,6 +99,8 @@ class Data_loader(object):#数据预处理器，把每一场比赛的固定时�
     def feed2net(self,mini_batch_paths):#传入batch_list的一个元素，即一个mini_batch路径，传出处理好的mini_batch
         mini_batch = list(map(self.csv2frame,mini_batch_paths))#把这32个路径中的文件转成可以传入的格式,组成一个32长度的列表，每个元素是一个帧序列和位置序列的元组
         return mini_batch
+    '''
+
 
 
 
