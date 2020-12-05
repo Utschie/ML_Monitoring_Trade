@@ -15,23 +15,24 @@ import os
 import torch
 from torch import nn
 import torch.utils.data as Data
-import  torch.nn.functional as F
+import torch.nn.functional as F
 import sys
 import pandas as pd
 import numpy as np
 import csv
+import random
 
 with open('D:\\data\\cidlist_public.csv') as f:
     reader = csv.reader(f)
     cidlist = [row[1] for row in reader]#得到cid对应表
 cidlist = list(map(float,cidlist))#把各个元素字符串类型转成浮点数类型
 class Data_loader(object):#数据预处理器，把每一场比赛的固定时间点之前的数据转化成张量序列
-    def __init__(self,big_filepath,result,timepoint):
-        self.filepath = big_filepath#这里的filepath是总的最大的那个filepath
+    def __init__(self,filepath,result,timepoint):
         self.result = result
-        self.batch_list = self.shuffler()
+        self.filelist = [i+'\\'+k for i,j,k in os.walk(filepath) for k in k]#得到所有csv文件的路径列表
+        self.shuffle()#打乱顺序并初始化batch_list
 
-    def loader(self,filepath):#给出单场比赛的csv文件路径，并转化成帧列表和对应变帧时间列表
+    def csv2frame(self,filepath):#给出单场比赛的csv文件路径，并转化成帧列表和对应变帧时间列表
         data = pd.read_csv(filepath)#读取文件
         data = data.drop(columns=['league','zhudui','kedui','companyname'])#去除非数字的列
         frametimelist=data.frametime.value_counts().sort_index(ascending=False).index#将frametime的值读取成列表
@@ -40,7 +41,7 @@ class Data_loader(object):#数据预处理器，把每一场比赛的固定时�
             state = data.groupby('frametime').get_group(i)#从第一次变盘开始得到当次转移
             state = np.array(state)#转成numpy多维数组
             #在填充成矩阵之前需要知道所有数据中到底有多少个cid
-            statematrix=np.zeros((410,12))#
+            statematrix=np.zeros((306,12))#因为cid_public里共有306个cid；去掉非数字列后有12列
             for j in state:
                 cid = j[1]#得到浮点数类型的cid
                 index = cidlist.index(cid)
@@ -49,19 +50,17 @@ class Data_loader(object):#数据预处理器，把每一场比赛的固定时�
             framelist.append(statematrix)
         framelist = np.array(framelist)#转成numpy数组
         frametimelist = np.array(frametimelist)
-        return framelist,frametimelist
+        return (framelist,frametimelist)#传出一个单帧和对应位置的元组
 
-    def shuffler(self):#在完成一个epoch的学习后，对数据进行shuffle重新分组，得到一个mini_batch的列表
-
-
-
-        return batch_list#返回新洗好的分batch列表，其中每个元素是一个装有32个文件名的列表
-
+    def shuffle(self,batch_size = 32):#在完成一个epoch的学习后，对数据进行shuffle重新分组，得到一个mini_batch的列表
+        random.shuffle(self.filelist)#首先对文件列表重新排序
+        self.batch_list = [self.filelist[i:i+batch_size] for i in range(0,len(self.filelist),batch_size)]#按batch_size大小每batch_size个分一份
+        return self.batch_list#返回新洗好的分batch列表，其中每个元素是一个装有batch_size个文件名的列表
 
 
-    def feeder(self):#每次调用都把一个准备好的mini_batch传递给网络
 
-
+    def feed2net(self,mini_batch_paths):#传入batch_list的一个元素，即一个mini_batch路径，传出处理好的mini_batch
+        mini_batch = list(map(self.csv2frame,mini_batch_paths))#把这32个路径中的文件转成可以传入的格式,组成一个32长度的列表，每个元素是一个帧序列和位置序列的元组
         return mini_batch
 
 
