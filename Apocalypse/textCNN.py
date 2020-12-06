@@ -81,7 +81,8 @@ class BisaiDataset(Dataset):#数据预处理器
         return (framelist,frametimelist)#传出一个单帧和对应位置的元组,以及拥有三个值的分类变量result
     
 
-
+class TextCNN(nn.Module):
+    
 
 
 
