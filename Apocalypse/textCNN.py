@@ -35,20 +35,22 @@ class BisaiDataset(Dataset):#数据预处理器
     
     def __getitem__(self, index):
         # TODO
+        i = False#用来标记函数是否成功的布尔变量
         # 1. Read one data from file (e.g. using numpy.fromfile, PIL.Image.open).
         #这里需要注意的是，第一步：read one data，是一个dat
-        data_path = self.filelist[index]
-        bisai_id = int(re.findall(r'\\(\d*?).csv',data_path)[0])
-        # 2. Preprocess the data (e.g. torchvision.Transform).
-        data = self.csv2frame(data_path)
-        # 3. Return a data pair (e.g. image and label).
-        try:
-            lable = self.lablelist.loc[bisai_id].result
-            return data,lable
-        except Exception:
-            pass
-
-        
+        while i == False:
+            try:
+                data_path = self.filelist[index]
+                bisai_id = int(re.findall(r'\\(\d*?).csv',data_path)[0])
+                # 2. Preprocess the data (e.g. torchvision.Transform).
+                data = self.csv2frame(data_path)
+                # 3. Return a data pair (e.g. image and label).
+                lable = self.lablelist.loc[bisai_id].result
+                i = True#如果没错则i=True，跳出循环
+            except Exception:
+                self.filelist.remove(data_path)#如果出错，说明赛果里没有这场比赛，则在列表里去掉data_path
+                continue#然后从try处再开始
+        return data,lable      
        
     def __len__(self):
         # You should change 0 to the total size of your dataset.
@@ -56,50 +58,29 @@ class BisaiDataset(Dataset):#数据预处理器
 
 
     def csv2frame(self,filepath):#给出单场比赛的csv文件路径，并转化成帧列表和对应变帧时间列表，以及比赛结果
-        '''
-        bisai_id = int(re.findall(r'\\(\d*?).csv',filepath)[0])#获得比赛id
-        try:
-            result = self.resultlist.loc[bisai_id]
-            if result.host > result.guest:
-                result = 1
-            elif result.host == result.guest:
-                result = 2
-            else:
-                result = 3
-        except Exception:#因为有的比赛结果没有存进去
-            self.filelist.remove(filepath)
-            return#如果那场比赛没有赛果，返回空值
-        '''
         data = pd.read_csv(filepath)#读取文件
         data = data.drop(columns=['league','zhudui','kedui','companyname'])#去除非数字的列
         frametimelist=data.frametime.value_counts().sort_index(ascending=False).index#将frametime的值读取成列表
-        framelist = list()#framelist为一个空列表
-        for i in frametimelist:#其中frametimelist里的数据是整型
+        framelist = list(range(len(frametimelist)))#framelist为一个空列表,长度与frametimelist相同
+        def data2framelist(i):
             state = data.groupby('frametime').get_group(i)#从第一次变盘开始得到当次转移
             state = np.array(state)#转成numpy多维数组
             #在填充成矩阵之前需要知道所有数据中到底有多少个cid
-            statematrix=np.zeros((306,12))#因为cid_public里共有306个cid；去掉非数字列后有12列
-            for j in state:
+            statematrix0=np.zeros((306,12))#因为cid_public里共有306个cid；去掉非数字列后有12列
+            def state2matrix(j):
                 cid = j[1]#得到浮点数类型的cid
                 index = cidlist.index(cid)
-                statematrix[index] = j#把对应矩阵那一行给它
+                statematrix0[index] = j#把对应矩阵那一行给它
+            statematrix = np.fromiter(map(state2matrix,state),dtype = np.float64)#用np.fromiter实现从map中
             statematrix=np.delete(statematrix,(0,1), axis=-1)#去掉frametime和cid列
-            framelist.append(statematrix)
-        framelist = np.array(framelist)#转成numpy数组
+            k = list(frametimelist).index(i)#找到i在frametimelist里的位置,由于frametimelist是ndarray，所以需要转成list取index 
+            framelist[k] = statematrix#在framelist同样的位置中给元素赋值
+        framelist = map(data2framelist,frametimelist)
+        framelist = np.array(list(framelist))#让map函数运行并转成numpy数组
         frametimelist = np.array(frametimelist)
         return (framelist,frametimelist)#传出一个单帧和对应位置的元组,以及拥有三个值的分类变量result
-    '''
-    def shuffle(self,batch_size = 32):#在完成一个epoch的学习后，对数据进行shuffle重新分组，得到一个mini_batch的列表
-        random.shuffle(self.filelist)#首先对文件列表重新排序
-        self.batch_list = [self.filelist[i:i+batch_size] for i in range(0,len(self.filelist),batch_size)]#按batch_size大小每batch_size个分一份
-        return self.batch_list#返回新洗好的分batch列表，其中每个元素是一个装有batch_size个文件名的列表
+    
 
-
-
-    def feed2net(self,mini_batch_paths):#传入batch_list的一个元素，即一个mini_batch路径，传出处理好的mini_batch
-        mini_batch = list(map(self.csv2frame,mini_batch_paths))#把这32个路径中的文件转成可以传入的格式,组成一个32长度的列表，每个元素是一个帧序列和位置序列的元组
-        return mini_batch
-    '''
 
 
 
