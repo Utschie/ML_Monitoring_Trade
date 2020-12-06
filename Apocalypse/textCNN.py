@@ -1,4 +1,4 @@
-#本模型是利用textCNN来做的一个特征提取模型，用的anaconda的tensorflow环境下的pytorch1.5
+#本模型是利用textCNN来做的一个分类模型，输出赛果的概率，用的anaconda的tensorflow环境下的pytorch1.5
 #不确定是直接把状态作为conv的输入还是先经过一层embedding再进行conv
 #不过如果需要embedding的话那可能需要graphembedding
 #其实由于原始数据是一帧一帧dataframe连在一起，然后长短不一，所以其实可以看做一个视频分类的问题—————20201112
@@ -12,6 +12,7 @@
 #暂时用public的公共cid，因为如果用全部cid可能需要打乱全部10万个训练集的次序，就很麻烦，倒不如用大家都有的一直活着的公司数据————20201204
 #本程序的开发暂时使用D盘data文件夹下的developing中的数据，即几天的数据，用于开发时使用————20201204
 #可能需要给developing文件夹下的文件专门做一个lablelist————20201205
+#对于embedding的部分也可以尝试CNN嵌套的方式，即用CNN给frame降维，同时还能参与训练————20201206
 import os
 import torch
 from torch import nn
