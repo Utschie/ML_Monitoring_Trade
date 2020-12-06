@@ -23,6 +23,7 @@ import numpy as np
 import csv
 import random
 import re
+from sklearn.decomposition import TruncatedSVD
 
 with open('D:\\data\\cidlist_public.csv') as f:
     reader = csv.reader(f)
@@ -32,6 +33,7 @@ class BisaiDataset(Dataset):#数据预处理器
     def __init__(self,filepath):
         self.lablelist = pd.read_csv('D:\\data\\lablelist_developing.csv',index_col = 0)#比赛id及其对应赛果的列表
         self.filelist = [i+'\\'+k for i,j,k in os.walk(filepath) for k in k]#得到所有csv文件的路径列表
+        self.lables = {'win':1,'lose':2,'draw':3}
     
     def __getitem__(self, index):
         # TODO
@@ -46,6 +48,7 @@ class BisaiDataset(Dataset):#数据预处理器
                 data = self.csv2frame(data_path)
                 # 3. Return a data pair (e.g. image and label).
                 lable = self.lablelist.loc[bisai_id].result
+                lable = self.lables[lable]
                 i = True#如果没错则i=True，跳出循环
             except Exception:
                 self.filelist.remove(data_path)#如果出错，说明赛果里没有这场比赛，则在列表里去掉data_path
@@ -76,12 +79,38 @@ class BisaiDataset(Dataset):#数据预处理器
             k = list(frametimelist).index(i)#找到i在frametimelist里的位置,由于frametimelist是ndarray，所以需要转成list取index 
             framelist[k] = statematrix#在framelist同样的位置中给元素赋值
         framelist = map(data2framelist,frametimelist)
-        framelist = np.array(list(framelist))#让map函数运行并转成numpy数组
+        framelist = np.fromiter(framelist,dtype = np.float64)#让map函数运行并转成numpy数组
         frametimelist = np.array(frametimelist)
         return (framelist,frametimelist)#传出一个单帧和对应位置的元组,以及拥有三个值的分类变量result
     
 
 class TextCNN(nn.Module):
+    def __init__(self,kernel_sizes,):
+        super().__init__()
+        self.pool = GlobalMaxPool1d()
+        self.convs = nn.ModuleList() 
+    
+
+    def mrx2vec(self,framelist):#把截断奇异值的方法把矩阵变成向量(matrix2vec/img2vec)，传入：len(frametimelist)*(306*10),传出：len(frametimelist)*10
+        veclist = np.fromiter(map(self.tsvd,framelist),dtype = np.float64) 
+        return veclist
+
+    def tsvd(self,frame):
+        tsvd = TruncatedSVD(1)
+        if frame.shape[0] != 1:
+            newframe = tsvd.fit_transform(np.transpose(frame))#降维成（1,7）的矩阵
+        else:
+            pass
+        return newframe
+
+    
+    def forward(self, inputs):
+        embeddings = self.mrx2vec(inputs)
+
+
+
+
+
     
 
 
