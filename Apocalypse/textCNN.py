@@ -88,8 +88,24 @@ class BisaiDataset(Dataset):#数据预处理器
 class TextCNN(nn.Module):
     def __init__(self,kernel_sizes,):
         super().__init__()
-        self.pool = GlobalMaxPool1d()
-        self.convs = nn.ModuleList() 
+        '''
+        对于每一个样本，有以下思路：
+        1.用mrx2vec把每一帧从307*10降到1*10，然后得到的len(frametimelist)*10做为一张单通道图片，
+          再用二维卷积核(高为10，宽任意)把图片变成一个不定宽度的序列或图片，再用torch.nn.AdaptiveMaxPool1d/2d池化层转成相同长度序列
+          最后输入MLP
+        2.不使用mrx2vec,直接把307个公司视作307个通道(或者转置下把10个指标做10个通道)，用一维卷积核或满高度的二维卷积核把每一帧转成一个定长序列，然后再同上
+        3.               
+                        |---->mrx2vec-------->|                                                      
+                        |                     |                                                      
+          单场比赛------>              len(frametimelist)*10----->Conv2D---->len(frametimelist)*n---->AdaptiveMaxPool1d/2d--->定长序列---->MLP
+                        |                     |                        |                                        ^                          
+                        |---->Conv1D--------->|                        |--->len(frametimelist)*1----------------|
+                                                                                                                |------------------------>LSTM
+                                                                                                                                           
+        ''' 
+
+        self.convs = nn.ModuleList()
+
     
 
     def mrx2vec(self,framelist):#把截断奇异值的方法把矩阵变成向量(matrix2vec/img2vec)，传入：len(frametimelist)*(306*10),传出：len(frametimelist)*10
