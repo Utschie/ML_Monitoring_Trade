@@ -13,6 +13,8 @@
 #本程序的开发暂时使用D盘data文件夹下的developing中的数据，即几天的数据，用于开发时使用————20201204
 #可能需要给developing文件夹下的文件专门做一个lablelist————20201205
 #对于embedding的部分也可以尝试CNN嵌套的方式，即用CNN给frame降维，同时还能参与训练————20201206
+#如果使用cid_public可能导致有的比赛第一个frame为空，因为可能第一个出赔的公司不在public里————20201207（于是决定用cid_complete）
+#csv2frame是双层循环显得很慢，或许可能可以用merge并表的方式来提高速度————20201207
 import os
 import torch
 from torch import nn
@@ -26,13 +28,13 @@ import random
 import re
 from sklearn.decomposition import TruncatedSVD
 
-with open('D:\\data\\cidlist_public.csv') as f:
+with open('D:\\data\\cidlist_complete.csv') as f:
     reader = csv.reader(f)
     cidlist = [row[1] for row in reader]#得到cid对应表
 cidlist = list(map(float,cidlist))#把各个元素字符串类型转成浮点数类型
 class BisaiDataset(Dataset):#数据预处理器
     def __init__(self,filepath):
-        self.lablelist = pd.read_csv('D:\\data\\lablelist_developing.csv',index_col = 0)#比赛id及其对应赛果的列表
+        self.lablelist = pd.read_csv('D:\\data\\lablelist.csv',index_col = 0)#比赛id及其对应赛果的列表
         self.filelist = [i+'\\'+k for i,j,k in os.walk(filepath) for k in k]#得到所有csv文件的路径列表
         self.lables = {'win':1,'lose':2,'draw':3}
     
@@ -60,27 +62,23 @@ class BisaiDataset(Dataset):#数据预处理器
         # You should change 0 to the total size of your dataset.
         return len(self.filelist)
 
-
     def csv2frame(self,filepath):#给出单场比赛的csv文件路径，并转化成帧列表和对应变帧时间列表，以及比赛结果
         data = pd.read_csv(filepath)#读取文件
         data = data.drop(columns=['league','zhudui','kedui','companyname'])#去除非数字的列
         frametimelist=data.frametime.value_counts().sort_index(ascending=False).index#将frametime的值读取成列表
-        framelist = list(range(len(frametimelist)))#framelist为一个空列表,长度与frametimelist相同
-        def data2framelist(i):
+        framelist = np.zeros(len(frametimelist), dtype=np.ndarray)#framelist为一个空列表,长度与frametimelist相同
+        for i in frametimelist:
             state = data.groupby('frametime').get_group(i)#从第一次变盘开始得到当次转移
             state = np.array(state)#转成numpy多维数组
             #在填充成矩阵之前需要知道所有数据中到底有多少个cid
-            statematrix0=np.zeros((306,12))#因为cid_public里共有306个cid；去掉非数字列后有12列
-            def state2matrix(j):
+            statematrix=np.zeros((601,12),dtype=float)#因为cid_complete里共有306个cid；去掉非数字列后有12列
+            for j in state:
                 cid = j[1]#得到浮点数类型的cid
                 index = cidlist.index(cid)
-                statematrix0[index] = j#把对应矩阵那一行给它
-            statematrix = np.fromiter(map(state2matrix,state),dtype = np.float64)#用np.fromiter实现从map中
+                statematrix[index] = j#把对应矩阵那一行给它
             statematrix=np.delete(statematrix,(0,1), axis=-1)#去掉frametime和cid列
             k = list(frametimelist).index(i)#找到i在frametimelist里的位置,由于frametimelist是ndarray，所以需要转成list取index 
             framelist[k] = statematrix#在framelist同样的位置中给元素赋值
-        framelist = map(data2framelist,frametimelist)
-        framelist = np.fromiter(framelist,dtype = np.float64)#让map函数运行并转成numpy数组
         frametimelist = np.array(frametimelist)
         return (framelist,frametimelist)#传出一个单帧和对应位置的元组,以及拥有三个值的分类变量result
     
