@@ -67,6 +67,9 @@ class BisaiDataset(Dataset):#数据预处理器
         data = data.drop(columns=['league','zhudui','kedui','companyname'])#去除非数字的列
         frametimelist=data.frametime.value_counts().sort_index(ascending=False).index#将frametime的值读取成列表
         framelist = np.zeros(len(frametimelist), dtype=np.ndarray)#framelist为一个空列表,长度与frametimelist相同
+        '''
+        此处两个循环算法太慢，或许可以用merge并表的方式提高速度
+        '''
         for i in frametimelist:
             state = data.groupby('frametime').get_group(i)#从第一次变盘开始得到当次转移
             state = np.array(state)#转成numpy多维数组
