@@ -98,10 +98,10 @@ class TextCNN(nn.Module):
         3.               
                         |---->mrx2vec-------->|                                                      
                         |                     |                                                      
-          单场比赛------>              len(frametimelist)*10----->Conv2D---->len(frametimelist)*n---->AdaptiveMaxPool1d/2d--->定长序列---->MLP
+          单场比赛------>              len(frametimelist)*10----->|Conv2D|---->len(frametimelist)*n---->|AdaptiveMaxPool1d/2d|--->定长序列---->|MLP|
                         |                     |                        |                                        ^                          
                         |---->Conv1D--------->|                        |--->len(frametimelist)*1----------------|
-                                                                                                                |------------------------>LSTM
+                                                                                                                |------------------------>|LSTM|
                                                                                                                                            
         ''' 
 
@@ -110,7 +110,7 @@ class TextCNN(nn.Module):
     
 
     def mrx2vec(self,framelist):#把截断奇异值的方法把矩阵变成向量(matrix2vec/img2vec)，传入：len(frametimelist)*(306*10),传出：len(frametimelist)*10
-        veclist = np.fromiter(map(self.tsvd,framelist),dtype = np.float64) 
+        veclist = np.array(list(map(self.tsvd,framelist))).squeeze()
         return veclist
 
     def tsvd(self,frame):
