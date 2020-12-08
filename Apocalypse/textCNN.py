@@ -112,8 +112,8 @@ class TextCNN(nn.Module):
         #....Conv2d输出.....(batch_size,out_channels,img_heights-kernel_heights+1,img_width-kernel_width+1),Conv1d输出(batch_size,out_channels,seq_width-kernel_width+1)
         #如果输入的形状不符，或者定义的in_channels和数据的in_channels不符则会出Error
         #卷积层用64个核
-        self.conv1 = nn.Conv1d(in_channels = 10, out_channels = 64, kernel_size = 2).double()#把（10*时序长度）的张量，把每一行当做单通道，通过核宽为2的一维卷积核转成（1*时序长度-2+1）的序列
-        self.conv2 = nn.Conv1d(in_channels = 10, out_channels = 64, kernel_size = 4).double()#把核宽换成4
+        self.conv1 = nn.Conv1d(in_channels = 10, out_channels = 64, kernel_size = 3).double()#把（10*时序长度）的张量，把每一行当做单通道，通过核宽为2的一维卷积核转成（1*时序长度-2+1）的序列
+        self.conv2 = nn.Conv1d(in_channels = 10, out_channels = 50, kernel_size = 5).double()#把核宽换成4
         #self.conv3 = nn.Conv2d(in_channels = 1, out_channels = 10, kernel_size = (4,4)).double()#
         self.pool1 = nn.AdaptiveAvgPool1d(1)#对每个通道输出的2701里输出一个平均值
         #一维池化层，用在conv1上，输出一个序列，池化层不改变通道数，如果conv层输入10个通道，则池化层也是过滤出10个通道
@@ -143,7 +143,7 @@ class TextCNN(nn.Module):
         outputs1 = self.pool1(F.relu(self.conv1(embeddings)))
         outputs2 = self.pool2(F.relu(self.conv2(embeddings)))
         #outputs3 = self.pool3(F.relu(self.conv3(embeddings.unsqueeze(0))))
-        output = torch.cat([outputs1.squeeze(-1),outputs2.squeeze(-1)],1)#合并后去掉channel维，剩下(batch_size,seq_len)的向量，输入到MLP或LSTM
+        output = torch.cat([outputs1.squeeze(-1),outputs2.squeeze(-1)],1)#去掉最后一维后在channel维上合并，变成(batch_size,64+50)的张量，然后输入MLP
 
 
 
