@@ -15,6 +15,7 @@
 #对于embedding的部分也可以尝试CNN嵌套的方式，即用CNN给frame降维，同时还能参与训练————20201206
 #如果使用cid_public可能导致有的比赛第一个frame为空，因为可能第一个出赔的公司不在public里————20201207（于是决定用cid_complete）
 #csv2frame是双层循环显得很慢，或许可能可以用merge并表的方式来提高速度————20201207
+#需要考虑最后合并是用多个卷积核然后在通道层面合并还是只用一个卷积核，再池化出某个长度在最后一维合并————20201208
 import os
 import torch
 from torch import nn
