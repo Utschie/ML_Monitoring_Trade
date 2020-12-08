@@ -83,7 +83,8 @@ class BisaiDataset(Dataset):#数据预处理器
             k = list(frametimelist).index(i)#找到i在frametimelist里的位置,由于frametimelist是ndarray，所以需要转成list取index 
             framelist[k] = statematrix#在framelist同样的位置中给元素赋值
         frametimelist = np.array(frametimelist)
-        return (framelist,frametimelist)#传出一个单帧和对应位置的元组,以及拥有三个值的分类变量result
+
+        return framelist#传出一个单帧
     
 
 class TextCNN(nn.Module):
@@ -98,32 +99,46 @@ class TextCNN(nn.Module):
         3.               
                         |---->mrx2vec-------->|                                                      
                         |                     |                                                      
-          单场比赛------>              len(frametimelist)*10----->|Conv2D|---->len(frametimelist)*n---->|AdaptiveMaxPool1d/2d|--->定长序列---->|MLP|
+          单场比赛------>              10*len(frametimelist)----->|Conv2D|---->n*len(frametimelist)---->|AdaptiveMaxPool1d/2d|--->定长序列---->|MLP|
                         |                     |                        |                                        ^                          
-                        |---->Conv1D--------->|                        |--->len(frametimelist)*1----------------|
+                        |---->Conv1D--------->|                        |--->1*len(frametimelist)----------------|
                                                                                                                 |------------------------>|LSTM|
                                                                                                                                            
         ''' 
-
-        self.convs = nn.ModuleList()
+        #pytorch里的out_channels就等于tensorflow里的参数filters，即卷积核数量，每个卷积核输出一个通道
+        #Conv1d/2d的第0维都是batch_size,输入的第0维也得是batch_size,所以Conv2d输入/出形状是(batch_size,channels,height,width),Conv1d的输入/出形状是(batch_size,channels,width)
+        #如果输入的形状不符，或者定义的in_channels和数据的in_channels不符则会出Error
+        self.conv1 = nn.Conv1d(in_channels = 10, out_channels = 1, kernel_size = 2).double()#把（10*时序长度）的张量，把每一行当做单通道，通过核宽为2的一维卷积层转成（1*时序长度-2+1）的序列
+        self.conv2 = nn.Conv1d(in_channels = 10, out_channels = 1, kernel_size = 4).double()#把核宽换成4
+        #self.conv3 = nn.Conv2d(in_channels = 1, out_channels = 10, kernel_size = (4,4)).double()#
+        self.pool1 = nn.AdaptiveMaxPool1d(150)#一维池化层，用在conv1上，输出一个序列，池化层不改变通道数，如果conv层输入10个通道，则池化层也是过滤出10个通道
+        #一维池化层的输入/输出形状是(batch_size,channels,width)
+        self.pool2 = nn.AdaptiveMaxPool1d(150)
+        #self.pool3 = nn.AdaptiveMaxPool2d((1,150)),二维池化层的输入/输出形状是(batch_size,channels,height,width)
 
     
 
     def mrx2vec(self,framelist):#把截断奇异值的方法把矩阵变成向量(matrix2vec/img2vec)，传入：len(frametimelist)*(306*10),传出：len(frametimelist)*10
         veclist = np.array(list(map(self.tsvd,framelist))).squeeze()
-        return veclist
+        veclist = veclist.transpose()
+        vectensor = torch.from_numpy(veclist)#转成张量
+        return vectensor.unsqueeze(0)#传出一个形状为(1,10,序列长度)的张量，0维是batch_size维
 
     def tsvd(self,frame):
         tsvd = TruncatedSVD(1)
         if frame.shape[0] != 1:
-            newframe = tsvd.fit_transform(np.transpose(frame))#降维成（1,7）的矩阵
+            newframe = tsvd.fit_transform(np.transpose(frame))#降维成（1,10）的矩阵
         else:
             pass
         return newframe
 
     
-    def forward(self, inputs):
-        embeddings = self.mrx2vec(inputs)
+    def forward(self,inputs):
+        embeddings = self.mrx2vec(inputs)#输入一个framelist,传出一个(1,10,序列长度)的张量
+        outputs1 = self.pool1(F.relu(self.conv1(embeddings)))
+        outputs2 = self.pool2(F.relu(self.conv2(embeddings)))
+        #outputs3 = self.pool3(F.relu(self.conv3(embeddings.unsqueeze(0))))
+        output = torch.cat([outputs1,outputs2],-1).squeeze(1)#合并后去掉channel维，剩下(batch_size,seq_len)的向量，输入到MLP或LSTM
 
 
 
