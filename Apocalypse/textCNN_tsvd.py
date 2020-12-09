@@ -177,7 +177,7 @@ if __name__ == "__main__":
     root_path = 'D:\\data\\developing'
     dataset = BisaiDataset(root_path)
     print('数据集读取完成')
-    loader = DataLoader(dataset, 32, shuffle=True,collate_fn = my_collate)#没法设定num_workers=8或者任何大于0的数字，因为windows系统不可以
+    loader = DataLoader(dataset, 32, shuffle=True,collate_fn = my_collate,num_workers=4)#没法设定num_workers>0时无法在交互模式下使用，只能在命令行里跑
     print('dataloader准备完成')
     train_iter = iter(loader)#32个batch处理起来还是挺慢的
     net = TextCNN()
