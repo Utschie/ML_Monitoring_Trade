@@ -134,10 +134,10 @@ class TextCNN(nn.Module):
         self.conv1 = nn.Conv1d(in_channels = 10, out_channels = 64, kernel_size = 3,bias = False,groups=2).double()#把（10*时序长度）的张量，把每一行当做单通道，通过核宽为2的一维卷积核转成（1*时序长度-2+1）的序列
         self.conv2 = nn.Conv1d(in_channels = 10, out_channels = 50, kernel_size = 5,bias = False,groups=2).double()#把核宽换成4
         #self.conv3 = nn.Conv2d(in_channels = 1, out_channels = 10, kernel_size = (4,4)).double()#
-        self.pool1 = nn.MaxPool1d(1)#对每个通道输出的里输出一个最大值，需要用最大池化，来消除序列填充0的影响
+        self.pool1 = nn.AdaptiveMaxPool1d(1)#对每个通道输出的里输出一个最大值，需要用最大池化，来消除序列填充0的影响
         #一维池化层，用在conv1上，输出一个序列，池化层不改变通道数，如果conv层输入10个通道，则池化层也是过滤出10个通道
         #一维池化层的输入/输出形状是(batch_size,out_channels,width)
-        self.pool2 = nn.MaxPool1d(1)
+        self.pool2 = nn.AdaptiveMaxPool1d(1)#adaptiv的池化层无视序列长度均输出同一个
         #self.pool3 = nn.AdaptiveMaxPool2d((1,150)),二维池化层的输入/输出形状是(batch_size,out_channels,height,width)
         self.mlp = nn.Sequential(
             nn.Linear(64+50,120),
@@ -152,11 +152,11 @@ class TextCNN(nn.Module):
 
     
     def forward(self,inputs):
-        outputs1 = self.pool1(F.relu(self.conv1(inputs)))
-        outputs2 = self.pool2(F.relu(self.conv2(inputs)))
+        output1 = self.pool1(F.relu(self.conv1(inputs)))
+        output2 = self.pool2(F.relu(self.conv2(inputs)))
         #outputs3 = self.pool3(F.relu(self.conv3(embeddings.unsqueeze(0))))
-        outputs3 = torch.cat([outputs1.squeeze(-1),outputs2.squeeze(-1)],1)#去掉最后一维后在channel维上合并，变成(batch_size,64+50)的张量，然后输入MLP
-        output = self.mlp(outputs3)
+        output3 = torch.cat([output1.squeeze(-1),output2.squeeze(-1)],1)#去掉最后一维后在channel维上合并，变成(batch_size,64+50)的张量，然后输入MLP
+        output = self.mlp(output3)
         return output
 
 
