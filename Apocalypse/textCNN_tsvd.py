@@ -177,7 +177,7 @@ if __name__ == "__main__":
     train_iter = iter(loader)#32个batch处理起来还是挺慢的
     net = TextCNN()
     lr, num_epochs = 0.001, 5
-    optimizer = torch.optim.SGD(net.parameters(), lr=0.5)
+    optimizer = torch.optim.Adam(net.parameters(), lr=lr)
     loss = nn.CrossEntropyLoss()
     for epoch in range(1, num_epochs + 1):
         for x, y in train_iter:
