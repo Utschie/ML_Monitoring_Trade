@@ -67,7 +67,7 @@ class BisaiDataset(Dataset):#数据预处理器
         data = pd.read_csv(filepath)#读取文件
         data = data.drop(columns=['league','zhudui','kedui','companyname'])#去除非数字的列
         frametimelist=data.frametime.value_counts().sort_index(ascending=False).index#将frametime的值读取成列表
-        framelist = np.zeros(len(frametimelist), dtype=np.ndarray)#framelist为一个空列表,长度与frametimelist相同
+        framelist = np.zeros((len(frametimelist),601,10), dtype=float)#framelist为一个空列表,长度与frametimelist相同,一定要规定好具体形状和float类型，否则dataloader无法读取
         '''
         此处两个循环算法太慢，或许可以用merge并表的方式提高速度
         '''
@@ -85,7 +85,7 @@ class BisaiDataset(Dataset):#数据预处理器
             framelist[k] = statematrix#在framelist同样的位置中给元素赋值
         frametimelist = np.array(frametimelist)
 
-        return framelist#传出一个单帧
+        return framelist#传出一个帧列表,也可以把frametimelist一并传出来，此处暂不考虑位置参数的问题
     
 
 class TextCNN(nn.Module):
@@ -112,6 +112,7 @@ class TextCNN(nn.Module):
         #....Conv2d输出.....(batch_size,out_channels,img_heights-kernel_heights+1,img_width-kernel_width+1),Conv1d输出(batch_size,out_channels,seq_width-kernel_width+1)
         #如果输入的形状不符，或者定义的in_channels和数据的in_channels不符则会出Error
         #卷积层用64个核
+        
         self.conv1 = nn.Conv1d(in_channels = 10, out_channels = 64, kernel_size = 3).double()#把（10*时序长度）的张量，把每一行当做单通道，通过核宽为2的一维卷积核转成（1*时序长度-2+1）的序列
         self.conv2 = nn.Conv1d(in_channels = 10, out_channels = 50, kernel_size = 5).double()#把核宽换成4
         #self.conv3 = nn.Conv2d(in_channels = 1, out_channels = 10, kernel_size = (4,4)).double()#
@@ -120,6 +121,13 @@ class TextCNN(nn.Module):
         #一维池化层的输入/输出形状是(batch_size,out_channels,width)
         self.pool2 = nn.AdaptiveAvgPool1d(1)
         #self.pool3 = nn.AdaptiveMaxPool2d((1,150)),二维池化层的输入/输出形状是(batch_size,out_channels,height,width)
+        self.fc = nn.Sequential(
+            nn.Linear(64+50,120),
+            nn.Sigmoid(),
+            nn.Linear(120, 84),
+            nn.Sigmoid(),
+            nn.Linear(84, 10)
+        )
 
     
 
@@ -147,6 +155,29 @@ class TextCNN(nn.Module):
 
 
 
+
+
+
+
+
+if __name__ == "__main__":
+    root_path = 'D:\\data\\developing'
+    dataset = dataset = BisaiDataset(root_path)
+    train_iter = DataLoader(dataset,32, shuffle=True)#32个batch处理起来还是挺慢的
+    net = TextCNN(3)
+    lr, num_epochs = 0.001, 5
+    optimizer = torch.optim.SGD(net.parameters(), lr=0.5)
+    loss = nn.CrossEntropyLoss()
+    for epoch in range(1, num_epochs + 1):
+        for X, y in data_iter:
+            output = net(X)#dataiter的元素直接传给模型让它去算，而其每一次赋给X时，X是包含batch_size维的，所以
+            l = loss(output, y.view(-1, 1))
+            optimizer.zero_grad() # 梯度清零，等价于net.zero_grad()
+            l.backward()
+            optimizer.step()
+        print('epoch %d, loss: %f' % (epoch, l.item()))
+
+     
 
 
     
