@@ -16,6 +16,7 @@
 #如果使用cid_public可能导致有的比赛第一个frame为空，因为可能第一个出赔的公司不在public里————20201207（于是决定用cid_complete）
 #csv2frame是双层循环显得很慢，或许可能可以用merge并表的方式来提高速度————20201207
 #需要考虑最后合并是用多个卷积核然后在通道层面合并还是只用一个卷积核，再池化出某个长度在最后一维合并————20201208
+#现在就是想看看，之前必须padding填充才能放入conv的数据能不能消除0填充的影响
 import os
 import torch
 from torch import nn
@@ -105,7 +106,7 @@ class BisaiDataset(Dataset):#数据预处理器
     
 
 class TextCNN(nn.Module):
-    def __init__(self,kernel_sizes,):
+    def __init__(self):
         super().__init__()
         '''
         对于每一个样本，有以下思路：
@@ -138,12 +139,12 @@ class TextCNN(nn.Module):
         #一维池化层的输入/输出形状是(batch_size,out_channels,width)
         self.pool2 = nn.MaxPool1d(1)
         #self.pool3 = nn.AdaptiveMaxPool2d((1,150)),二维池化层的输入/输出形状是(batch_size,out_channels,height,width)
-        self.fc = nn.Sequential(
+        self.mlp = nn.Sequential(
             nn.Linear(64+50,120),
             nn.Sigmoid(),
             nn.Linear(120, 84),
             nn.Sigmoid(),
-            nn.Linear(84, 10)
+            nn.Linear(84, 3)#输出节点需要为3，即输出三个值，另外不需要softmax层，因为使用nn.CrossEntropyLoss()时就已经用了softmax
         )
 
     
@@ -154,8 +155,8 @@ class TextCNN(nn.Module):
         outputs1 = self.pool1(F.relu(self.conv1(inputs)))
         outputs2 = self.pool2(F.relu(self.conv2(inputs)))
         #outputs3 = self.pool3(F.relu(self.conv3(embeddings.unsqueeze(0))))
-        output = torch.cat([outputs1.squeeze(-1),outputs2.squeeze(-1)],1)#去掉最后一维后在channel维上合并，变成(batch_size,64+50)的张量，然后输入MLP
-
+        outputs3 = torch.cat([outputs1.squeeze(-1),outputs2.squeeze(-1)],1)#去掉最后一维后在channel维上合并，变成(batch_size,64+50)的张量，然后输入MLP
+        output = self.mlp(outputs3)
         return output
 
 
@@ -174,7 +175,7 @@ if __name__ == "__main__":
     dataset = BisaiDataset(root_path)
     loader = DataLoader(dataset, 32, shuffle=True,collate_fn = my_collate)#没法设定num_workers=8或者任何大于0的数字，因为windows系统不可以
     train_iter = iter(loader)#32个batch处理起来还是挺慢的
-    net = TextCNN(3)
+    net = TextCNN()
     lr, num_epochs = 0.001, 5
     optimizer = torch.optim.SGD(net.parameters(), lr=0.5)
     loss = nn.CrossEntropyLoss()
@@ -184,7 +185,7 @@ if __name__ == "__main__":
             #但是还需要使填充后的那些0不参与计算，所以可能需要制作掩码矩阵
             #或者需要时序全局最大池化层来消除填充的后果
             output = net(x)#x要求是一个固定shape的第0维是batch_size的张量，所以需要批量填充
-            l = loss(output, y.view(-1, 1))
+            l = loss(output, y)
             optimizer.zero_grad() # 梯度清零，等价于net.zero_grad()
             l.backward()
             optimizer.step()
