@@ -131,8 +131,8 @@ class TextCNN(nn.Module):
         #如果输入的形状不符，或者定义的in_channels和数据的in_channels不符则会出Error
         #卷积层的groups参数我也说不太清，但是会让参数减少，并且必须同时被输入和输出通道数整除
         #conv的卷积核是有bias偏置的，也就是说，即便所有元素为0，卷积输出也不为0，除非设置bias=False
-        self.conv1 = nn.Conv1d(in_channels = 10, out_channels = 64, kernel_size = 3,bias = False,groups=2).double()#把（10*时序长度）的张量，把每一行当做单通道，通过核宽为2的一维卷积核转成（1*时序长度-2+1）的序列
-        self.conv2 = nn.Conv1d(in_channels = 10, out_channels = 50, kernel_size = 5,bias = False,groups=2).double()#把核宽换成4
+        self.conv1 = nn.Conv1d(in_channels = 10, out_channels = 64, kernel_size = 3,bias = False,groups=2).float()#把（10*时序长度）的张量，把每一行当做单通道，通过核宽为2的一维卷积核转成（1*时序长度-2+1）的序列
+        self.conv2 = nn.Conv1d(in_channels = 10, out_channels = 50, kernel_size = 5,bias = False,groups=2).float()#把核宽换成4
         #self.conv3 = nn.Conv2d(in_channels = 1, out_channels = 10, kernel_size = (4,4)).double()#
         self.pool1 = nn.AdaptiveMaxPool1d(1)#对每个通道输出的里输出一个最大值，需要用最大池化，来消除序列填充0的影响
         #一维池化层，用在conv1上，输出一个序列，池化层不改变通道数，如果conv层输入10个通道，则池化层也是过滤出10个通道
