@@ -193,7 +193,7 @@ if __name__ == "__main__":
             x = pad_sequence(x,batch_first=True).permute(0,2,1).float().cuda()#由于序列长度不同所以，再先填充最后两维再转置，使得x满足conv1d的输入要求,另外数据类型要为float，否则报错，因为卷积层的权重是float型
             #但是还需要使填充后的那些0不参与计算，所以可能需要制作掩码矩阵
             #或者需要时序全局最大池化层来消除填充的后果
-            output = net(x)#x要求是一个固定shape的第0维是batch_size的张量，所以需要批量填充
+            output = net(x).cpu()#x要求是一个固定shape的第0维是batch_size的张量，所以需要批量填充,net和x放到GPU，output放到cpu
             l = loss(output, y)
             optimizer.zero_grad() # 梯度清零，等价于net.zero_grad()
             l.backward()
