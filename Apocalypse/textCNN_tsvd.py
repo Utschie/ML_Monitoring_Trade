@@ -167,7 +167,10 @@ def my_collate(batch):#由于默认下dataloader要求batch里的张量是相同
     target = torch.LongTensor(target)
     return data, target
 
-
+def get_parameter_number(model):#参数统计
+    total_num = sum(p.numel() for p in model.parameters())
+    trainable_num = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    return {'Total': total_num, 'Trainable': trainable_num}
 
 
 if __name__ == "__main__":
@@ -176,6 +179,7 @@ if __name__ == "__main__":
     loader = DataLoader(dataset, 32, shuffle=True,collate_fn = my_collate)#没法设定num_workers=8或者任何大于0的数字，因为windows系统不可以
     train_iter = iter(loader)#32个batch处理起来还是挺慢的
     net = TextCNN()
+    get_parameter_number(net)
     lr, num_epochs = 0.001, 5
     optimizer = torch.optim.Adam(net.parameters(), lr=lr)
     loss = nn.CrossEntropyLoss()
