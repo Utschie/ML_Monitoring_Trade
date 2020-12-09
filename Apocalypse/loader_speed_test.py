@@ -1,22 +1,3 @@
-#本模型是利用textCNN来做的一个分类模型，输出赛果的概率，用的anaconda的tensorflow环境下的pytorch1.5
-#不确定是直接把状态作为conv的输入还是先经过一层embedding再进行conv
-#不过如果需要embedding的话那可能需要graphembedding
-#其实由于原始数据是一帧一帧dataframe连在一起，然后长短不一，所以其实可以看做一个视频分类的问题—————20201112
-#可能会用到conv3D以及CRNN
-#中间空白的帧（即有的时候不变盘）或许可以用之前最近的那一次变盘填充，作为当前帧————20201112
-#Data_loader里准备数据部分里的循环部分或许可以用map方法提高一下效率，否则一个样本就几万次循环太慢了————20201127
-#20160701-20190224总共有66709场比赛，20141130-20160630共有37897场比赛，总共104606场比赛————20201203
-#本程序用的是20141130-20160630的37897场比赛做训练集，用20160701-20190224做验证集和测试集————20201203
-#最新的cidlist共有600个cid，其中有一些奇怪的3000开头的cid，还没想好要不要去掉————20201204
-#cidlist_complete是全部的cid文件，cid_publice是前后半段时间都共有的cid共有306个————20201204
-#暂时用public的公共cid，因为如果用全部cid可能需要打乱全部10万个训练集的次序，就很麻烦，倒不如用大家都有的一直活着的公司数据————20201204
-#本程序的开发暂时使用D盘data文件夹下的developing中的数据，即几天的数据，用于开发时使用————20201204
-#可能需要给developing文件夹下的文件专门做一个lablelist————20201205
-#对于embedding的部分也可以尝试CNN嵌套的方式，即用CNN给frame降维，同时还能参与训练————20201206
-#如果使用cid_public可能导致有的比赛第一个frame为空，因为可能第一个出赔的公司不在public里————20201207（于是决定用cid_complete）
-#csv2frame是双层循环显得很慢，或许可能可以用merge并表的方式来提高速度————20201207
-#需要考虑最后合并是用多个卷积核然后在通道层面合并还是只用一个卷积核，再池化出某个长度在最后一维合并————20201208
-#现在就是想看看，之前必须padding填充才能放入conv的数据能不能消除0填充的影响————20201209
 import os
 import torch
 from torch import nn
@@ -30,6 +11,7 @@ import random
 import re
 from sklearn.decomposition import TruncatedSVD
 from torch.nn.utils.rnn import pad_sequence#用来填充序列
+import time
 
 with open('D:\\data\\cidlist_complete.csv') as f:
     reader = csv.reader(f)
@@ -39,7 +21,7 @@ class BisaiDataset(Dataset):#数据预处理器
     def __init__(self,filepath):
         self.lablelist = pd.read_csv('D:\\data\\lablelist.csv',index_col = 0)#比赛id及其对应赛果的列表
         self.filelist = [i+'\\'+k for i,j,k in os.walk(filepath) for k in k]#得到所有csv文件的路径列表
-        self.lables = {'win':0,'lose':1,'draw':2}
+        self.lables = {'win':1,'lose':2,'draw':3}
     
     def __getitem__(self, index):
         # TODO
@@ -177,35 +159,19 @@ if __name__ == "__main__":
     root_path = 'D:\\data\\developing'
     dataset = BisaiDataset(root_path)
     print('数据集读取完成')
-    loader = DataLoader(dataset, 32, shuffle=True,collate_fn = my_collate,num_workers=4)#没法设定num_workers>0时无法在交互模式下使用，只能在命令行里跑
+    loader1 = DataLoader(dataset, 32, shuffle=True,collate_fn = my_collate,num_workers=1)#没法设定num_workers>0时无法在交互模式下使用，只能在命令行里跑
+    loader2 = DataLoader(dataset, 32, shuffle=True,collate_fn = my_collate,num_workers=2)
+    loader3 = DataLoader(dataset, 32, shuffle=True,collate_fn = my_collate,num_workers=4)
+    loader4 = DataLoader(dataset, 32, shuffle=True,collate_fn = my_collate,num_workers=8)
     print('dataloader准备完成')
-    train_iter = iter(loader)#32个batch处理起来还是挺慢的
-    net = TextCNN().cuda()
-    print('网络构建完成')
-    stat = get_parameter_number(net)
-    print(str(stat))
-    lr, num_epochs = 0.001, 5
-    optimizer = torch.optim.Adam(net.parameters(), lr=lr)
-    loss = nn.CrossEntropyLoss()
-    for epoch in range(1, num_epochs + 1):
-        counter = 0
-        for x, y in train_iter:
-            x = pad_sequence(x,batch_first=True).permute(0,2,1).float().cuda()#由于序列长度不同所以，再先填充最后两维再转置，使得x满足conv1d的输入要求,另外数据类型要为float，否则报错，因为卷积层的权重是float型
-            #但是还需要使填充后的那些0不参与计算，所以可能需要制作掩码矩阵
-            #或者需要时序全局最大池化层来消除填充的后果
-            output = net(x)#x要求是一个固定shape的第0维是batch_size的张量，所以需要批量填充
-            l = loss(output, y)
-            optimizer.zero_grad() # 梯度清零，等价于net.zero_grad()
-            l.backward()
-            optimizer.step()
-            counter+=1
-            print('第'+str(epoch)+'个epoch已学习'+str(counter)+'个batch')
-        print('epoch %d, loss: %f' % (epoch, l.item()))
-
-     
-
+    train_iter_list = [iter(loader1),iter(loader2),iter(loader3),iter(loader4)]
+    for i in train_iter_list:
+        start = time.time()
+        a = next(i)
+        end = time.time()
+        print('耗时'+str(end-start)+'秒')
 
     
 
-
-
+   
+    
