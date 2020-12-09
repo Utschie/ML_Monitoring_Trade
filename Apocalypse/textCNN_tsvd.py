@@ -176,14 +176,19 @@ def get_parameter_number(model):#参数统计
 if __name__ == "__main__":
     root_path = 'D:\\data\\developing'
     dataset = BisaiDataset(root_path)
+    print('数据集读取完成')
     loader = DataLoader(dataset, 32, shuffle=True,collate_fn = my_collate)#没法设定num_workers=8或者任何大于0的数字，因为windows系统不可以
+    print('dataloader准备完成')
     train_iter = iter(loader)#32个batch处理起来还是挺慢的
     net = TextCNN()
-    get_parameter_number(net)
+    print('网络构建完成')
+    stat = get_parameter_number(net)
+    print(str(stat))
     lr, num_epochs = 0.001, 5
     optimizer = torch.optim.Adam(net.parameters(), lr=lr)
     loss = nn.CrossEntropyLoss()
     for epoch in range(1, num_epochs + 1):
+        counter = 0
         for x, y in train_iter:
             x = pad_sequence(x,batch_first=True).permute(0,2,1)#由于序列长度不同所以，再先填充最后两维再转置，使得x满足conv1d的输入要求
             #但是还需要使填充后的那些0不参与计算，所以可能需要制作掩码矩阵
@@ -193,6 +198,8 @@ if __name__ == "__main__":
             optimizer.zero_grad() # 梯度清零，等价于net.zero_grad()
             l.backward()
             optimizer.step()
+            counter+=1
+            print('第'+str(epoch)+'个epoch已学习'+str(counter)+'个batch')
         print('epoch %d, loss: %f' % (epoch, l.item()))
 
      
