@@ -122,20 +122,21 @@ class TextCNN(nn.Module):
                                                                                                                 |------------------------>|LSTM|
                                                                                                                                            
         ''' 
-        #pytorch里的out_channels就等于tensorflow里的参数filters，即卷积核数量，每个卷积核输出一个通道
+        #in_channels=10,意味着每个channel对应一个卷积核，然后这10个卷积核对10个通道过一遍后相加得到一个序列，叫做一个输出通道
+        #out_channels=64,就是有64个独立的这样的操作
         #Conv1d/2d的第0维都是batch_size,输入的第0维也得是batch_size,
         #所以Conv2d输入形状是(batch_size,in_channels,img_height,img_width),Conv1d的输入形状是(batch_size,in_channels,seq_width)
         #....Conv2d输出.....(batch_size,out_channels,img_heights-kernel_heights+1,img_width-kernel_width+1),Conv1d输出(batch_size,out_channels,seq_width-kernel_width+1)
         #如果输入的形状不符，或者定义的in_channels和数据的in_channels不符则会出Error
-        #卷积层用64个核
-        
-        self.conv1 = nn.Conv1d(in_channels = 10, out_channels = 64, kernel_size = 3).double()#把（10*时序长度）的张量，把每一行当做单通道，通过核宽为2的一维卷积核转成（1*时序长度-2+1）的序列
-        self.conv2 = nn.Conv1d(in_channels = 10, out_channels = 50, kernel_size = 5).double()#把核宽换成4
+        #卷积层的groups参数我也说不太清，但是会让参数减少，并且必须同时被输入和输出通道数整除
+        #conv的卷积核是有bias偏置的，也就是说，即便所有元素为0，卷积输出也不为0，除非设置bias=False
+        self.conv1 = nn.Conv1d(in_channels = 10, out_channels = 64, kernel_size = 3,bias = False,groups=2).double()#把（10*时序长度）的张量，把每一行当做单通道，通过核宽为2的一维卷积核转成（1*时序长度-2+1）的序列
+        self.conv2 = nn.Conv1d(in_channels = 10, out_channels = 50, kernel_size = 5,bias = False,groups=2).double()#把核宽换成4
         #self.conv3 = nn.Conv2d(in_channels = 1, out_channels = 10, kernel_size = (4,4)).double()#
-        self.pool1 = nn.AdaptiveAvgPool1d(1)#对每个通道输出的2701里输出一个平均值
+        self.pool1 = nn.MaxPool1d(1)#对每个通道输出的里输出一个最大值，需要用最大池化，来消除序列填充0的影响
         #一维池化层，用在conv1上，输出一个序列，池化层不改变通道数，如果conv层输入10个通道，则池化层也是过滤出10个通道
         #一维池化层的输入/输出形状是(batch_size,out_channels,width)
-        self.pool2 = nn.AdaptiveAvgPool1d(1)
+        self.pool2 = nn.MaxPool1d(1)
         #self.pool3 = nn.AdaptiveMaxPool2d((1,150)),二维池化层的输入/输出形状是(batch_size,out_channels,height,width)
         self.fc = nn.Sequential(
             nn.Linear(64+50,120),
@@ -170,8 +171,8 @@ def my_collate(batch):#由于默认下dataloader要求batch里的张量是相同
 
 if __name__ == "__main__":
     root_path = 'D:\\data\\developing'
-    dataset = dataset = BisaiDataset(root_path)
-    loader = DataLoader(dataset, 32, shuffle=True,collate_fn = my_collate)#num_workers是开8个进程读取数据
+    dataset = BisaiDataset(root_path)
+    loader = DataLoader(dataset, 32, shuffle=True,collate_fn = my_collate)#没法设定num_workers=8或者任何大于0的数字，因为windows系统不可以
     train_iter = iter(loader)#32个batch处理起来还是挺慢的
     net = TextCNN(3)
     lr, num_epochs = 0.001, 5
