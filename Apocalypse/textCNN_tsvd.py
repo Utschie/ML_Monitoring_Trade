@@ -28,6 +28,7 @@ import csv
 import random
 import re
 from sklearn.decomposition import TruncatedSVD
+from torch.nn.utils.rnn import pad_sequence#用来填充序列
 
 with open('D:\\data\\cidlist_complete.csv') as f:
     reader = csv.reader(f)
@@ -84,8 +85,23 @@ class BisaiDataset(Dataset):#数据预处理器
             k = list(frametimelist).index(i)#找到i在frametimelist里的位置,由于frametimelist是ndarray，所以需要转成list取index 
             framelist[k] = statematrix#在framelist同样的位置中给元素赋值
         frametimelist = np.array(frametimelist)
+        vectensor = self.mrx2vec(framelist)
+        return vectensor#传出一个帧列表,也可以把frametimelist一并传出来，此处暂不考虑位置参数的问题
+    
+    def tsvd(self,frame):
+        tsvd = TruncatedSVD(1)
+        if frame.shape[0] != 1:
+            newframe = tsvd.fit_transform(np.transpose(frame))#降维成（1,10）的矩阵
+        else:
+            pass
+        return newframe
+    
+    def mrx2vec(self,framelist):#把截断奇异值的方法把矩阵变成向量(matrix2vec/img2vec)，传入：len(frametimelist)*(306*10),传出：len(frametimelist)*10
+        veclist = np.array(list(map(self.tsvd,framelist))).squeeze()
+        #veclist = veclist.transpose()
+        vectensor = torch.from_numpy(veclist)#转成张量
+        return vectensor#传出一个形状为(1,序列长度,10)的张量，因为后面传入模型之前，还需要做一下pad，需要做一下0维是batch_size维
 
-        return framelist#传出一个帧列表,也可以把frametimelist一并传出来，此处暂不考虑位置参数的问题
     
 
 class TextCNN(nn.Module):
@@ -131,31 +147,23 @@ class TextCNN(nn.Module):
 
     
 
-    def mrx2vec(self,framelist):#把截断奇异值的方法把矩阵变成向量(matrix2vec/img2vec)，传入：len(frametimelist)*(306*10),传出：len(frametimelist)*10
-        veclist = np.array(list(map(self.tsvd,framelist))).squeeze()
-        veclist = veclist.transpose()
-        vectensor = torch.from_numpy(veclist)#转成张量
-        return vectensor.unsqueeze(0)#传出一个形状为(1,10,序列长度)的张量，0维是batch_size维
-
-    def tsvd(self,frame):
-        tsvd = TruncatedSVD(1)
-        if frame.shape[0] != 1:
-            newframe = tsvd.fit_transform(np.transpose(frame))#降维成（1,10）的矩阵
-        else:
-            pass
-        return newframe
 
     
     def forward(self,inputs):
-        embeddings = self.mrx2vec(inputs)#输入一个framelist,传出一个(1,10,序列长度)的张量
-        outputs1 = self.pool1(F.relu(self.conv1(embeddings)))
-        outputs2 = self.pool2(F.relu(self.conv2(embeddings)))
+        outputs1 = self.pool1(F.relu(self.conv1(inputs)))
+        outputs2 = self.pool2(F.relu(self.conv2(inputs)))
         #outputs3 = self.pool3(F.relu(self.conv3(embeddings.unsqueeze(0))))
         output = torch.cat([outputs1.squeeze(-1),outputs2.squeeze(-1)],1)#去掉最后一维后在channel维上合并，变成(batch_size,64+50)的张量，然后输入MLP
 
+        return output
 
 
 
+def my_collate(batch):#由于默认下dataloader要求batch里的张量是相同尺寸，需要自己定义一个collate函数才能允许不同尺寸
+    data = [item[0] for item in batch]
+    target = [item[1] for item in batch]
+    target = torch.LongTensor(target)
+    return data, target
 
 
 
@@ -163,14 +171,16 @@ class TextCNN(nn.Module):
 if __name__ == "__main__":
     root_path = 'D:\\data\\developing'
     dataset = dataset = BisaiDataset(root_path)
-    train_iter = DataLoader(dataset,32, shuffle=True)#32个batch处理起来还是挺慢的
+    loader = DataLoader(dataset, 32, shuffle=True,collate_fn = my_collate)#num_workers是开8个进程读取数据
+    train_iter = iter(loader)#32个batch处理起来还是挺慢的
     net = TextCNN(3)
     lr, num_epochs = 0.001, 5
     optimizer = torch.optim.SGD(net.parameters(), lr=0.5)
     loss = nn.CrossEntropyLoss()
     for epoch in range(1, num_epochs + 1):
-        for X, y in data_iter:
-            output = net(X)#dataiter的元素直接传给模型让它去算，而其每一次赋给X时，X是包含batch_size维的，所以
+        for x, y in train_iter:
+            x = pad_sequence(x,batch_first=True).permute(0,2,1)#由于序列长度不同所以，再先填充最后两维再转置，使得x满足conv1d的输入要求
+            output = net(x)#x要求是一个固定shape的第0维是batch_size的张量，所以需要批量填充
             l = loss(output, y.view(-1, 1))
             optimizer.zero_grad() # 梯度清零，等价于net.zero_grad()
             l.backward()
