@@ -71,7 +71,7 @@ class BisaiDataset(Dataset):#数据预处理器
         frametimelist=data.frametime.value_counts().sort_index(ascending=False).index#将frametime的值读取成列表
         framelist = np.zeros((len(frametimelist),601,10), dtype=float)#framelist为一个空列表,长度与frametimelist相同,一定要规定好具体形状和float类型，否则dataloader无法读取
         '''
-        此处两个循环算法太慢，或许可以用merge并表的方式提高速度
+        此处两个循环算法太慢，把内层循环改成用pandas的update速度更慢，我严重怀疑可能就是程序里的pandas部分把程序变慢了。应该尝试用numpy把这段程序加速
         '''
         for i in frametimelist:
             state = data.groupby('frametime').get_group(i)#从第一次变盘开始得到当次转移
