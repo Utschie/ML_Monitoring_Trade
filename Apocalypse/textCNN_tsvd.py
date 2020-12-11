@@ -19,6 +19,7 @@
 #现在就是想看看，之前必须padding填充才能放入conv的数据能不能消除0填充的影响————20201209
 #为了加速循环需要使用numba，而本版本3.5.6的python需要先pip install llvmlite==0.29.0，然后pip install numba==0.45.0————20201209
 #完全抛弃pandas，稍微把tvsd函数改一下之后，数据预处理速度从109秒降到了10秒————20201211
+#D盘里的同名文件证明，batch_size=32是可以跑的，在num_workers=4的条件下，cpu利用率在85%，内存和显存占用小到可忽略不计————20201211
 import os
 import torch
 from torch import nn
@@ -180,6 +181,7 @@ if __name__ == "__main__":
     dataset = BisaiDataset(root_path)
     print('数据集读取完成')
     loader = DataLoader(dataset, 32, shuffle=True,collate_fn = my_collate,num_workers=4)#没法设定num_workers>0时无法在交互模式下使用，只能在命令行里跑
+    #num_workers的作用在于同时处理几个batch，num_workers=4意味着四个线程分别处理4个batch,共128个文件，然后基本上是每4个结果同时出
     print('dataloader准备完成')
     train_iter = iter(loader)#32个batch处理起来还是挺慢的
     net = TextCNN().cuda()
