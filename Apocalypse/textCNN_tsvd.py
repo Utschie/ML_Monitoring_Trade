@@ -17,6 +17,8 @@
 #csv2frame是双层循环显得很慢，或许可能可以用merge并表的方式来提高速度————20201207
 #需要考虑最后合并是用多个卷积核然后在通道层面合并还是只用一个卷积核，再池化出某个长度在最后一维合并————20201208
 #现在就是想看看，之前必须padding填充才能放入conv的数据能不能消除0填充的影响————20201209
+#为了加速循环需要使用numba，而本版本3.5.6的python需要先pip install llvmlite==0.29.0，然后pip install numba==0.45.0————20201209
+#完全抛弃pandas之后，数据预处理速度从102秒降到了4秒————20201211
 import os
 import torch
 from torch import nn
@@ -71,7 +73,7 @@ class BisaiDataset(Dataset):#数据预处理器
         frametimelist=data.frametime.value_counts().sort_index(ascending=False).index#将frametime的值读取成列表
         framelist = np.zeros((len(frametimelist),601,10), dtype=float)#framelist为一个空列表,长度与frametimelist相同,一定要规定好具体形状和float类型，否则dataloader无法读取
         '''
-        此处两个循环算法太慢，把内层循环改成用pandas的update速度更慢，我严重怀疑可能就是程序里的pandas部分把程序变慢了。应该尝试用numpy把这段程序加速
+        此处两个循环算法太慢，把内层循环改成用pandas的update速度更慢。应该尝试用numpy和numba把这段程序加速
         '''
         for i in frametimelist:
             state = data.groupby('frametime').get_group(i)#从第一次变盘开始得到当次转移
