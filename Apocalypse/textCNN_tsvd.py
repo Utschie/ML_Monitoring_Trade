@@ -20,6 +20,7 @@
 #为了加速循环需要使用numba，而本版本3.5.6的python需要先pip install llvmlite==0.29.0，然后pip install numba==0.45.0————20201209
 #完全抛弃pandas，稍微把tvsd函数改一下之后，数据预处理速度从109秒降到了10秒————20201211
 #D盘里的同名文件证明，batch_size=32是可以跑的，在num_workers=4的条件下，cpu利用率在85%，内存和显存占用小到可忽略不计————20201211
+#batch_size=32，num_workers=4的条件下，差不多620秒1个epoch=200场比赛，那么10万场比赛则需要31万秒=5167分钟=86小时=4天跑完一个epoch————20201211
 import os
 import torch
 from torch import nn
