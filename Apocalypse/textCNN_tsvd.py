@@ -21,6 +21,7 @@
 #完全抛弃pandas，稍微把tvsd函数改一下之后，数据预处理速度从109秒降到了10秒————20201211
 #D盘里的同名文件证明，batch_size=32是可以跑的，在num_workers=4的条件下，cpu利用率在85%，内存和显存占用小到可忽略不计————20201211
 #batch_size=32，num_workers=4的条件下，差不多620秒1个epoch=200场比赛，那么10万场比赛则需要31万秒=5167分钟=86小时=4天跑完一个epoch————20201211
+#使用了cython调用numpy也没有加成速，因为cython也是调用了numpy，内层不用numpy全用原生循环更慢了，如果再想提速恐怕只能直接写C了————20201212
 import os
 import torch
 from torch import nn
