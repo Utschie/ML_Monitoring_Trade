@@ -35,6 +35,7 @@ import random
 import re
 from sklearn.decomposition import TruncatedSVD
 from torch.nn.utils.rnn import pad_sequence#用来填充序列
+import time
 
 with open('D:\\data\\cidlist_complete.csv') as f:
     reader = csv.reader(f)
@@ -43,27 +44,21 @@ cidlist = list(map(float,cidlist))#把各个元素字符串类型转成浮点数
 class BisaiDataset(Dataset):#数据预处理器
     def __init__(self,filepath):
         self.lablelist = pd.read_csv('D:\\data\\lablelist.csv',index_col = 0)#比赛id及其对应赛果的列表
-        self.filelist = [i+'\\'+k for i,j,k in os.walk(filepath) for k in k]#得到所有csv文件的路径列表
-        self.lables = {'win':0,'lose':1,'draw':2}
+        self.filelist0 = [i+'\\'+k for i,j,k in os.walk(filepath) for k in k]#得到所有csv文件的路径列表
+        self.filelist = [data_path for data_path in self.filelist0 if int(re.findall(r'\\(\d*?).csv',data_path)[0]) in  self.lablelist.index]#只保留有赛果的文件路径
+        self.lables = {'win':0,'lose':1,'draw':2}#分类问题要从0开始编号，否则出错
     
     def __getitem__(self, index):
         # TODO
-        i = False#用来标记函数是否成功的布尔变量
         # 1. Read one data from file (e.g. using numpy.fromfile, PIL.Image.open).
         #这里需要注意的是，第一步：read one data，是一个dat
-        while i == False:
-            try:
-                data_path = self.filelist[index]
-                bisai_id = int(re.findall(r'\\(\d*?).csv',data_path)[0])
-                # 2. Preprocess the data (e.g. torchvision.Transform).
-                data = self.csv2frame(data_path)
-                # 3. Return a data pair (e.g. image and label).
-                lable = self.lablelist.loc[bisai_id].result
-                lable = self.lables[lable]
-                i = True#如果没错则i=True，跳出循环
-            except Exception:
-                self.filelist.remove(data_path)#如果出错，说明赛果里没有这场比赛，则在列表里去掉data_path
-                continue#然后从try处再开始
+        data_path = self.filelist[index]
+        bisai_id = int(re.findall(r'\\(\d*?).csv',data_path)[0])
+        # 2. Preprocess the data (e.g. torchvision.Transform).
+        data = self.csv2frame(data_path)
+        # 3. Return a data pair (e.g. image and label).
+        lable = self.lablelist.loc[bisai_id].result
+        lable = self.lables[lable]
         return data,lable      
        
     def __len__(self):
@@ -74,22 +69,18 @@ class BisaiDataset(Dataset):#数据预处理器
         data = pd.read_csv(filepath)#读取文件
         data = data.drop(columns=['league','zhudui','kedui','companyname'])#去除非数字的列
         frametimelist=data.frametime.value_counts().sort_index(ascending=False).index#将frametime的值读取成列表
-        framelist = np.zeros((len(frametimelist),601,10), dtype=float)#framelist为一个空列表,长度与frametimelist相同,一定要规定好具体形状和float类型，否则dataloader无法读取
+        framelist =list()#framelist为一个空列表,长度与frametimelist相同,一定要规定好具体形状和float类型，否则dataloader无法读取
         '''
-        此处两个循环算法太慢，把内层循环改成用pandas的update速度更慢。应该尝试用numpy和numba把这段程序加速
+        此处两个循环算法太慢，用pandas更慢，完全抛弃pandas后，数据处理速度从109秒降到了10秒，降到10秒后cpu利用率20%，再往上提也提不上去了，可能需要C++或C来写了
         '''
+        new_data = np.array(data)
+        lables = new_data[:,0]
         for i in frametimelist:
-            state = data.groupby('frametime').get_group(i)#从第一次变盘开始得到当次转移
-            state = np.array(state)#转成numpy多维数组
+            state = new_data[lables==i]#从第一次变盘开始得到当次转移
+            #state = np.array(state)#不必转成numpy多维数组，因为已经是了
+            state = np.delete(state,(0,1), axis=-1)#去掉frametime和cid
             #在填充成矩阵之前需要知道所有数据中到底有多少个cid
-            statematrix=np.zeros((601,12),dtype=float)#因为cid_complete里共有306个cid；去掉非数字列后有12列
-            for j in state:
-                cid = j[1]#得到浮点数类型的cid
-                index = cidlist.index(cid)
-                statematrix[index] = j#把对应矩阵那一行给它
-            statematrix=np.delete(statematrix,(0,1), axis=-1)#去掉frametime和cid列
-            k = list(frametimelist).index(i)#找到i在frametimelist里的位置,由于frametimelist是ndarray，所以需要转成list取index 
-            framelist[k] = statematrix#在framelist同样的位置中给元素赋值
+            framelist.append(state)
         frametimelist = np.array(frametimelist)
         vectensor = self.mrx2vec(framelist)
         return vectensor#传出一个帧列表,也可以把frametimelist一并传出来，此处暂不考虑位置参数的问题
@@ -99,11 +90,11 @@ class BisaiDataset(Dataset):#数据预处理器
         if frame.shape[0] != 1:
             newframe = tsvd.fit_transform(np.transpose(frame))#降维成（1,10）的矩阵
         else:
-            pass
+            return frame.reshape((10,1))#第一行需要reshape一下
         return newframe
     
-    def mrx2vec(self,framelist):#把截断奇异值的方法把矩阵变成向量(matrix2vec/img2vec)，传入：len(frametimelist)*(306*10),传出：len(frametimelist)*10
-        veclist = np.array(list(map(self.tsvd,framelist))).squeeze()
+    def mrx2vec(self,flist):#把截断奇异值的方法把矩阵变成向量(matrix2vec/img2vec)，传入：len(frametimelist)*(306*10),传出：len(frametimelist)*10
+        veclist = np.array(list(map(self.tsvd,flist))).squeeze()
         #veclist = veclist.transpose()
         vectensor = torch.from_numpy(veclist)#转成张量
         return vectensor#传出一个形状为(1,序列长度,10)的张量，因为后面传入模型之前，还需要做一下pad_sequence(0维是batch_size维)
@@ -142,7 +133,7 @@ class TextCNN(nn.Module):
         self.pool1 = nn.AdaptiveMaxPool1d(1)#对每个通道输出的里输出一个最大值，需要用最大池化，来消除序列填充0的影响
         #一维池化层，用在conv1上，输出一个序列，池化层不改变通道数，如果conv层输入10个通道，则池化层也是过滤出10个通道
         #一维池化层的输入/输出形状是(batch_size,out_channels,width)
-        self.pool2 = nn.AdaptiveMaxPool1d(1)#adaptiv的池化层无视序列长度均输出同一个
+        self.pool2 = nn.AdaptiveMaxPool1d(1)
         #self.pool3 = nn.AdaptiveMaxPool2d((1,150)),二维池化层的输入/输出形状是(batch_size,out_channels,height,width)
         self.mlp = nn.Sequential(
             nn.Linear(64+50,120),
@@ -157,11 +148,11 @@ class TextCNN(nn.Module):
 
     
     def forward(self,inputs):
-        output1 = self.pool1(F.relu(self.conv1(inputs)))
-        output2 = self.pool2(F.relu(self.conv2(inputs)))
+        outputs1 = self.pool1(F.relu(self.conv1(inputs)))
+        outputs2 = self.pool2(F.relu(self.conv2(inputs)))
         #outputs3 = self.pool3(F.relu(self.conv3(embeddings.unsqueeze(0))))
-        output3 = torch.cat([output1.squeeze(-1),output2.squeeze(-1)],1)#去掉最后一维后在channel维上合并，变成(batch_size,64+50)的张量，然后输入MLP
-        output = self.mlp(output3)
+        outputs3 = torch.cat([outputs1.squeeze(-1),outputs2.squeeze(-1)],1)#去掉最后一维后在channel维上合并，变成(batch_size,64+50)的张量，然后输入MLP
+        output = self.mlp(outputs3)
         return output
 
 
@@ -182,10 +173,8 @@ if __name__ == "__main__":
     root_path = 'D:\\data\\developing'
     dataset = BisaiDataset(root_path)
     print('数据集读取完成')
-    loader = DataLoader(dataset, 32, shuffle=True,collate_fn = my_collate,num_workers=4)#没法设定num_workers>0时无法在交互模式下使用，只能在命令行里跑
-    #num_workers的作用在于同时处理几个batch，num_workers=4意味着四个线程分别处理4个batch,共128个文件，然后基本上是每4个结果同时出
+    loader = DataLoader(dataset, 32, shuffle=True,collate_fn = my_collate,num_workers=4)#num_workers>0情况下无法在交互模式下运行
     print('dataloader准备完成')
-    train_iter = iter(loader)#32个batch处理起来还是挺慢的
     net = TextCNN().cuda()
     print('网络构建完成')
     stat = get_parameter_number(net)
@@ -195,23 +184,24 @@ if __name__ == "__main__":
     loss = nn.CrossEntropyLoss()
     for epoch in range(1, num_epochs + 1):
         counter = 0
-        for x, y in train_iter:
-            x = pad_sequence(x,batch_first=True).permute(0,2,1).float().cuda()#由于序列长度不同所以，再先填充最后两维再转置，使得x满足conv1d的输入要求,另外数据类型要为float，否则报错，因为卷积层的权重是float型
+        start = time.time()
+        for x, y in iter(loader):
+            x = pad_sequence(x,batch_first=True).permute(0,2,1).float().cuda()#由于序列长度不同所以，再先填充最后两维再转置，使得x满足conv1d的输入要求
             #但是还需要使填充后的那些0不参与计算，所以可能需要制作掩码矩阵
             #或者需要时序全局最大池化层来消除填充的后果
-            output = net(x).cpu()#x要求是一个固定shape的第0维是batch_size的张量，所以需要批量填充,net和x放到GPU，output放到cpu
+            output = net(x).cpu()#x要求是一个固定shape的第0维是batch_size的张量，所以需要批量填充
             l = loss(output, y)
             optimizer.zero_grad() # 梯度清零，等价于net.zero_grad()
             l.backward()
             optimizer.step()
+            end = time.time()
+            train_period = end-start
             counter+=1
-            print('第'+str(epoch)+'个epoch已学习'+str(counter)+'个batch')
+            print('第'+str(epoch)+'个epoch已学习'+str(counter)+'个batch,'+'用时'+str(train_period)+'秒')
+            print('本batch的赛果为'+str(y))
+            print('filelist长度为'+str(len(dataset.filelist)))
+            start = time.time()
         print('epoch %d, loss: %f' % (epoch, l.item()))
 
      
-
-
-    
-
-
 
