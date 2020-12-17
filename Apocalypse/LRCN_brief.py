@@ -161,8 +161,7 @@ class ConvLstm(nn.Module):
         conv_output = self.conv_net(conv_input)#得到第0维为batch_size的输出
         lstm_input = conv_output.reshape((32,500,200))#再按batch_size拆开
         lstm_output = self.lstm_net(lstm_input)
-
-        return self.net(lstm_output)
+        return lstm_output
 
 
 
@@ -184,7 +183,6 @@ if __name__ == "__main__":
     print(str(stat1))
     lr, num_epochs = 0.001, 5
     optimizer= torch.optim.Adam(net.parameters(), lr=lr)
-
     loss = nn.CrossEntropyLoss()
     for epoch in range(1, num_epochs + 1):
         counter = 0
@@ -196,16 +194,9 @@ if __name__ == "__main__":
             conv_output = conv_net(x)#得到第0维为batch_size的输出
             lstm_input = conv_output.split(len_list,0)#再按照各个batch的seq_len再划分开
             '''
-            
-            
-            
-            
-            
-            
-            x = pad_sequence(x,batch_first=True).permute(0,2,1).float().cuda()#由于序列长度不同所以，再先填充最后两维再转置，使得x满足conv1d的输入要求
             #但是还需要使填充后的那些0不参与计算，所以可能需要制作掩码矩阵
             #或者需要时序全局最大池化层来消除填充的后果
-            output = net(x).cpu()#x要求是一个固定shape的第0维是batch_size的张量，所以需要批量填充
+            output = net(x).cuda()#x要求是一个固定shape的第0维是batch_size的张量，所以需要批量填充
             l = loss(output, y)
             optimizer.zero_grad() # 梯度清零，等价于net.zero_grad()
             l.backward()
