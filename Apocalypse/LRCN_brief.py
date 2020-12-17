@@ -3,7 +3,7 @@
 #这个10通道的1维序列通过CNN（因为没有时间联系）提取特征后，再输入到LSTM里
 #这里保留了CNN最后的全连接层，并把输出数改为300，googlenet改成1d后，参数变成370多万————20201217
 #lstm需要把hidden_size降到500，也就是说，在预处理数据时，对序列长度>500的序列应该进行帧抽取————20201217
-#本模型暂时采用保留头尾的纯均匀采样，之后如果可能再采取tsn模型的段共识函数的方法————20201217
+#本模型暂时采用随机采样，之后如果可能再采取tsn模型的段共识函数的方法————20201217
 #其实还有一种可能，就是完全弃用RNN，只使用CNN进行做分类模型，然后再根据每场比赛已经走过的帧加权投票————20201217
 #预处理数据是把所有数据都变成500长度，不足的用0矩阵在序列前填充————20201217
 #经过目前的改造，总模型参数423万，其中conv模型142万，lstm模型281万————20201217
@@ -146,11 +146,12 @@ class Lstm(nn.Module):#把CNN的结果输入LSTM里
                                 hidden_size=500,#选择对帧进行保留首尾的均匀截断采样
                                 num_layers=1,#暂时就只有一层
                                 bidirectional=True)
-        self.decoder = nn.Linear(1000, 3)#把LSTM的输出
+        self.decoder = nn.Linear(2000, 3)#把LSTM的输出
 
     def forward(self,inputs):
         output, _= self.encoder(inputs.permute(1,0,2))#inputs需要转置一下再输入lstm层，因为pytorch要求第0维为长度，第二维才是batch_size
-        return self.decoder(output[-1])#把最后一个时间步的输出输入MLP
+        encoding = torch.cat((output[0], output[-1]), -1)#双向的lstm，就把两个都放进去
+        return self.decoder(encoding)#把最后一个时间步的输出输入MLP
 
 class ConvLstm(nn.Module):
     def __init__(self):
