@@ -1,7 +1,8 @@
 #本版本是LRCN的brief版
 #他把每一帧的状态矩阵都理解成拥有10个通道的1维序列，每个长度是601
 #这个10通道的1维序列通过CNN（因为没有时间联系）提取特征后，再输入到LSTM里
-#这里保留了CNN最后的全连接层，并把输出数改为300
+#这里保留了CNN最后的全连接层，并把输出数改为300，googlenet改成1d后，参数变成370多万————20201217
+#但是还是决定进一步精简
 import os
 import torch
 from torch import nn
@@ -112,7 +113,7 @@ class FlattenLayer(nn.Module):
         return x.view(x.shape[0], -1)
 
 class GoogLeNet(nn.Module):#把2d改成了1d，把输入通道1改成了10
-    def __init__(self,depth):
+    def __init__(self):
         super().__init__()
         self.b1 = nn.Sequential(nn.Conv1d(10, 64, kernel_size=7, stride=2, padding=3),
                    nn.ReLU(),
