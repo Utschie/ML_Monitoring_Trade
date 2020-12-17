@@ -84,7 +84,7 @@ class BisaiDataset(Dataset):#数据预处理器
         if len_frame<500:
             framelist = np.concatenate((np.zeros((500-len_frame,601,10),dtype=float),framelist),axis=0)#如果不足500，则在前面用0填充
         #vectensor = self.mrx2vec(framelist)#LRCN里取消了Mrx2vec的过程，直接传入单帧序列然后用CNN和LSTM处理
-        return torch.from_numpy(framelist)#传出一个帧列表,也可以把frametimelist一并传出来，此处暂不考虑位置参数的问题,是一个(seq_len,)
+        return framelist.transpose(0,2,1)#传出一个帧列表,也可以把frametimelist一并传出来，此处暂不考虑位置参数的问题,是一个(seq_len,)
 
 class Inception(nn.Module):#把conv2d改成了1d，然后改一下参数
     # c1 - c4为每条线路里的层的输出通道数
@@ -153,10 +153,15 @@ class Lstm(nn.Module):#把CNN的结果输入LSTM里
 class ConvLstm(nn.Module):
     def __init__(self):
         super().__init__()
-        self.net = nn.Sequential(ConvNet(),
-                                 Lstm())
-    def forward(self,inputs):
-        return self.net(inputs)
+        self.conv_net = ConvNet()
+        self.lstm_net = Lstm()
+    def forward(self,x):
+        conv_input = x.reshape((32*500,10,601)).cuda().float()#把所有batch拼接成一个大的放入卷积网络里，插入通道维，转成float()
+        conv_output = self.conv_net(conv_input)#得到第0维为batch_size的输出
+        lstm_input = conv_output.split(500,0)#再按照各个batch的seq_len再划分开
+        lstm_output = self.lstm_net(lstm_input)
+
+        return self.net(lstm_output)
 
 
 
