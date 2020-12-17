@@ -145,10 +145,11 @@ class Lstm(nn.Module):#把CNN的结果输入LSTM里
                                 hidden_size=500,#选择对帧进行保留首尾的均匀截断采样
                                 num_layers=1,#暂时就只有一层
                                 bidirectional=True)
-        self.decoder = nn.Linear(500, 3)#把LSTM的输出
+        self.decoder = nn.Linear(1000, 3)#把LSTM的输出
 
     def forward(self,inputs):
-        return self.decoder(self.encoder(inputs))
+        output, _= self.encoder(inputs.permute(1,0,2))#inputs需要转置一下再输入lstm层，因为pytorch要求第0维为长度，第二维才是batch_size
+        return self.decoder(output[-1])#把最后一个时间步的输出输入MLP
 
 class ConvLstm(nn.Module):
     def __init__(self):
