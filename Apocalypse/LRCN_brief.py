@@ -2,7 +2,11 @@
 #他把每一帧的状态矩阵都理解成拥有10个通道的1维序列，每个长度是601
 #这个10通道的1维序列通过CNN（因为没有时间联系）提取特征后，再输入到LSTM里
 #这里保留了CNN最后的全连接层，并把输出数改为300，googlenet改成1d后，参数变成370多万————20201217
-#但是还是决定进一步精简
+#lstm需要把hidden_size降到500，也就是说，在预处理数据时，对序列长度>500的序列应该进行帧抽取————20201217
+#本模型暂时采用保留头尾的纯均匀采样，之后如果可能再采取tsn模型的段共识函数的方法————20201217
+#其实还有一种可能，就是完全弃用RNN，只使用CNN进行做分类模型，然后再根据每场比赛已经走过的帧加权投票————20201217
+#预处理数据是把所有数据都变成500长度，不足的用0矩阵在序列前填充————20201217
+#经过目前的改造，总模型参数423万，其中conv模型142万，lstm模型281万————20201217
 import os
 import torch
 from torch import nn
@@ -57,6 +61,9 @@ class BisaiDataset(Dataset):#数据预处理器
         '''
         new_data = np.array(data)
         lables = new_data[:,0]
+        if len(frametimelist)>500:
+            frametimelist = random.sample(list(frametimelist),500)#如果长度大于500，随机抽取500个
+            frametimelist.sort(reverse=True)#并降序排列
         for i in frametimelist:
             statematrix=np.zeros((601,11),dtype=float)#先建立一个空列表
             statematrix[:,0] = cidlist#把cidlist赋给第0列
@@ -73,15 +80,18 @@ class BisaiDataset(Dataset):#数据预处理器
             framelist.append(statematrix)
         frametimelist = np.array(frametimelist)
         framelist = np.array(framelist)
+        len_frame = framelist.shape[0]
+        if len_frame<500:
+            framelist = np.concatenate((np.zeros((500-len_frame,601,10),dtype=float),framelist),axis=0)#如果不足500，则在前面用0填充
         #vectensor = self.mrx2vec(framelist)#LRCN里取消了Mrx2vec的过程，直接传入单帧序列然后用CNN和LSTM处理
-        return framelist#传出一个帧列表,也可以把frametimelist一并传出来，此处暂不考虑位置参数的问题,是一个(seq_len,)
+        return torch.from_numpy(framelist)#传出一个帧列表,也可以把frametimelist一并传出来，此处暂不考虑位置参数的问题,是一个(seq_len,)
 
-class Inception(nn.Module):#把conv2d改成了1d
+class Inception(nn.Module):#把conv2d改成了1d，然后改一下参数
     # c1 - c4为每条线路里的层的输出通道数
-    def __init__(self, in_c, c1, c2, c3, c4):
+    def __init__(self, in_c=10, c1=24, c2=(6,24), c3=(6,24), c4 = 24):#输入通道10，输出通道统一为24
         super().__init__()
         # 线路1，单1 x 1卷积层
-        self.p1_1 = nn.Conv1d(in_c, c1, kernel_size=1)
+        self.p1_1 = nn.Conv1d(in_c, c1, kernel_size=1)#输出通道6
         # 线路2，1 x 1卷积层后接3 x 3卷积层
         self.p2_1 = nn.Conv1d(in_c, c2[0], kernel_size=1)
         self.p2_2 = nn.Conv1d(c2[0], c2[1], kernel_size=3, padding=1)
@@ -97,14 +107,8 @@ class Inception(nn.Module):#把conv2d改成了1d
         p2 = F.relu(self.p2_2(F.relu(self.p2_1(x))))
         p3 = F.relu(self.p3_2(F.relu(self.p3_1(x))))
         p4 = F.relu(self.p4_2(self.p4_1(x)))
-        return torch.cat((p1, p2, p3, p4), dim=1)  # 在通道维上连结输出   
+        return torch.cat((p1, p2, p3, p4), dim=1)  # 在通道维上连结输出,默认是24*4=96个通道 
 
-class GlobalAvgPool1d(nn.Module):#把2d改成1d
-    # 全局平均池化层可通过将池化窗口形状设置成输入的高和宽实现
-    def __init__(self):
-        super().__init__()
-    def forward(self, x):
-        return F.avg_pool1d(x, kernel_size=x.size()[2:])
 
 class FlattenLayer(nn.Module):
     def __init__(self):
@@ -112,38 +116,47 @@ class FlattenLayer(nn.Module):
     def forward(self, x): # x shape: (batch, *, *, ...)
         return x.view(x.shape[0], -1)
 
-class GoogLeNet(nn.Module):#把2d改成了1d，把输入通道1改成了10
+class ConvNet(nn.Module):#把2d改成了1d，把输入通道1改成了10，然后取消前面的conv，直接输入inception
     def __init__(self):
         super().__init__()
-        self.b1 = nn.Sequential(nn.Conv1d(10, 64, kernel_size=7, stride=2, padding=3),
-                   nn.ReLU(),
+        self.b4 = nn.Sequential(Inception(),
+                   Inception(96, 128, (128, 192), (32, 96), 64),
+                   Inception(480, 128, (128, 192), (24, 64), 64),
+                   Inception(448, 128, (144, 192), (32, 64), 64),
+                   Inception(448, 144, (32, 64), (32, 112), 128),
                    nn.MaxPool1d(kernel_size=3, stride=2, padding=1))
 
-        self.b2 = nn.Sequential(nn.Conv1d(64, 64, kernel_size=1),
-                   nn.Conv1d(64, 192, kernel_size=3, padding=1),
-                   nn.MaxPool1d(kernel_size=3, stride=2, padding=1))
+        self.b5 = nn.Sequential(Inception(448, 64, (64, 128), (32, 128), 128),
+                   Inception(448, 64, (96,128), (32, 192), 128),
+                   nn.AdaptiveAvgPool1d(512))
 
-        self.b3 = nn.Sequential(Inception(192, 64, (96, 128), (16, 32), 32),
-                   Inception(256, 128, (128, 192), (32, 96), 64),
-                   nn.MaxPool1d(kernel_size=3, stride=2, padding=1))
-
-        self.b4 = nn.Sequential(Inception(480, 192, (96, 208), (16, 48), 64),
-                   Inception(512, 160, (112, 224), (24, 64), 64),
-                   Inception(512, 128, (128, 256), (24, 64), 64),
-                   Inception(512, 112, (144, 288), (32, 64), 64),
-                   Inception(528, 256, (160, 320), (32, 128), 128),
-                   nn.MaxPool1d(kernel_size=3, stride=2, padding=1))
-
-        self.b5 = nn.Sequential(Inception(832, 256, (160, 320), (32, 128), 128),
-                   Inception(832, 384, (192, 384), (48, 128), 128),
-                   GlobalAvgPool1d())
-
-        self.net = nn.Sequential(self.b1, self.b2, self.b3, self.b4, self.b5, 
-                    FlattenLayer(),nn.Linear(1024, 300))#这里把原模型的输出改成了300，然后输入到lSTM层
+        self.net = nn.Sequential(self.b4, self.b5, 
+                    FlattenLayer(),nn.Linear(512, 200))#这里把原模型的输出改成了200，然后输入到lSTM层
     
     def forward(self,x):
         return self.net(x)
 
+
+
+class Lstm(nn.Module):#把CNN的结果输入LSTM里
+    def __init__(self):
+        super().__init__()
+        self.encoder = nn.LSTM(input_size=200, 
+                                hidden_size=500,#选择对帧进行保留首尾的均匀截断采样
+                                num_layers=1,#暂时就只有一层
+                                bidirectional=True)
+        self.decoder = nn.Linear(500, 3)#把LSTM的输出
+
+    def forward(self,inputs):
+        return self.decoder(self.encoder(inputs))
+
+class ConvLstm(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.net = nn.Sequential(ConvNet(),
+                                 Lstm())
+    def forward(self,inputs):
+        return self.net(inputs)
 
 
 
@@ -159,17 +172,30 @@ if __name__ == "__main__":
     print('数据集读取完成')
     loader = DataLoader(dataset, 32, shuffle=True,num_workers=4)#num_workers>0情况下无法在交互模式下运行
     print('dataloader准备完成')
-    net = TextCNN().cuda()
+    net = ConvLstm().cuda()
     print('网络构建完成')
-    stat = get_parameter_number(net)
-    print(str(stat))
+    stat1 = get_parameter_number(net)
+    print(str(stat1))
     lr, num_epochs = 0.001, 5
-    optimizer = torch.optim.Adam(net.parameters(), lr=lr)
+    optimizer= torch.optim.Adam(net.parameters(), lr=lr)
+
     loss = nn.CrossEntropyLoss()
     for epoch in range(1, num_epochs + 1):
         counter = 0
         start = time.time()
         for x, y in iter(loader):
+            '''
+            len_list = list(map(len,x))#把各个batch的长度取出来做一个列表
+            conv_input = torch.cat(x,0).unsqueeze(1).cuda().float()#把所有batch拼接成一个大的放入卷积网络里，插入通道维，转成float()
+            conv_output = conv_net(x)#得到第0维为batch_size的输出
+            lstm_input = conv_output.split(len_list,0)#再按照各个batch的seq_len再划分开
+            '''
+            
+            
+            
+            
+            
+            
             x = pad_sequence(x,batch_first=True).permute(0,2,1).float().cuda()#由于序列长度不同所以，再先填充最后两维再转置，使得x满足conv1d的输入要求
             #但是还需要使填充后的那些0不参与计算，所以可能需要制作掩码矩阵
             #或者需要时序全局最大池化层来消除填充的后果
