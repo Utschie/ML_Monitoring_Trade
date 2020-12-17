@@ -7,6 +7,7 @@
 #其实还有一种可能，就是完全弃用RNN，只使用CNN进行做分类模型，然后再根据每场比赛已经走过的帧加权投票————20201217
 #预处理数据是把所有数据都变成500长度，不足的用0矩阵在序列前填充————20201217
 #经过目前的改造，总模型参数423万，其中conv模型142万，lstm模型281万————20201217
+#再度精简的convnet里有86万个参数————20201217
 import os
 import torch
 from torch import nn
@@ -122,11 +123,11 @@ class ConvNet(nn.Module):#把2d改成了1d，把输入通道1改成了10，然�
         self.b4 = nn.Sequential(Inception(),
                    Inception(96, 128, (128, 192), (32, 96), 64),
                    Inception(480, 128, (128, 192), (24, 64), 64),
-                   Inception(448, 128, (144, 192), (32, 64), 64),
+                   #Inception(448, 128, (144, 192), (32, 64), 64),#暂时去掉一层以减少参数
                    Inception(448, 144, (32, 64), (32, 112), 128),
                    nn.MaxPool1d(kernel_size=3, stride=2, padding=1))
 
-        self.b5 = nn.Sequential(Inception(448, 64, (64, 128), (32, 128), 128),
+        self.b5 = nn.Sequential(#Inception(448, 64, (64, 128), (32, 128), 128),#暂时去掉一层以减少参数
                    Inception(448, 64, (96,128), (32, 192), 128),
                    nn.AdaptiveAvgPool1d(1))
 
