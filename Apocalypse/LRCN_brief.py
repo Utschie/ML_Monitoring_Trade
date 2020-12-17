@@ -128,7 +128,7 @@ class ConvNet(nn.Module):#把2d改成了1d，把输入通道1改成了10，然�
 
         self.b5 = nn.Sequential(Inception(448, 64, (64, 128), (32, 128), 128),
                    Inception(448, 64, (96,128), (32, 192), 128),
-                   nn.AdaptiveAvgPool1d(512))
+                   nn.AdaptiveAvgPool1d(1))
 
         self.net = nn.Sequential(self.b4, self.b5, 
                     FlattenLayer(),nn.Linear(512, 200))#这里把原模型的输出改成了200，然后输入到lSTM层
@@ -158,7 +158,7 @@ class ConvLstm(nn.Module):
     def forward(self,x):
         conv_input = x.reshape((32*500,10,601)).cuda().float()#把所有batch拼接成一个大的放入卷积网络里，插入通道维，转成float()
         conv_output = self.conv_net(conv_input)#得到第0维为batch_size的输出
-        lstm_input = conv_output.split(500,0)#再按照各个batch的seq_len再划分开
+        lstm_input = conv_output.reshape((32,500,200))#再按batch_size拆开
         lstm_output = self.lstm_net(lstm_input)
 
         return self.net(lstm_output)
