@@ -196,6 +196,7 @@ if __name__ == "__main__":
             '''
             #但是还需要使填充后的那些0不参与计算，所以可能需要制作掩码矩阵
             #或者需要时序全局最大池化层来消除填充的后果
+            x = x.cuda().float()
             output = net(x).cuda()#x要求是一个固定shape的第0维是batch_size的张量，所以需要批量填充
             l = loss(output, y)
             optimizer.zero_grad() # 梯度清零，等价于net.zero_grad()
