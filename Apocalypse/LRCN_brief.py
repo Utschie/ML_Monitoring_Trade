@@ -63,7 +63,7 @@ class BisaiDataset(Dataset):#数据预处理器
         new_data = np.array(data)
         lables = new_data[:,0]
         if len(frametimelist)>500:
-            frametimelist = random.sample(list(frametimelist),500)#如果长度大于500，随机抽取500个
+            frametimelist = [frametimelist[0]]+random.sample(list(frametimelist)[1:-1],498)+[frametimelist[-1]]#如果长度大于500,保留头尾，并在中间随机抽取498个，共计500个
             frametimelist.sort(reverse=True)#并降序排列
         for i in frametimelist:
             statematrix=np.zeros((601,11),dtype=float)#先建立一个空列表
