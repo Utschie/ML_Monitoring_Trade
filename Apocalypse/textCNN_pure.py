@@ -1,6 +1,6 @@
 #本文件是纯粹用CNN，预处理是把每帧处理成相同大小，然后用CNN读取矩阵
 #把单场比赛转成(1,10,1101)的图片，前面的奇异值分解再补上终赔
-#4G显存刚刚好不可以承受128的batch，64的batch没问题
+#4G显存刚刚好不可以承受128的batch，64的batch没问题————20201219
 import os
 import torch
 from torch import nn
@@ -179,7 +179,7 @@ if __name__ == "__main__":
     root_path = 'D:\\data\\developing'
     dataset = BisaiDataset(root_path)
     print('数据集读取完成')
-    loader = DataLoader(dataset, 32, shuffle=True,num_workers=4)#num_workers>0情况下无法在交互模式下运行
+    loader = DataLoader(dataset, 128, shuffle=True,num_workers=4)#num_workers>0情况下无法在交互模式下运行
     print('dataloader准备完成')
     net = GoogLeNet().double().cuda()#双精度
     print('网络构建完成')
@@ -209,3 +209,4 @@ if __name__ == "__main__":
             print('filelist长度为'+str(len(dataset.filelist)))
             start = time.time()
         print('epoch %d, loss: %f' % (epoch, l.item()))
+        torch.cuda.empty_cache()#一个epoch后释放显存

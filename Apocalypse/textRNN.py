@@ -1,6 +1,6 @@
 #本模型是利用textRNN来做的一个分类模型，输出赛果的概率
 #因为LRCN受显存性能限制，所以这个方法就是放弃CNN转而用SVD做特征提取器
-#128个batch，16G内存可以装下
+#128个batch，16G内存可以装下，最多到10G，还有点富余————20201219
 import os
 import torch
 from torch import nn
@@ -113,7 +113,7 @@ if __name__ == "__main__":
     root_path = 'D:\\data\\developing'
     dataset = BisaiDataset(root_path)
     print('数据集读取完成')
-    loader = DataLoader(dataset, 32, shuffle=True,num_workers=4)#num_workers>0情况下无法在交互模式下运行
+    loader = DataLoader(dataset, 128, shuffle=True,num_workers=4)#num_workers>0情况下无法在交互模式下运行
     print('dataloader准备完成')
     net = Lstm().double().cuda()#双精度
     print('网络构建完成')
