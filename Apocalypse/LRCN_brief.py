@@ -9,6 +9,7 @@
 #经过目前的改造，总模型参数423万，其中conv模型142万，lstm模型281万————20201217
 #再度精简的convnet里有86万个参数————20201217
 #需要改模型，因为如果把所有batch的图片聚成一串放进去，即便batch_size=16,seq_len=250,16G的显存也装不下————20201219
+#或者放弃CNN做特征提取，或者疯狂减少seq_len————20201219
 import os
 import torch
 from torch import nn
