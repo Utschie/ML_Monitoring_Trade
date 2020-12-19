@@ -175,6 +175,9 @@ def get_parameter_number(model):#参数统计
     return {'Total': total_num, 'Trainable': trainable_num}
 
 
+
+
+
 if __name__ == "__main__":
     root_path = 'D:\\data\\developing'
     dataset = BisaiDataset(root_path)
