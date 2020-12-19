@@ -67,7 +67,7 @@ class BisaiDataset(Dataset):#数据预处理器
         vectensor = self.mrx2vec(framelist)
         len_frame = vectensor.shape[0]
         if len_frame<500:
-            vectensor = np.concatenate((np.zeros((500-len_frame,10),dtype=float),vectensor),axis=0)#如果不足500，则在前面用0填充
+            vectensor = np.concatenate((np.zeros((500-len_frame,10),dtype=np.float64),vectensor),axis=0)#如果不足500，则在前面用0填充
         vectensor = torch.from_numpy(vectensor)
         return vectensor#传出一个帧列表,也可以把frametimelist一并传出来，此处暂不考虑位置参数的问题
     

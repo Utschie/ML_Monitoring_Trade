@@ -63,7 +63,7 @@ class BisaiDataset(Dataset):#数据预处理器
             state = np.delete(state,(0,1), axis=-1)#去掉frametime和cid
             #在填充成矩阵之前需要知道所有数据中到底有多少个cid
             framelist.append(state)
-        statematrix=np.zeros((601,11),dtype=float)#先建立一个空列表
+        statematrix=np.zeros((601,11),dtype=np.float64)#先建立一个空列表
         statematrix[:,0] = cidlist#把cidlist赋给第0列
         state = new_data[lables==frametimelist[-1]]#从第一次变盘开始得到当次转移
         state = np.array(state)#转成numpy多维数组
@@ -79,7 +79,7 @@ class BisaiDataset(Dataset):#数据预处理器
         vectensor = self.mrx2vec(framelist)
         len_frame = vectensor.shape[0]
         if len_frame<500:
-            vectensor = np.concatenate((np.zeros((500-len_frame,10),dtype=float),vectensor),axis=0)#如果不足500，则在前面用0填充
+            vectensor = np.concatenate((np.zeros((500-len_frame,10),dtype=np.float64),vectensor),axis=0)#如果不足500，则在前面用0填充
         vectensor = np.concatenate((vectensor,statematrix),axis=0)
         vectensor = torch.from_numpy(vectensor.transpose(1,0))
         return vectensor.unsqueeze(0)#传出一个帧列表,也可以把frametimelist一并传出来，此处暂不考虑位置参数的问题
