@@ -1,6 +1,6 @@
 #本文件是纯粹用CNN，预处理是把每帧处理成相同大小，然后用CNN读取矩阵
 #把单场比赛转成(1,10,1101)的图片，前面的奇异值分解再补上终赔
-#4G显存可以承受128的batch
+#4G显存刚刚好不可以承受128的batch，64的batch没问题
 import os
 import torch
 from torch import nn
