@@ -93,7 +93,7 @@ class BisaiDataset(Dataset):#数据预处理器
         return newframe
     
     def mrx2vec(self,flist):#把截断奇异值的方法把矩阵变成向量(matrix2vec/img2vec)，传入：len(frametimelist)*(306*10),传出：len(frametimelist)*10
-        vectensor = np.array(list(map(self.tsvd,flist))).squeeze()
+        vectensor = np.array(list(map(self.tsvd,flist))).squeeze(2)#只把最后一维的1抹除，因为有时候第0维也可能是1，第0维不能抹
         #veclist = veclist.transpose()
         #vectensor = torch.from_numpy(veclist)#转成张量
         return vectensor#传出一个形状为(1,序列长度,10)的张量，因为后面传入模型之前，还需要做一下pad_sequence(0维是batch_size维)
