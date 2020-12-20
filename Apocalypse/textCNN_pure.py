@@ -1,6 +1,7 @@
 #本文件是纯粹用CNN，预处理是把每帧处理成相同大小，然后用CNN读取矩阵
 #把单场比赛转成(1,10,1101)的图片，前面的奇异值分解再补上终赔
-#4G显存刚刚好不可以承受128的batch，64的batch没问题————20201219
+#4G显存刚好不能承受128的batch，64的没问题
+#64的batch放在cuda上，显存2.2G，平均0.33s/场————20201220
 import os
 import torch
 from torch import nn
@@ -15,14 +16,17 @@ import re
 from sklearn.decomposition import TruncatedSVD
 from torch.nn.utils.rnn import pad_sequence#用来填充序列
 import time
-
-with open('D:\\data\\cidlist_complete.csv') as f:
+from prefetch_generator import BackgroundGenerator
+with open('C:\\data\\cidlist_complete.csv') as f:
     reader = csv.reader(f)
     cidlist = [row[1] for row in reader]#得到cid对应表
 cidlist = list(map(float,cidlist))#把各个元素字符串类型转成浮点数类型
+class DataLoaderX(DataLoader):
+    def __iter__(self):
+        return BackgroundGenerator(super().__iter__())
 class BisaiDataset(Dataset):#数据预处理器
     def __init__(self,filepath):
-        self.lablelist = pd.read_csv('D:\\data\\lablelist.csv',index_col = 0)#比赛id及其对应赛果的列表
+        self.lablelist = pd.read_csv('C:\\data\\lablelist.csv',index_col = 0)#比赛id及其对应赛果的列表
         self.filelist0 = [i+'\\'+k for i,j,k in os.walk(filepath) for k in k]#得到所有csv文件的路径列表
         self.filelist = [data_path for data_path in self.filelist0 if int(re.findall(r'\\(\d*?).csv',data_path)[0]) in  self.lablelist.index]#只保留有赛果的文件路径
         self.lables = {'win':0,'lose':1,'draw':2}#分类问题要从0开始编号，否则出错
@@ -93,10 +97,10 @@ class BisaiDataset(Dataset):#数据预处理器
         return newframe
     
     def mrx2vec(self,flist):#把截断奇异值的方法把矩阵变成向量(matrix2vec/img2vec)，传入：len(frametimelist)*(306*10),传出：len(frametimelist)*10
-        vectensor = np.array(list(map(self.tsvd,flist))).squeeze(2)#只把最后一维的1抹除，因为有时候第0维也可能是1，第0维不能抹
+        vectensor = np.array(list(map(self.tsvd,flist))).squeeze(2)#把最后一维的1抹除
         #veclist = veclist.transpose()
         #vectensor = torch.from_numpy(veclist)#转成张量
-        return vectensor#传出一个形状为(1,序列长度,10)的张量，因为后面传入模型之前，还需要做一下pad_sequence(0维是batch_size维)
+        return vectensor#传出一个形状为(序列长度,10)的张量，因为后面传入模型之前，还需要做一下pad_sequence(0维是batch_size维)
 
 
 
@@ -175,14 +179,11 @@ def get_parameter_number(model):#参数统计
     return {'Total': total_num, 'Trainable': trainable_num}
 
 
-
-
-
 if __name__ == "__main__":
-    root_path = 'D:\\data\\developing'
+    root_path = 'C:\\data\\developing'
     dataset = BisaiDataset(root_path)
     print('数据集读取完成')
-    loader = DataLoader(dataset, 128, shuffle=True,num_workers=4)#num_workers>0情况下无法在交互模式下运行
+    loader = DataLoaderX(dataset, 64, shuffle=True,num_workers=8,pin_memory=True)#num_workers>0情况下无法在交互模式下运行
     print('dataloader准备完成')
     net = GoogLeNet().double().cuda()#双精度
     print('网络构建完成')
@@ -198,8 +199,9 @@ if __name__ == "__main__":
             #但是还需要使填充后的那些0不参与计算，所以可能需要制作掩码矩阵
             #或者需要时序全局最大池化层来消除填充的后果
             x = x.double().cuda()
+            y = y.long().cuda()
             output = net(x)#x要求是一个固定shape的第0维是batch_size的张量，所以需要批量填充
-            output = output.cpu()
+            #output = output.cpu()
             l = loss(output, y)
             optimizer.zero_grad() # 梯度清零，等价于net.zero_grad()
             l.backward()
@@ -208,8 +210,8 @@ if __name__ == "__main__":
             train_period = end-start
             counter+=1
             print('第'+str(epoch)+'个epoch已学习'+str(counter)+'个batch,'+'用时'+str(train_period)+'秒')
-            print('本batch的赛果为'+str(y))
-            print('filelist长度为'+str(len(dataset.filelist)))
+            #print('loss: %f' % (l.item()))
             start = time.time()
+            #torch.cuda.empty_cache()#释放显存
         print('epoch %d, loss: %f' % (epoch, l.item()))
         torch.cuda.empty_cache()#一个epoch后释放显存
