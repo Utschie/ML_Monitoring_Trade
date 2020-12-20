@@ -104,6 +104,7 @@ class Lstm(nn.Module):#把CNN的结果输入LSTM里
 
     def forward(self,inputs):
         output, _= self.encoder(inputs.permute(1,0,2))#inputs需要转置一下再输入lstm层，因为pytorch要求第0维为长度，第二维才是batch_size
+        #LSTM有两个输出，一个是正常输出，还有一个是隐藏节点输出，这里只用正常输出
         encoding = torch.cat((output[0], output[-1]), -1)#双向的lstm，就把两个都放进去
         return self.decoder(encoding)#把最后一个时间步的输出输入MLP
 
