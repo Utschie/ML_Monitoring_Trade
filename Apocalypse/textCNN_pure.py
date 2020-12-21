@@ -29,7 +29,7 @@ class BisaiDataset(Dataset):#数据预处理器
         self.lablelist = pd.read_csv('C:\\data\\lablelist.csv',index_col = 0)#比赛id及其对应赛果的列表
         self.filelist0 = [i+'\\'+k for i,j,k in os.walk(filepath) for k in k]#得到所有csv文件的路径列表
         self.filelist = [data_path for data_path in self.filelist0 if int(re.findall(r'\\(\d*?).csv',data_path)[0]) in  self.lablelist.index]#只保留有赛果的文件路径
-        self.lables = {'win':0,'lose':1,'draw':2}#分类问题要从0开始编号，否则出错
+        self.lables = {'win':0,'draw':1,'lose':2}#分类问题要从0开始编号，否则出错
     
     def __getitem__(self, index):
         # TODO

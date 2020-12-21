@@ -15,6 +15,7 @@ from sklearn.decomposition import TruncatedSVD
 from torch.nn.utils.rnn import pad_sequence#用来填充序列
 import time
 from prefetch_generator import BackgroundGenerator
+from torch.utils.tensorboard import SummaryWriter
 with open('C:\\data\\cidlist_complete.csv') as f:
     reader = csv.reader(f)
     cidlist = [row[1] for row in reader]#得到cid对应表
@@ -27,7 +28,7 @@ class BisaiDataset(Dataset):#数据预处理器
         self.lablelist = pd.read_csv('C:\\data\\lablelist.csv',index_col = 0)#比赛id及其对应赛果的列表
         self.filelist0 = [i+'\\'+k for i,j,k in os.walk(filepath) for k in k]#得到所有csv文件的路径列表
         self.filelist = [data_path for data_path in self.filelist0 if int(re.findall(r'\\(\d*?).csv',data_path)[0]) in  self.lablelist.index]#只保留有赛果的文件路径
-        self.lables = {'win':0,'lose':1,'draw':2}#分类问题要从0开始编号，否则出错
+        self.lables = {'win':0,'draw':1,'lose':2}#分类问题要从0开始编号,而且要对应好了表中的顺序编，
     
     def __getitem__(self, index):
         # TODO
@@ -112,10 +113,16 @@ def get_parameter_number(model):#参数统计
 
 
 if __name__ == "__main__":
+    train_writer = SummaryWriter('C:\\data\\log\\train')#自动建立
+    test_writer = SummaryWriter('C:\\data\\log\\test')#自动建立
+    checkpoint_path = 'C:\\data\\ckpoint\\checkpoint.pth'#ckpoint文件夹需要提前建立
     root_path = 'C:\\data\\developing'
-    dataset = BisaiDataset(root_path)
+    test_path = 'C:\\data\\test'
+    dataset = BisaiDataset(root_path)#训练集
+    test_set = BisaiDataset(test_path)#验证集
     print('数据集读取完成')
     loader = DataLoaderX(dataset, 128, shuffle=True,num_workers=8,pin_memory=True)#num_workers>0情况下无法在交互模式下运行
+    test_loader = DataLoaderX(test_set, 128, shuffle=True,num_workers=8,pin_memory=True)#验证dataloader
     print('dataloader准备完成')
     net = Lstm().double().cuda()#双精度
     print('网络构建完成')
@@ -124,9 +131,12 @@ if __name__ == "__main__":
     lr, num_epochs = 0.001, 2000
     optimizer= torch.optim.Adam(net.parameters(), lr=lr)
     loss = nn.CrossEntropyLoss()
+    gesamt_counter = 0
     for epoch in range(1, num_epochs + 1):
         counter = 0
         start = time.time()
+        train_output = torch.zeros((1,3))
+        train_y = torch.zeros((1)).long()#得是long类型
         for x, y in iter(loader):
             #但是还需要使填充后的那些0不参与计算，所以可能需要制作掩码矩阵
             #或者需要时序全局最大池化层来消除填充的后果
@@ -140,9 +150,58 @@ if __name__ == "__main__":
             end = time.time()
             train_period = end-start
             counter+=1
+            gesamt_counter+=1
             print('第'+str(epoch)+'个epoch已学习'+str(counter)+'个batch,'+'用时'+str(train_period)+'秒')
+            train_writer.add_scalar('step_loss',l.item(),gesamt_counter)#随着每一步学习的loss下降图
             #print('loss: %f' % (l.item()))
             start = time.time()
-            #torch.cuda.empty_cache()#释放一下显存
+            train_output = torch.cat((train_output,output.cpu()),0)#把这一个batch的输出连起来
+            train_y = torch.cat((train_y,y.cpu()),0)#把这一个batch的lable连起来
         print('epoch %d, loss: %f' % (epoch, l.item()))
+        prediction = torch.argmax(train_output, 1)#找出每场比赛预测输出的最大值的坐标
+        correct = (prediction == train_y).sum().float()#找出预测正确的总个数
+        accuracy = correct/len(train_y)#计算Top-1正确率,总共就三分类，就不看top-2的了
+        train_writer.add_scalar('Top-1 Accuracy',accuracy,epoch)#写入文件
+        print('开始验证......')
+        torch.cuda.empty_cache()#释放一下显存
+        #下面是一个epoch结束的验证部分
+        with torch.no_grad():#这样在验证时显存才不会爆
+            test_output = torch.zeros((1,3))
+            test_y = torch.zeros((1)).long()#得是long类型
+            test_counter = 0
+            for x,y in iter(test_loader):
+                x = x.double().cuda()
+                output = net(x).cpu()#把输出转到内存
+                test_output = torch.cat((test_output,output),0)#把这一个batch的输出连起来
+                test_y = torch.cat((test_y,y),0)#把这一个batch的lable连起来
+                #torch.cuda.empty_cache()
+                test_counter+=1
+                print('验证集已完成'+str(test_counter)+'个batch')
+            #验证输出和验证lable的第一个元素都是0，鉴于到时候占比很小就不删除了
+            print('计算结果......')
+            l_test = loss(test_output,test_y)#用整个验证集的输出和lable算一个总平均loss(nn.CrossEntropyLoss默认就是求平均值)
+            test_writer.add_scalar('epoch_loss',l_test.item(),epoch)#每一个epoch算一次验证loss
+            train_writer.add_scalar('epoch_loss',l.item(),epoch)#每一个epoch把训练loss也加上
+            prediction = torch.argmax(test_output, 1)#找出每场比赛预测输出的最大值的坐标
+            correct = (prediction == test_y).sum().float()#找出预测正确的总个数
+            accuracy = correct/len(test_y)#计算Top-1正确率,总共就三分类，就不看top-2的了
+            test_writer.add_scalar('Top-1 Accuracy',accuracy,epoch)#写入文件
+            print('验证完成，开始保存......')
+            #下面是模型保存部分
+            checkpoint = {
+                'model':Lstm(),
+                'epoch': epoch,
+                'model_state_dict': net.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'loss': loss,
+                }
+            torch.save(checkpoint, checkpoint_path)
+            torch.cuda.empty_cache()#释放一下显存
+            print('保存完毕')
+                
+            
+
+        
+
+
 
