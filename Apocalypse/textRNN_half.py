@@ -1,5 +1,10 @@
 #本模型是把序列长度减少一半的textRNN模型，seq_len=250
 #这样参数就变成了52.7万，128的batch，显存1.9G，内存10G，均速约0.2s/场————20201220
+#在C:\\data\\test这个数据集的baseline是52.11%
+#在F:\\cleaned_data_new_20141130-20160630这个总测试集的baseline是51.73%————20201222
+#如果不按最小赔率买而是最大赔率（只选冷门）,那么这个baseline在C:\\data\\test是19.01%，在总测试集上是21.5%————20201223
+#应该把所有文件合成一个大path，然后随机比例分成3:1的数据组成两个新path，这样文件都分别放在ssd和hdd上，可以均衡一下train和test的cpu利用率————20201228
+
 import os
 import torch
 from torch import nn
@@ -31,7 +36,7 @@ class BisaiDataset(Dataset):#数据预处理器
         self.lables = {'win':0,'draw':1,'lose':2}#分类问题要从0开始编号,而且要对应好了表中的顺序编，
     
     def __getitem__(self, index):
-        # TODO
+        #todo
         # 1. Read one data from file (e.g. using numpy.fromfile, PIL.Image.open).
         #这里需要注意的是，第一步：read one data，是一个dat
         data_path = self.filelist[index]
