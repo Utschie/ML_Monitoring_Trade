@@ -4,7 +4,7 @@
 #在F:\\cleaned_data_new_20141130-20160630这个总测试集的baseline是51.73%————20201222
 #如果不按最小赔率买而是最大赔率（只选冷门）,那么这个baseline在C:\\data\\test是19.01%，在总测试集上是21.5%————20201223
 #应该把所有文件合成一个大path，然后随机比例分成3:1的数据组成两个新path，这样文件都分别放在ssd和hdd上，可以均衡一下train和test的cpu利用率————20201228
-
+#另外应该在lstm后再加一层全连接层，用relu做激活函数————20201228
 import os
 import torch
 from torch import nn
