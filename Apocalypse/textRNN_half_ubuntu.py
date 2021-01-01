@@ -155,7 +155,7 @@ if __name__ == "__main__":
     test_writer = SummaryWriter('/home/jsy/log/test')#自动建立
     checkpoint_path = '/home/jsy/log/checkpoints/checkpoint.pth'#ckpoint文件夹需要提前建立
     train_path = ['/home/jsy/train_20160701-20170531','/media/jsy/Samsung/train_20180211-20190224','/media/jsy/WD/train_20170601-20180210']
-    test_path = ['/media/jsy/Samsung/test2','/media/jsy/HDD/test3','home/jsy/test4']
+    test_path = ['/media/jsy/Samsung/test2','/home/jsy/test4']
     dataset = BisaiDataset(train_path)#训练集
     test_set = BisaiDataset(test_path)#验证集
     print('数据集读取完成')
