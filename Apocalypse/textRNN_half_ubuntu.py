@@ -20,6 +20,7 @@
 #最后的验证集等到最后模型训练完测一次就行————20201231
 #开3个num_workers跑大概cpu的avg load在14-16左右，但是平均速度要减慢到0.25s/场————20201231
 #先用256的batch，0.001的lr跑一段时间，稳定不下降了，再中断用128的batch，0.001/pow(2,2)的lr跑，然后再用64的batch，0.001/pow(4,2)跑————20201231
+#由于test4的路径写错了，所以测试集里只有test2和test3的这13000多个文件，路径错误居然没出错，那就先这么地吧，等下次调参的时候再改过来————20201231
 import os
 import torch
 from torch import nn
@@ -37,6 +38,7 @@ import time
 from prefetch_generator import BackgroundGenerator
 from torch.utils.tensorboard import SummaryWriter
 from pywick.optimizers.nadam import Nadam#使用pywick包里的nadam优化器
+from torch.optim import lr_scheduler
 with open('/home/jsy/data/cidlist_complete.csv') as f:
     reader = csv.reader(f)
     cidlist = [row[1] for row in reader]#得到cid对应表
@@ -159,8 +161,8 @@ if __name__ == "__main__":
     dataset = BisaiDataset(train_path)#训练集
     test_set = BisaiDataset(test_path)#验证集
     print('数据集读取完成')
-    loader = DataLoaderX(dataset, 256 ,shuffle=True,num_workers=4,pin_memory=True)#num_workers>0情况下无法在交互模式下运行
-    test_loader = DataLoaderX(test_set, 256, shuffle=True,num_workers=4,pin_memory=True)#验证dataloader
+    loader = DataLoaderX(dataset, 64 ,shuffle=True,num_workers=4,pin_memory=True)#num_workers>0情况下无法在交互模式下运行
+    test_loader = DataLoaderX(test_set, 64, shuffle=True,num_workers=4,pin_memory=True)#验证dataloader
     print('dataloader准备完成')
     net = Lstm().double().cuda()#双精度
     print('网络构建完成')
@@ -177,7 +179,10 @@ if __name__ == "__main__":
         start_epoch = checkpoint['epoch']
         gesamt_counter = checkpoint['gesamt_counter']
     loss = nn.CrossEntropyLoss()
-    for epoch in range(start_epoch, num_epochs + 1):
+    optimizer= Nadam(net.parameters(), lr=lr/16)
+    scheuler = lr_scheduler.StepLR(optimizer,step_size=20,gamma=0.25)
+    for epoch in range(start_epoch+1, num_epochs + 1):
+        l_list = list()
         epoch_start = time.time()#记录整个epoch除验证外所用的时间
         net.train()
         counter = 0
@@ -202,13 +207,14 @@ if __name__ == "__main__":
             counter+=1
             gesamt_counter+=1
             print('第'+str(epoch)+'个epoch已学习'+str(counter)+'个batch,'+'用时'+str(train_period)+'秒')
+            l_list.append(l.item())
             train_writer.add_scalar('step_loss',l.item(),gesamt_counter)#随着每一步学习的loss下降图
             #print('loss: %f' % (l.item()))
             start = time.time()
             train_output = torch.cat((train_output,output.cpu()),0)#把这一个batch的输出连起来
             train_y = torch.cat((train_y,y.cpu()),0)#把这一个batch的lable连起来
         epoch_end = time.time()
-        print('epoch %d, loss: %f' % (epoch, l.item()))
+        print('epoch %d, loss: %f' % (epoch,np.mean(l_list)))
         print('第'+str(epoch)+'个epoch训练用时'+str(int(epoch_end-epoch_start))+'秒')
         prediction = torch.argmax(train_output, 1)#找出每场比赛预测输出的最大值的坐标
         correct = (prediction == train_y).sum().float()#找出预测正确的总个数
@@ -217,6 +223,7 @@ if __name__ == "__main__":
         #下面是一个epoch结束的验证部分
         #if epoch>=20:
         print('开始验证......')
+        test_start = time.time()
         net.eval()
         torch.cuda.empty_cache()#释放一下显存
         with torch.no_grad():#这样在验证时显存才不会爆
@@ -235,12 +242,14 @@ if __name__ == "__main__":
             print('计算结果......')
             l_test = loss(test_output,test_y)#用整个验证集的输出和lable算一个总平均loss(nn.CrossEntropyLoss默认就是求平均值)
             test_writer.add_scalar('epoch_loss',l_test.item(),epoch)#每一个epoch算一次验证loss
-            train_writer.add_scalar('epoch_loss',l.item(),epoch)#每一个epoch把训练loss也加上
+            train_writer.add_scalar('epoch_loss',np.mean(l_list),epoch)#每一个epoch把训练loss也加上
             prediction = torch.argmax(test_output, 1)#找出每场比赛预测输出的最大值的坐标
             correct = (prediction == test_y).sum().float()#找出预测正确的总个数
             accuracy = correct/len(test_y)#计算Top-1正确率,总共就三分类，就不看top-2的了
             test_writer.add_scalar('Top-1 Accuracy',accuracy,epoch)#写入文件
-            print('验证完成，开始保存......')
+        test_end = time.time()
+        print('验证已完成，用时'+str(int(test_end-test_start))+'秒')
+        print('验证完成，开始保存......')
         #下面是模型保存部分
         checkpoint = {
                 'epoch': epoch,
@@ -250,6 +259,7 @@ if __name__ == "__main__":
                 }
         torch.save(checkpoint, checkpoint_path)#保存checkpoint到路径
         torch.cuda.empty_cache()#释放一下显存
+        scheuler.step()
         print('保存完毕')
                 
             
