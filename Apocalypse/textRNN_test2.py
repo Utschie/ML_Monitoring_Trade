@@ -1,6 +1,7 @@
-#专门用来对textRNN_half_ubuntu2来做的测试程序
-#由于训练集的比例是1：1：1,测试集则采用非平衡数据集查看最终效果
-#不需要跑循环只需要测试一次就好
+#本程序是用来测试textRNN_half在平衡数据集里性能的程序
+#原程序在非平衡数据集中训练测试的结果是52%左右
+#现在测试一下在平衡数据集中的表现，如果好，则说明这样的数据预处理思路有效
+#经过测试，在平衡数据集中textRNN_half的表现是33%，也就是说，无效，模型最终就只是依据模型中本来就存在的概率来进行判断————20210126
 import os
 import torch
 from torch import nn
@@ -28,15 +29,12 @@ class DataLoaderX(DataLoader):
         return BackgroundGenerator(super().__iter__())
 class BisaiDataset(Dataset):#数据预处理器
     def __init__(self,filepath):#filepath是个列表
+        with open(filepath,'r') as f:#读取filepath文件并做成filelist列表
+            self.filelist = []
+            for line in f:
+                self.filelist.append(line.strip('\n'))
         self.lablelist = pd.read_csv('/home/jsy/data/lablelist.csv',index_col = 0)#比赛id及其对应赛果的列表
-        self.filelist0 = list()
-        for x in filepath:#把filepath这个列表中的所有目录下的路径组合成一个列表
-            self.filelist0+=[i+'/'+k for i,j,k in os.walk(x) for k in k]#得到所有csv文件的路径列表
-        #self.filelist0 = [i+'/'+k for i,j,k in os.walk(filepath) for k in k]#得到所有csv文件的路径列表
-        self.filelist = [data_path for data_path in self.filelist0 if int(re.findall(r'/(\d*?).csv',data_path)[0]) in  self.lablelist.index]#只保留有赛果的文件路径
-        self.lables = {'win':0,'draw':1,'lose':2}#分类问题要从0开始编号,而且要对应好了表中的顺序编
-        self.all_mean = np.array([0.92236896, 2.56799437, 3.64873151, 3.94965805])#全样本均值
-        self.all_std = np.array([0.03154385, 1.76454825, 1.0027637 , 3.01005411])#全样本标准差
+        self.lables = {'win':0,'draw':1,'lose':2}#分类问题要从0开始编号,而且要对应好了表中的顺序编，
     
     def __getitem__(self, index):
         #todo
@@ -65,7 +63,7 @@ class BisaiDataset(Dataset):#数据预处理器
         '''
         new_data = np.array(data)
         lables = new_data[:,0]
-        if len(frametimelist)>250:#如果总帧数大于250,则随机挑选250，若不足250,则在后面处理vectensor时补0
+        if len(frametimelist)>250:
             frametimelist = [frametimelist[0]]+random.sample(list(frametimelist)[1:-1],248)+[frametimelist[-1]]#如果长度大于500,保留头尾，并在中间随机抽取498个，共计500个
             frametimelist.sort(reverse=True)#并降序排列
         for i in frametimelist:
@@ -73,25 +71,36 @@ class BisaiDataset(Dataset):#数据预处理器
             #state = np.array(state)#不必转成numpy多维数组，因为已经是了
             state = np.delete(state,(0,1), axis=-1)#去掉frametime和cid
             #在填充成矩阵之前需要知道所有数据中到底有多少个cid
-            max = (state.max(axis=0)[0:4]-self.all_mean)/self.all_std#标准化
-            mean = (state.mean(axis=0)[0:4]-self.all_mean)/self.all_std
-            min = (state.min(axis=0)[0:4]-self.all_mean)/self.all_std
-            max_min = np.concatenate((max,mean,min),axis=0)
-            framelist.append(max_min)
+            framelist.append(state)
         frametimelist = np.array(frametimelist)
-        vectensor = np.array(framelist)
+        vectensor = self.mrx2vec(framelist)
         len_frame = vectensor.shape[0]
         if len_frame<250:
-            vectensor = np.concatenate((np.zeros((250-len_frame,12),dtype=np.float64),vectensor),axis=0)#如果不足500，则在前面用0填充
+            vectensor = np.concatenate((np.zeros((250-len_frame,10),dtype=np.float64),vectensor),axis=0)#如果不足500，则在前面用0填充
         vectensor = torch.from_numpy(vectensor)
         return vectensor#传出一个帧列表,也可以把frametimelist一并传出来，此处暂不考虑位置参数的问题
     
+    def tsvd(self,frame):
+        tsvd = TruncatedSVD(1)
+        if frame.shape[0] != 1:
+            newframe = tsvd.fit_transform(np.transpose(frame))#降维成（1,10）的矩阵
+        else:
+            return frame.reshape((10,1))#第一行需要reshape一下
+        return newframe
+    
+    def mrx2vec(self,flist):#把截断奇异值的方法把矩阵变成向量(matrix2vec/img2vec)，传入：len(frametimelist)*(306*10),传出：len(frametimelist)*10
+        vectensor = np.array(list(map(self.tsvd,flist))).squeeze(2)
+        #veclist = veclist.transpose()
+        #vectensor = torch.from_numpy(veclist)#转成张量
+        return vectensor#传出一个形状为(1,序列长度,10)的张量，因为后面传入模型之前，还需要做一下pad_sequence(0维是batch_size维)
+
+ 
 
 
 class Lstm(nn.Module):#在模型建立之处就把它默认初始化
     def __init__(self):
         super().__init__()
-        self.encoder = nn.LSTM(input_size=12, 
+        self.encoder = nn.LSTM(input_size=10, 
                                 hidden_size=250,#选择对帧进行保留首尾的均匀截断采样
                                 num_layers=1,#暂时就只有一层
                                 bidirectional=True)
@@ -102,7 +111,7 @@ class Lstm(nn.Module):#在模型建立之处就把它默认初始化
         self.decoder = nn.Sequential(
             nn.Linear(1000, 250),#把LSTM的输出
             nn.ReLU(),
-            nn.Dropout(0.5),
+            nn.Dropout(0.2),
             nn.Linear(250, 3)
         )
         nn.init.normal_(self.decoder[0].weight,mean=0.0)
@@ -124,14 +133,14 @@ def get_parameter_number(model):#参数统计
 
 
 if __name__ == "__main__":
-    checkpoint_path = '/home/jsy/log2/checkpoints/checkpoint.pth'#ckpoint文件夹需要提前建立
-    test_path1 = ['/home/jsy/train_20160701-20170531','/media/jsy/Samsung/train_20180211-20190224','/media/jsy/WD/train_20170601-20180210']
-    test_path2 = ['/media/jsy/Samsung/test2','/home/jsy/test4']
+    checkpoint_path = '/home/jsy/log/checkpoints/checkpoint.pth'#ckpoint文件夹需要提前建立
+    test_path1 = '/home/jsy/balanced_train_path.txt'
+    test_path2 = '/home/jsy/balanced_test_path.txt'
     test_set1 = BisaiDataset(test_path1)#验证集
     test_set2 = BisaiDataset(test_path2)
     print('数据集读取完成')
-    test_loader1 = DataLoaderX(test_set1, 64 ,shuffle=True,num_workers=16,pin_memory=True)#num_workers>0情况下无法在交互模式下运行
-    test_loader2 = DataLoaderX(test_set2, 64, shuffle=True,num_workers=16,pin_memory=True)#验证dataloader
+    test_loader1 = DataLoaderX(test_set1, 64 ,shuffle=True,num_workers=4,pin_memory=True)#num_workers>0情况下无法在交互模式下运行
+    test_loader2 = DataLoaderX(test_set2, 64, shuffle=True,num_workers=4,pin_memory=True)#验证dataloader
     print('dataloader准备完成')
     net = Lstm().double().cuda()#双精度
     print('网络构建完成')
@@ -191,7 +200,5 @@ if __name__ == "__main__":
     print('test_set2的Top-1精确度为'+str(accuracy2))
             
     
-                
-
-        
-
+            
+  
