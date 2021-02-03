@@ -1,4 +1,15 @@
 #本程序是采用平衡数据集的用tsvd的模型，看看会不会比非平衡数据集好————20210126
+#把优化器的eps跳到1e-16,并把初始学习率调低两个数量级，看看loss会不会继续持续下降
+'''
+经过初始学习率分别为0.01,0.001,0.0001,0.00001的比对后，发现0.001甚至0.01是最好的学习率，loss最低降到1.1左右
+而0.0001和0.00001下降非常慢，甚至在初始学习率为0.00001时loss到了5之后下降就非常慢了
+而当学习率为0.01时loss很快就下降到了1.1,而且非常稳定，甚至比0.001还稳
+'''
+#这次试一下如果不用正交初始化而是用默认初始化的话，loss会是个什么结果
+#使用默认初始化的效果比正交初始化的结果要略好，甚至大冷的平均收益率超过1（约1.002这样）。
+#虽然只跑了可能3个epoch，但是总准确率提高到了42%，所以还是默认初始化比较好————20210202
+#如果按照这个测试结果，那么爆大冷，小冷和正常的预测准确率分别为28.14%，29.01%和64.62%————20210203
+#按照各种预测结果的最后一帧的最大值购买，那么平均收益分别为12.89%,3.87%和10.52%————20210203
 import os
 import torch
 from torch import nn
@@ -17,6 +28,7 @@ from prefetch_generator import BackgroundGenerator
 from torch.utils.tensorboard import SummaryWriter
 from pywick.optimizers.nadam import Nadam#使用pywick包里的nadam优化器
 from torch.optim import lr_scheduler
+from torch.optim import Adam
 with open('/home/jsy/data/cidlist_complete.csv') as f:
     reader = csv.reader(f)
     cidlist = [row[1] for row in reader]#得到cid对应表
@@ -101,20 +113,20 @@ class Lstm(nn.Module):#在模型建立之处就把它默认初始化
                                 hidden_size=250,#选择对帧进行保留首尾的均匀截断采样
                                 num_layers=1,#暂时就只有一层
                                 bidirectional=True)
-        nn.init.orthogonal_(self.encoder.weight_ih_l0)
-        nn.init.orthogonal_(self.encoder.weight_hh_l0)
-        nn.init.constant_(self.encoder.bias_ih_l0,0.0)
-        nn.init.constant_(self.encoder.bias_hh_l0,0.0)
+        #nn.init.orthogonal_(self.encoder.weight_ih_l0)
+        #nn.init.orthogonal_(self.encoder.weight_hh_l0)
+        #nn.init.constant_(self.encoder.bias_ih_l0,0.0)
+        #nn.init.constant_(self.encoder.bias_hh_l0,0.0)
         self.decoder = nn.Sequential(
             nn.Linear(1000, 250),#把LSTM的输出
             nn.ReLU(),
             nn.Dropout(0.2),
             nn.Linear(250, 3)
         )
-        nn.init.normal_(self.decoder[0].weight,mean=0.0)
-        nn.init.constant_(self.decoder[0].bias, 0.0)
-        nn.init.normal_(self.decoder[3].weight,mean=0.0)
-        nn.init.constant_(self.decoder[3].bias, 0.0)
+        #nn.init.normal_(self.decoder[0].weight,mean=0.0)
+        #nn.init.constant_(self.decoder[0].bias, 0.0)
+        #nn.init.normal_(self.decoder[3].weight,mean=0.0)
+        #nn.init.constant_(self.decoder[3].bias, 0.0)
 
     def forward(self,inputs):
         output, _= self.encoder(inputs.permute(1,0,2))#inputs需要转置一下再输入lstm层，因为pytorch要求第0维为长度，第二维才是batch_size
@@ -138,15 +150,15 @@ if __name__ == "__main__":
     dataset = BisaiDataset(train_path)#训练集
     test_set = BisaiDataset(test_path)#验证集
     print('数据集读取完成')
-    loader = DataLoaderX(dataset, 64 ,shuffle=True,num_workers=4,pin_memory=True)#num_workers>0情况下无法在交互模式下运行
-    test_loader = DataLoaderX(test_set, 64, shuffle=True,num_workers=4,pin_memory=True)#验证dataloader
+    loader = DataLoaderX(dataset, 128 ,shuffle=True,num_workers=4,pin_memory=True)#num_workers>0情况下无法在交互模式下运行
+    test_loader = DataLoaderX(test_set, 128, shuffle=True,num_workers=4,pin_memory=True)#验证dataloader
     print('dataloader准备完成')
     net = Lstm().double().cuda()#双精度
     print('网络构建完成')
     stat1 = get_parameter_number(net)
     print(str(stat1))
     lr, num_epochs = 0.001, 2000
-    optimizer= Nadam(net.parameters(), lr=lr)
+    optimizer= Adam(net.parameters(), lr=lr,eps=1e-16)
     start_epoch = 1#如果没有checkpoint则初始epoch为1
     gesamt_counter = 0
     if os.path.exists(checkpoint_path):
@@ -156,7 +168,6 @@ if __name__ == "__main__":
         start_epoch = checkpoint['epoch']+1
         gesamt_counter = checkpoint['gesamt_counter']
     loss = nn.CrossEntropyLoss()
-    optimizer= Nadam(net.parameters(), lr=lr)
     scheuler = lr_scheduler.StepLR(optimizer,step_size=5,gamma=0.25)
     for epoch in range(start_epoch, num_epochs + 1):
         l_list = list()
