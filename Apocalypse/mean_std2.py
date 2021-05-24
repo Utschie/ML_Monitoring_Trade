@@ -102,9 +102,9 @@ new_var = (old_n*(old_var+(new_mean-old_mean)**2)+now_n*(now_var+(new_mean-now_m
 old_mean = new_mean#用新的mean代替旧的mean
 old_var = new_var#用新的var代替旧的var
 old_n = new_n#用新的n代替旧的n
-np.save('/home/jsy/data/old_mean0.npy',old_mean)
-np.save('/home/jsy/data/old_var0.npy',old_var)
-np.save('/home/jsy/data/old_n0.npy',old_n)
+np.save('/home/jsy/data/old_mean2.npy',old_mean)
+np.save('/home/jsy/data/old_var2.npy',old_var)
+np.save('/home/jsy/data/old_n2.npy',old_n)
 print(old_n)
 print(old_mean)
 print(old_var)
